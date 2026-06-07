@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_dark">#FF1A0D2E</color>
+    <color name="purple_primary">#FF6C2BD9</color>
+    <color name="purple_secondary">#FF9B51FF</color>
+    <color name="purple_light">#FFC084FF</color>
+    <color name="purple_accent">#FFE0B0FF</color>
+    <color name="surface_dark">#FF121212</color>
+    <color name="surface_light">#FF1E1E2E</color>
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#FFB0B0C0</color>
+    <color name="knob_amber">#FFFFC107</color>
+    <color name="knob_cyan">#FF00BCD4</color>
+    <color name="knob_green">#FF4CAF50</color>
+</resources>

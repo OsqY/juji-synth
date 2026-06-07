@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Purple waveform background -->
+    <path
+        android:fillColor="#6C2BD9"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+    <!-- Sound wave -->
+    <path
+        android:fillColor="#E0B0FF"
+        android:pathData="M30,60 L38,40 L46,55 L54,30 L62,55 L70,40 L78,60"
+        android:strokeWidth="0" />
+</vector>

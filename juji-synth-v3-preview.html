@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Juji Synth v3 — UI Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep: #0D0520;
+  --bg-panel: #1A0D2E;
+  --bg-surface: #1E1E2E;
+  --bg-card: #252536;
+  --purple-primary: #6C2BD9;
+  --purple-secondary: #9B51FF;
+  --purple-light: #C084FF;
+  --purple-accent: #E0B0FF;
+  --purple-glow: rgba(108,43,217,0.3);
+  --text-primary: #FFFFFF;
+  --text-secondary: #B0B0C0;
+  --text-muted: #707080;
+  --knob-amber: #FFC107;
+  --knob-cyan: #00BCD4;
+  --knob-green: #4CAF50;
+  --knob-pink: #E91E63;
+  --knob-orange: #FF9800;
+  --knob-red: #E53935;
+  --chassis-outer: #150E28;
+  --chassis-inner: #1E1835;
+  --chassis-border-light: #3A2A5E;
+  --chassis-border-dark: #0D0520;
+  --screw-color: #2A1A4E;
+  --tab-inactive: rgba(45,27,78,0.15);
+  --tab-active: rgba(108,43,217,0.3);
+  --key-white: #F5F5F5;
+  --key-black: #1A1A2E;
+  --key-pressed: #9B51FF;
+  --key-playing: #6C2BD9;
+  --knob-bg: #221840;
+}
+
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background: #080412;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+/* ─── PHONE FRAME ─── */
+.phone {
+  width: 820px;
+  height: 480px;
+  background: var(--bg-deep);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── TAB BAR ─── */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 4px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid rgba(45,27,78,0.3);
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px 0;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.tab.active {
+  background: var(--tab-active);
+  border-color: rgba(108,43,217,0.6);
+  color: var(--purple-light);
+  box-shadow: inset 0 1px 0 rgba(192,132,255,0.15);
+}
+
+.tab.inactive {
+  background: var(--tab-inactive);
+  color: var(--text-secondary);
+}
+
+.tab.inactive:hover {
+  background: rgba(45,27,78,0.25);
+}
+
+/* ─── CHASSIS ─── */
+.chassis {
+  flex: 1;
+  margin: 4px 8px 0;
+  border-radius: 10px;
+  background: radial-gradient(ellipse at 30% 20%, #1E1835, #150E28);
+  border: 2px solid;
+  border-image: linear-gradient(135deg, #3A2A5E, #1A0D2E, #2D1B4E, #0D0520) 1;
+  position: relative;
+  padding: 6px;
+  overflow: hidden;
+}
+
+/* Screw holes */
+.chassis::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.screw { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--screw-color); box-shadow: inset 0 1px 1px rgba(255,255,255,0.15); }
+.screw::after { content: ''; position: absolute; width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.1); top: 1px; left: 1px; }
+.screw.tl { top: 8px; left: 8px; }
+.screw.tr { top: 8px; right: 8px; }
+.screw.bl { bottom: 8px; left: 8px; }
+.screw.br { bottom: 8px; right: 8px; }
+
+/* ─── PANEL CONTENT ─── */
+.panel {
+  display: flex;
+  height: 100%;
+  gap: 12px;
+  padding: 4px;
+}
+
+.panel-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.col-header {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+/* ─── HARDWARE KNOB ─── */
+.knob-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.knob {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  cursor: grab;
+}
+
+.knob.shadow {
+  position: absolute;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.35);
+  top: 3px; left: 3px;
+}
+
+.knob-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #3E3E54, #28283E 50%, #16162A);
+  box-shadow:
+    inset 0 2px 3px rgba(255,255,255,0.08),
+    inset 0 -2px 3px rgba(0,0,0,0.4),
+    0 0 0 2px rgba(153,153,170,0.3);
+}
+
+.knob-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  background: radial-gradient(circle, #9999AA, #555570, #3A3A50, #666680) border-box;
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 65%, black 66%);
+  mask: radial-gradient(circle at 50% 50%, transparent 65%, black 66%);
+}
+
+.knob-highlight {
+  position: absolute;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,0.12);
+  top: 10px; left: 14px;
+  transform: rotate(-45deg);
+}
+
+.knob-indicator {
+  position: absolute;
+  width: 2.5px; height: 22px;
+  background: var(--knob-amber);
+  border-radius: 2px;
+  bottom: 50%;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  transform-origin: bottom center;
+  box-shadow: 0 0 4px var(--knob-amber);
+}
+
+/* Arc track */
+.arc-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.knob-label {
+  font-size: 9px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.knob-value {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--knob-amber);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Waveform selector */
+.waveform-row {
+  display: flex;
+  gap: 3px;
+}
+
+.wf-btn {
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-align: center;
+  min-width: 28px;
+}
+
+.wf-btn.active {
+  background: rgba(255,193,7,0.25);
+  border-color: var(--knob-amber);
+  color: var(--knob-amber);
+  font-weight: 700;
+}
+
+.wf-btn.inactive {
+  background: rgba(45,27,78,0.2);
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+/* Waveform icon */
+.wf-icon {
+  width: 20px; height: 16px;
+  margin: 0 auto 2px;
+}
+
+.wf-icon svg { width: 100%; height: 100%; }
+
+/* ─── KEYBOARD ─── */
+.keyboard-section {
+  padding: 4px 8px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pitch-strip {
+  height: 16px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #2D1B4E, #1A0D2E, #2D1B4E);
+  position: relative;
+  cursor: pointer;
+}
+
+.pitch-strip .center {
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  bottom: 1px;
+  width: 2px;
+  background: rgba(192,132,255,0.4);
+  transform: translateX(-50%);
+}
+
+.keyboard {
+  display: flex;
+  height: 52px;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  background: var(--knob-bg);
+}
+
+.white-keys {
+  display: flex;
+  flex: 1;
+}
+
+.white-key {
+  flex: 1;
+  border-right: 1px solid #ddd;
+  background: linear-gradient(180deg, #fff 0%, var(--key-white) 100%);
+  border-radius: 0 0 3px 3px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.05s;
+  box-shadow: inset 0 -1px 2px rgba(0,0,0,0.05);
+}
+
+.white-key:active {
+  background: linear-gradient(180deg, var(--key-pressed), #7B3BCC);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+  transform: translateY(1px);
+}
+
+.black-key-zone {
+  position: absolute;
+  top: 0;
+  height: 65%;
+  width: 60%;
+  border-radius: 0 0 3px 3px;
+  cursor: pointer;
+  transition: all 0.05s;
+}
+
+.black-key-zone:active {
+  background: var(--key-pressed) !important;
+  transform: translateY(1px);
+}
+
+/* Bottom bar */
+.bottom-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 8px 4px;
+}
+
+.transport {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.transport-btn {
+  width: 26px; height: 26px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  border: none;
+  color: white;
+}
+
+.transport-btn.play { background: var(--knob-green); }
+.transport-btn.stop { background: var(--purple-primary); }
+
+.bpm { font-size: 9px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
+
+.actions {
+  display: flex;
+  gap: 4px;
+}
+
+.action-btn {
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(45,27,78,0.5);
+  background: rgba(45,27,78,0.3);
+  color: var(--purple-light);
+}
+
+.action-btn:hover { background: rgba(108,43,217,0.3); }
+
+/* Section divider */
+.divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(45,27,78,0.5), transparent);
+  margin: 4px 0;
+}
+
+/* Slider */
+.slider-track {
+  width: 40px; height: 3px;
+  background: rgba(45,27,78,0.3);
+  border-radius: 2px;
+  position: relative;
+  margin: 2px 0;
+}
+
+.slider-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--knob-amber);
+  width: 60%;
+}
+
+/* Toggle */
+.toggle {
+  width: 24px; height: 16px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  color: white;
+}
+
+.toggle.on { background: var(--purple-primary); box-shadow: 0 0 6px rgba(108,43,217,0.5); }
+.toggle.off { background: rgba(45,27,78,0.4); }
+</style>
+</head>
+<body>
+<div class="phone">
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <div class="tab active">OSC</div>
+    <div class="tab inactive">FILTER</div>
+    <div class="tab inactive">ENV</div>
+    <div class="tab inactive">LFO</div>
+    <div class="tab inactive">FX</div>
+    <div class="tab inactive">SEQ</div>
+    <div class="tab inactive">MOD</div>
+  </div>
+
+  <!-- Chassis -->
+  <div class="chassis">
+    <div class="screw tl"></div>
+    <div class="screw tr"></div>
+    <div class="screw bl"></div>
+    <div class="screw br"></div>
+
+    <!-- OSC Panel -->
+    <div class="panel">
+      <!-- OSC1 Column -->
+      <div class="panel-col">
+        <div class="col-header" style="color:var(--knob-amber);">OSC 1</div>
+        <div class="waveform-row">
+          <div class="wf-btn active">
+            <div class="wf-icon">
+              <svg viewBox="0 0 20 16"><path d="M0 16 L20 0 L20 16" stroke="#FFC107" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+            </div>
+            Saw
+          </div>
+          <div class="wf-btn inactive">
+            <div class="wf-icon">
+              <svg viewBox="0 0 20 16"><path d="M0 8 L0 0 L10 0 L10 16 L20 16 L20 8" stroke="#B0B0C0" stroke-width="1.5" fill="none"/></svg>
+            </div>
+            Sqr
+          </div>
+          <div class="wf-btn inactive">
+            <div class="wf-icon">
+              <svg viewBox="0 0 20 16"><path d="M0 16 L10 0 L20 16" stroke="#B0B0C0" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+            </div>
+            Tri
+          </div>
+          <div class="wf-btn inactive">
+            <div class="wf-icon">
+              <svg viewBox="0 0 20 16"><path d="M0 8 C3 -4,7 -4,10 8 C13 20,17 20,20 8" stroke="#B0B0C0" stroke-width="1.5" fill="none"/></svg>
+            </div>
+            Sin
+          </div>
+        </div>
+        <div class="knob-wrap">
+          <div class="knob"><div class="knob shadow"></div><div class="knob-body"></div><div class="knob-rim"></div><div class="knob-highlight"></div><div class="knob-indicator" style="background:var(--knob-amber);box-shadow:0 0 4px var(--knob-amber);transform:translateX(-50%) rotate(200deg);"></div></div>
+          <div class="knob-label">Level</div>
+          <div class="knob-value">100</div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div style="width:1px;background:linear-gradient(to bottom,transparent,rgba(45,27,78,0.5),transparent);"></div>
+
+      <!-- OSC2 Column -->
+      <div class="panel-col">
+        <div class="col-header" style="color:var(--knob-cyan);">OSC 2</div>
+        <div class="waveform-row">
+          <div class="wf-btn active" style="border-color:var(--knob-cyan);background:rgba(0,188,212,0.25);color:var(--knob-cyan);">
+            <div class="wf-icon">
+              <svg viewBox="0 0 20 16"><path d="M0 16 L20 0 L20 16" stroke="#00BCD4" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+            </div>
+            Saw
+          </div>
+          <div class="wf-btn inactive">
+            <div class="wf-icon">
+              <svg viewBox="0 0 20 16"><path d="M0 8 L0 0 L10 0 L10 16 L20 16 L20 8" stroke="#B0B0C0" stroke-width="1.5" fill="none"/></svg>
+            </div>
+            Sqr
+          </div>
+          <div class="wf-btn inactive">
+            <div class="wf-icon">
+              <svg viewBox="0 0 20 16"><path d="M0 16 L10 0 L20 16" stroke="#B0B0C0" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+            </div>
+            Tri
+          </div>
+          <div class="wf-btn inactive">
+            <div class="wf-icon">
+              <svg viewBox="0 0 20 16"><path d="M0 8 C3 -4,7 -4,10 8 C13 20,17 20,20 8" stroke="#B0B0C0" stroke-width="1.5" fill="none"/></svg>
+            </div>
+            Sin
+          </div>
+        </div>
+        <div class="knob-wrap">
+          <div class="knob"><div class="knob shadow"></div><div class="knob-body"></div><div class="knob-rim"></div><div class="knob-highlight"></div><div class="knob-indicator" style="background:var(--knob-cyan);box-shadow:0 0 4px var(--knob-cyan);transform:translateX(-50%) rotate(20deg);"></div></div>
+          <div class="knob-label">Level</div>
+          <div class="knob-value" style="color:var(--knob-cyan);">80</div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div style="width:1px;background:linear-gradient(to bottom,transparent,rgba(45,27,78,0.5),transparent);"></div>
+
+      <!-- Controls Column -->
+      <div class="panel-col" style="flex:0.8;">
+        <div class="knob-wrap">
+          <div class="knob" style="width:52px;height:52px;"><div class="knob shadow" style="width:52px;height:52px;"></div><div class="knob-body" style="width:52px;height:52px;"></div><div class="knob-rim" style="width:52px;height:52px;"></div><div class="knob-highlight" style="width:20px;height:20px;top:7px;left:9px;"></div><div class="knob-indicator" style="height:16px;background:var(--knob-green);box-shadow:0 0 4px var(--knob-green);transform:translateX(-50%) rotate(320deg);"></div></div>
+          <div class="knob-label">Detune</div>
+          <div class="knob-value" style="color:var(--knob-green);">+12¢</div>
+        </div>
+        <div class="knob-wrap">
+          <div class="knob" style="width:52px;height:52px;"><div class="knob shadow" style="width:52px;height:52px;"></div><div class="knob-body" style="width:52px;height:52px;"></div><div class="knob-rim" style="width:52px;height:52px;"></div><div class="knob-highlight" style="width:20px;height:20px;top:7px;left:9px;"></div><div class="knob-indicator" style="height:16px;background:var(--knob-pink);box-shadow:0 0 4px var(--knob-pink);transform:translateX(-50%) rotate(80deg);"></div></div>
+          <div class="knob-label">Mix</div>
+          <div class="knob-value" style="color:var(--knob-pink);">60%</div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:4px;">
+          <div class="knob-wrap">
+            <div class="knob" style="width:40px;height:40px;"><div class="knob shadow" style="width:40px;height:40px;"></div><div class="knob-body" style="width:40px;height:40px;"></div><div class="knob-rim" style="width:40px;height:40px;"></div><div class="knob-indicator" style="height:12px;transform:translateX(-50%) rotate(0deg);"></div></div>
+            <div class="knob-label">Sub</div>
+            <div class="knob-value">0</div>
+          </div>
+          <div class="knob-wrap">
+            <div class="knob" style="width:40px;height:40px;"><div class="knob shadow" style="width:40px;height:40px;"></div><div class="knob-body" style="width:40px;height:40px;"></div><div class="knob-rim" style="width:40px;height:40px;"></div><div class="knob-indicator" style="height:12px;transform:translateX(-50%) rotate(180deg);"></div></div>
+            <div class="knob-label">Noise</div>
+            <div class="knob-value">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom: Keyboard -->
+  <div class="keyboard-section">
+    <!-- Pitch bend strip -->
+    <div class="pitch-strip"><div class="center"></div></div>
+
+    <!-- Keyboard -->
+    <div class="keyboard">
+      <div class="white-keys" id="whiteKeys"></div>
+    </div>
+
+    <!-- Bottom bar -->
+    <div class="bottom-bar">
+      <div class="transport">
+        <button class="transport-btn play">▶</button>
+        <button class="transport-btn stop">↺</button>
+        <span class="bpm">BPM: 120</span>
+      </div>
+      <div class="actions">
+        <button class="action-btn">PRESET</button>
+        <button class="action-btn">SAVE</button>
+        <button class="action-btn">HELP</button>
+        <button class="action-btn">⚙</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Generate keyboard
+const container = document.getElementById('whiteKeys');
+const noteNames = ['C','D','E','F','G','A','B'];
+const blackPositions = {'C': 0.55, 'D': 0.55, 'F': 0.55, 'G': 0.55, 'A': 0.55};
+
+for (let oct = 0; oct < 2; oct++) {
+  for (let i = 0; i < 7; i++) {
+    const note = noteNames[i];
+    const isC = note === 'C';
+    const key = document.createElement('div');
+    key.className = 'white-key';
+    key.style.borderLeft = isC ? 'none' : '';
+    container.appendChild(key);
+
+    // Black key overlay
+    if (['C','D','F','G','A'].includes(note)) {
+      const bk = document.createElement('div');
+      bk.className = 'black-key-zone';
+      bk.style.left = (blackPositions[note] * 100) + '%';
+      bk.style.background = 'linear-gradient(180deg, #2A2A4E, #1A1A2E)';
+      bk.style.boxShadow = 'inset 0 1px 1px rgba(255,255,255,0.1), inset 0 -1px 2px rgba(0,0,0,0.5)';
+      bk.style.borderLeft = '1px solid rgba(255,255,255,0.05)';
+      key.appendChild(bk);
+    }
+  }
+}
+</script>
+</body>
+</html>
