@@ -58,9 +58,9 @@
 - [x] 9.2 Define PianoRollNote data class with fields: note (0-127), startStep (Float), duration (Float), velocity (0-127), muted (Boolean)
 - [x] 9.3 Rewrite PianoRollView.kt: render grid with MIDI note rows (C2-C7) and time columns (16 steps by default)
 - [x] 9.4 Implement note creation: tap on empty cell creates a note of default length (1 step) and velocity (100); tap-and-drag creates variable-length note
-- [ ] 9.5 Implement note dragging: vertical drag changes pitch, horizontal drag moves start position (snap to grid)
-- [ ] 9.6 Implement note resizing: drag right edge to change duration
-- [ ] 9.7 Implement velocity editing: long-press note to show velocity control, store velocity per-note, visualize by color intensity
+- [x] 9.5 Implement note dragging: vertical drag changes pitch, horizontal drag moves start position (snap to grid)
+- [x] 9.6 Implement note resizing: drag right edge to change duration
+- [x] 9.7 Implement velocity editing: long-press note to show velocity control, store velocity per-note, visualize by color intensity
 - [x] 9.8 Implement pattern playback: add playhead that moves across grid at sequencer tempo; trigger noteOn/noteOff on engine as playhead passes notes
 - [x] 9.9 Notes placed in piano roll do NOT play immediately (wait for transport play)
 - [x] 9.10 Integrate piano roll playback with transport: use sequencer tempo and play/stop state; pattern loops when it reaches pianoRollLength
