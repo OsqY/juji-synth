@@ -2,10 +2,12 @@
 #define JUJISYNTH_REVERB_H
 
 #include <array>
+#include "Smoother.h"
 
 /**
  * Simple Schroeder/Moorer reverb using comb filters and all-pass filters.
  * Produces a diffuse, natural-sounding reverb tail.
+ * Uses parameter smoothing to prevent zipper noise.
  */
 class Reverb {
 public:
@@ -21,9 +23,10 @@ public:
 
 private:
     double sampleRate_ = 44100.0;
-    double mix_ = 0.3;
+    double mix_ = 0.0;
     double decay_ = 0.5;
     double damping_ = 0.5;
+    Smoother mixSmoother_;
 
     // Comb filter delay lines (lengths in samples)
     static constexpr int NUM_COMBS = 4;

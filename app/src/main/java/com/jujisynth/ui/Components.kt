@@ -1,6 +1,6 @@
 package com.jujisynth.ui
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -83,11 +83,11 @@ fun ParameterTooltip(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(PurpleDark.copy(alpha = 0.95f))
-            .border(1.dp, PurplePrimary, RoundedCornerShape(6.dp))
+            .background(BgGunmetal.copy(alpha = 0.95f))
+            .border(1.dp, KnobCyan, RoundedCornerShape(6.dp))
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
-        Text(text, color = PurpleLight, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        Text(text, color = TextPrimary, fontSize = 10.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -131,12 +131,30 @@ fun SynthKnob(
     accentColor: Color = KnobAmber,
     size: Dp = 80.dp,
     minValue: Float = 0.0f,
-    maxValue: Float = 1.0f
+    maxValue: Float = 1.0f,
+    // MIDI Learn parameters
+    learnMode: Boolean = false,
+    isSelected: Boolean = false,
+    isMapped: Boolean = false,
+    onLearnSelect: (() -> Unit)? = null
 ) {
     val animatedValue by animateFloatAsState(targetValue = value, label = "knob")
     val currentValue by rememberUpdatedState(value)
+    val currentLearnMode by rememberUpdatedState(learnMode)
+    val currentOnLearnSelect by rememberUpdatedState(onLearnSelect)
     var showTooltip by remember { mutableStateOf(false) }
     var knobPosition by remember { mutableStateOf(Offset.Zero) }
+
+    val infiniteTransition = rememberInfiniteTransition()
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
 
     Column(
         modifier = modifier.width(size + 16.dp),
@@ -153,8 +171,8 @@ fun SynthKnob(
                 modifier = Modifier
                     .size(size)
                     .clip(CircleShape)
-                    .background(BgKnobArea)
-                    .border(2.dp, PurpleMid, CircleShape)
+                    .background(BgPanel)
+                    .border(2.dp, PanelHighlight, CircleShape)
                     .pointerInput(Unit) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
@@ -166,7 +184,18 @@ fun SynthKnob(
                                 val event = awaitPointerEvent(PointerEventPass.Main)
                                 val change = event.changes.find { it.id == down.id } ?: break
 
-                                if (!change.pressed) { change.consume(); break }
+                                if (!change.pressed) {
+                                    // Learn mode: short tap selects the control
+                                    if (currentLearnMode) {
+                                        val tapElapsed = System.nanoTime() - downTime
+                                        val tapDistance = (change.position - down.position).getDistance()
+                                        if (tapElapsed < 400_000_000L && tapDistance < 8.dp.toPx()) {
+                                            currentOnLearnSelect?.invoke()
+                                        }
+                                    }
+                                    change.consume()
+                                    break
+                                }
 
                                 val elapsed = System.nanoTime() - downTime
                                 val distance = (change.position - down.position).getDistance()
@@ -261,7 +290,7 @@ fun SynthKnob(
 
                     // 5. Background arc track (refined with subtle gradient)
                     drawArc(
-                        color = PurpleMid.copy(alpha = 0.25f),
+                        color = PanelHighlight.copy(alpha = 0.25f),
                         startAngle = 135f,
                         sweepAngle = 270f,
                         useCenter = false,
@@ -305,6 +334,40 @@ fun SynthKnob(
                         radius = 3.5f,
                         center = Offset(cx, cy)
                     )
+
+                    // 9. Learn mode pulsing highlight
+                    if (learnMode) {
+                        if (isSelected) {
+                            // Solid white border for selected control
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.6f),
+                                radius = radius + 4f,
+                                center = Offset(cx, cy),
+                                style = Stroke(width = 3f)
+                            )
+                        } else {
+                            // Pulsing amber border for mappable controls
+                            drawCircle(
+                                color = KnobAmber.copy(alpha = pulseAlpha),
+                                radius = radius + 3f,
+                                center = Offset(cx, cy),
+                                style = Stroke(width = 2.5f)
+                            )
+                        }
+                    }
+
+                    // 10. Mapped indicator (small green dot in top-right corner)
+                    if (isMapped && !learnMode) {
+                        val dotRadius = 4f
+                        val dotX = cx + radius * 0.7f
+                        val dotY = cy - radius * 0.7f
+                        drawCircle(color = KnobGreen, radius = dotRadius, center = Offset(dotX, dotY))
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.3f),
+                            radius = dotRadius * 0.5f,
+                            center = Offset(dotX - 0.5f, dotY - 0.5f)
+                        )
+                    }
                 }
             }
 
@@ -352,65 +415,7 @@ fun SynthKnob(
     }
 }
 
-/**
- * Section panel with hardware synth aesthetic.
- * Includes subtle noise texture, enhanced border, inner shadow effect,
- * and engraved-style title text.
- */
-@Composable
-fun SynthPanel(
-    title: String,
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    // Stable pseudo-random noise dots for panel texture
-    val noiseDots = remember {
-        val rng = java.util.Random(42L)
-        List(120) {
-            Offset(rng.nextFloat(), rng.nextFloat())
-        }
-    }
-
-    Column(
-        modifier = modifier
-            .padding(2.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(BgPanel)
-            .border(1.dp, PurpleMid.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-            .padding(6.dp)
-    ) {
-        // Title with engraved look: darker shadow text offset below lighter text
-        Box(modifier = Modifier.padding(bottom = 4.dp, start = 2.dp)) {
-            Text(
-                text = title,
-                color = Color.Black.copy(alpha = 0.50f),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.offset(x = 0.5.dp, y = 0.5.dp)
-            )
-            Text(
-                text = title,
-                color = PurpleLight,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        // Content area with subtle noise texture overlay
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                for (dot in noiseDots) {
-                    drawCircle(
-                        color = Color.White.copy(alpha = 0.025f),
-                        radius = 0.8f,
-                        center = Offset(dot.x * size.width, dot.y * size.height)
-                    )
-                }
-            }
-            Column { content() }
-        }
-    }
-}
+// SynthPanel has been moved to SynthPanel.kt
 
 /**
  * Horizontal slider. (Unchanged — kept as-is per spec.)
@@ -431,7 +436,7 @@ fun SynthSlider(
             value = value, onValueChange = onValueChange,
             colors = SliderDefaults.colors(
                 thumbColor = accentColor, activeTrackColor = accentColor,
-                inactiveTrackColor = PurpleMid.copy(alpha = 0.3f)
+                inactiveTrackColor = PanelHighlight.copy(alpha = 0.3f)
             ),
             modifier = Modifier.height(20.dp)
         )
@@ -448,8 +453,8 @@ fun SynthToggle(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     label: String = "",
-    enabledColor: Color = PurplePrimary,
-    disabledColor: Color = PurpleMid.copy(alpha = 0.4f)
+    enabledColor: Color = KnobCyan,
+    disabledColor: Color = PanelHighlight.copy(alpha = 0.4f)
 ) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         // Outer container provides consistent space for glow ring
@@ -482,7 +487,7 @@ fun SynthToggle(
                     .border(
                         1.5.dp,
                         if (checked) enabledColor.copy(alpha = 0.9f)
-                        else PurpleMid.copy(alpha = 0.3f),
+                        else PanelHighlight.copy(alpha = 0.3f),
                         RoundedCornerShape(5.dp)
                     )
                     .clickable { onCheckedChange(!checked) },
@@ -535,8 +540,8 @@ fun WaveformButton(
     val names = listOf("Saw", "Sqr", "Tri", "Sin")
     val isSelected = waveform == currentWaveform
 
-    val bgColor = if (isSelected) accentColor.copy(alpha = 0.25f) else PurpleMid.copy(alpha = 0.2f)
-    val borderColor = if (isSelected) accentColor else PurpleMid.copy(alpha = 0.3f)
+    val bgColor = if (isSelected) accentColor.copy(alpha = 0.25f) else BgPanel
+    val borderColor = if (isSelected) accentColor else PanelHighlight.copy(alpha = 0.3f)
 
     Box(
         modifier = modifier
@@ -630,16 +635,16 @@ fun WaveformIcon(
                 lineTo(w * 0.5f, 0f)
                 lineTo(w, h)
             }
-            3 -> Path().apply { // Sine: smooth sine wave curve
+            3 -> Path().apply { // Sine: smooth sine wave curve (scaled to fit bounds)
                 moveTo(0f, h * 0.5f)
                 cubicTo(
-                    w * 0.2f, -h * 0.35f,
-                    w * 0.3f, -h * 0.35f,
+                    w * 0.2f, h * 0.05f,
+                    w * 0.25f, h * 0.05f,
                     w * 0.5f, h * 0.5f
                 )
                 cubicTo(
-                    w * 0.7f, h * 1.35f,
-                    w * 0.8f, h * 1.35f,
+                    w * 0.75f, h * 0.95f,
+                    w * 0.8f, h * 0.95f,
                     w, h * 0.5f
                 )
             }

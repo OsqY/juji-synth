@@ -13,6 +13,7 @@ set(SOURCES
     Reverb.cpp
     Delay.cpp
     Distortion.cpp
+    Chorus.cpp
     ModulationMatrix.cpp
     Sequencer.cpp
     SynthVoice.cpp
@@ -28,6 +29,7 @@ set(HEADERS
     Reverb.h
     Delay.h
     Distortion.h
+    Chorus.h
     ModulationMatrix.h
     Sequencer.h
     SynthVoice.h

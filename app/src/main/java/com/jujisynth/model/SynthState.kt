@@ -55,6 +55,10 @@ data class SynthState(
     val delayFeedback: Float = 0.3f,
     val distortionDrive: Float = 0.0f,
     val distortionMix: Float = 0.0f,
+    // Chorus
+    val chorusRate: Float = 0.3f,
+    val chorusDepth: Float = 0.0f,
+    val chorusMix: Float = 0.0f,
     val effectsBypass: Boolean = false,
 
     // Master
@@ -65,9 +69,29 @@ data class SynthState(
     val sequencerSteps: List<SequencerStep> = List(16) { SequencerStep() },
     val sequencerTempo: Float = 120.0f,
     val sequencerPlaying: Boolean = false,
+    val sequencerCurrentStep: Int = 0,
+    val sequencerRecording: Boolean = false,
+    val sequencerLooping: Boolean = true,
+
+    // Piano roll pattern
+    val pianoRollNotes: List<PianoRollNote> = emptyList(),
+    val pianoRollLength: Int = 16,
 
     // Modulation routes (simplified)
     val modulationRoutes: List<ModulationRoute> = List(8) { ModulationRoute() }
+)
+
+/**
+ * Note in the piano roll pattern editor.
+ * Uses fractional step positions for sub-step precision.
+ */
+@Serializable
+data class PianoRollNote(
+    val note: Int = 60,          // MIDI note 0-127
+    val startStep: Float = 0f,   // fractional step position
+    val duration: Float = 1f,    // in steps (1.0 = one beat at 4/4)
+    val velocity: Int = 100,     // 0-127
+    val muted: Boolean = false
 )
 
 @Serializable
@@ -166,6 +190,9 @@ object ParamIds {
     const val DIST_DRIVE = 45
     const val DIST_MIX = 46
     const val EFFECTS_BYPASS = 47
+    const val CHORUS_RATE = 55
+    const val CHORUS_DEPTH = 56
+    const val CHORUS_MIX = 57
 
     const val MASTER_VOLUME = 50
     const val PITCH_BEND = 51
@@ -173,4 +200,5 @@ object ParamIds {
 
     const val SEQ_TEMPO = 60
     const val SEQ_PLAYING = 61
+    const val SEQ_LOOPING = 62
 }

@@ -124,6 +124,26 @@ Java_com_jujisynth_audio_SynthEngine_nativeNoteOff(JNIEnv* env, jclass /*clazz*/
 }
 
 JNIEXPORT void JNICALL
+Java_com_jujisynth_audio_SynthEngine_nativePanic(JNIEnv* env, jclass /*clazz*/) {
+    SynthEngine::getInstance().getAudioEngine().panic();
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujisynth_audio_SynthEngine_nativeGetWaveform(JNIEnv* env, jclass /*clazz*/,
+                                                       jfloatArray buffer) {
+    jsize size = env->GetArrayLength(buffer);
+    if (size <= 0) return;
+    jfloat* elements = env->GetFloatArrayElements(buffer, nullptr);
+    SynthEngine::getInstance().getAudioEngine().getWaveform(elements, size);
+    env->ReleaseFloatArrayElements(buffer, elements, 0);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujisynth_audio_SynthEngine_nativeResetEffects(JNIEnv* env, jclass /*clazz*/) {
+    SynthEngine::getInstance().getAudioEngine().setPendingEffectsReset();
+}
+
+JNIEXPORT void JNICALL
 Java_com_jujisynth_audio_SynthEngine_nativeSetParam(JNIEnv* env, jclass /*clazz*/,
                                                     jint paramId, jfloat value) {
     auto& engine = SynthEngine::getInstance().getAudioEngine();
@@ -177,6 +197,11 @@ Java_com_jujisynth_audio_SynthEngine_nativeSetParam(JNIEnv* env, jclass /*clazz*
         case 46: engine.setDistortionMix(value); break;
         case 47: engine.setEffectsBypass(value > 0.5f); break;
 
+        // Chorus (55-57)
+        case 55: engine.setChorusRate(value); break;
+        case 56: engine.setChorusDepth(value); break;
+        case 57: engine.setChorusMix(value); break;
+
         // Master (50-52)
         case 50: engine.setMasterVolume(value); break;
         case 51: engine.setPitchBend(value); break;
@@ -185,7 +210,72 @@ Java_com_jujisynth_audio_SynthEngine_nativeSetParam(JNIEnv* env, jclass /*clazz*
         // Sequencer (60-62)
         case 60: engine.setSequencerTempo(value); break;
         case 61: engine.setSequencerPlaying(value > 0.5f); break;
+        case 62: engine.setSequencerLooping(value > 0.5f); break;
     }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_jujisynth_audio_SynthEngine_nativeGetSequencerStep(JNIEnv* env, jclass /*clazz*/) {
+    return static_cast<jint>(SynthEngine::getInstance().getAudioEngine().getSequencerStep());
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_jujisynth_audio_SynthEngine_nativeGetSequencerLooping(JNIEnv* env, jclass /*clazz*/) {
+    return static_cast<jboolean>(SynthEngine::getInstance().getAudioEngine().getSequencerLooping());
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujisynth_audio_SynthEngine_nativeApplySynthState(JNIEnv* env, jclass /*clazz*/,
+                                                           jfloatArray values) {
+    jsize count = env->GetArrayLength(values);
+    if (count < AudioEngine::SYNTH_PARAM_COUNT) return;
+    jfloat* elements = env->GetFloatArrayElements(values, nullptr);
+    SynthEngine::getInstance().getAudioEngine().setAllParamsFromArray(elements, count);
+    env->ReleaseFloatArrayElements(values, elements, JNI_ABORT);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujisynth_audio_SynthEngine_nativeSetModulationRoute(JNIEnv* env, jclass /*clazz*/,
+                                                              jint index, jint source,
+                                                              jint destination, jfloat amount,
+                                                              jboolean active) {
+    ModulationRoute route;
+    route.source = source;
+    route.destination = destination;
+    route.amount = amount;
+    route.active = static_cast<bool>(active);
+    SynthEngine::getInstance().getAudioEngine().setModulationRoute(index, route);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujisynth_audio_SynthEngine_nativeSetSequencerSteps(JNIEnv* env, jclass /*clazz*/,
+                                                              jintArray notes, jintArray velocities,
+                                                              jfloatArray gates, jfloatArray automation) {
+    jsize count = env->GetArrayLength(notes);
+    if (count != SEQUENCER_STEPS) return;
+    if (env->GetArrayLength(velocities) != SEQUENCER_STEPS) return;
+    if (env->GetArrayLength(gates) != SEQUENCER_STEPS) return;
+    if (env->GetArrayLength(automation) != SEQUENCER_STEPS) return;
+
+    jint* notesArr = env->GetIntArrayElements(notes, nullptr);
+    jint* velArr = env->GetIntArrayElements(velocities, nullptr);
+    jfloat* gateArr = env->GetFloatArrayElements(gates, nullptr);
+    jfloat* autoArr = env->GetFloatArrayElements(automation, nullptr);
+
+    std::array<SequencerStep, SEQUENCER_STEPS> steps;
+    for (int i = 0; i < SEQUENCER_STEPS; i++) {
+        steps[i].note = static_cast<int>(notesArr[i]);
+        steps[i].velocity = static_cast<int>(velArr[i]);
+        steps[i].gate = gateArr[i];
+        steps[i].automation = autoArr[i];
+    }
+
+    env->ReleaseIntArrayElements(notes, notesArr, JNI_ABORT);
+    env->ReleaseIntArrayElements(velocities, velArr, JNI_ABORT);
+    env->ReleaseFloatArrayElements(gates, gateArr, JNI_ABORT);
+    env->ReleaseFloatArrayElements(automation, autoArr, JNI_ABORT);
+
+    SynthEngine::getInstance().getAudioEngine().setSequencerSteps(steps);
 }
 
 JNIEXPORT jfloat JNICALL
@@ -226,6 +316,9 @@ Java_com_jujisynth_audio_SynthEngine_nativeGetParam(JNIEnv* env, jclass /*clazz*
         case 44: return params.effects.delay.feedback;
         case 45: return params.effects.distortion.drive;
         case 46: return params.effects.distortion.mix;
+        case 55: return params.effects.chorus.rate;
+        case 56: return params.effects.chorus.depth;
+        case 57: return params.effects.chorus.mix;
         case 50: return params.master.volume;
         default: return 0.0f;
     }

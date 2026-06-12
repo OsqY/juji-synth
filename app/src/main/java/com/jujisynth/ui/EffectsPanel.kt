@@ -22,143 +22,13 @@ import com.jujisynth.ui.theme.*
 fun EffectsPanel(
     state: SynthState,
     onParamChange: (SynthState) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    learnMode: Boolean = false,
+    selectedParamId: Int? = null,
+    onLearnSelect: ((Int) -> Unit)? = null
 ) {
     SynthPanel(title = "EFFECTS", modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            // ── Reverb ──
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Reverb", color = KnobCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                SynthKnob(
-                    value = state.reverbMix,
-                    onValueChange = {
-                        onParamChange(state.copy(reverbMix = it))
-                        SynthEngine.setParam(ParamIds.REVERB_MIX, it)
-                    },
-                    label = "Mix",
-                    valueDisplay = "%.0f".format(state.reverbMix * 100),
-                    accentColor = KnobCyan,
-                    size = 48.dp
-                )
-                Spacer(Modifier.height(4.dp))
-                SynthKnob(
-                    value = state.reverbDecay,
-                    onValueChange = {
-                        onParamChange(state.copy(reverbDecay = it))
-                        SynthEngine.setParam(ParamIds.REVERB_DECAY, it)
-                    },
-                    label = "Decay",
-                    valueDisplay = "%.0f".format(state.reverbDecay * 100),
-                    accentColor = KnobCyan,
-                    size = 48.dp
-                )
-            }
-
-            // Divider
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(120.dp)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(PurpleMid.copy(alpha = 0.3f))
-            )
-
-            // ── Delay ──
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Delay", color = KnobAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                SynthKnob(
-                    value = state.delayMix,
-                    onValueChange = {
-                        onParamChange(state.copy(delayMix = it))
-                        SynthEngine.setParam(ParamIds.DELAY_MIX, it)
-                    },
-                    label = "Mix",
-                    valueDisplay = "%.0f".format(state.delayMix * 100),
-                    accentColor = KnobAmber,
-                    size = 48.dp
-                )
-                Spacer(Modifier.height(4.dp))
-                SynthKnob(
-                    value = state.delayTime,
-                    onValueChange = {
-                        onParamChange(state.copy(delayTime = it))
-                        SynthEngine.setParam(ParamIds.DELAY_TIME, it)
-                    },
-                    label = "Time",
-                    valueDisplay = "%.0fms".format(20 + 1980 * state.delayTime * state.delayTime),
-                    accentColor = KnobAmber,
-                    size = 48.dp
-                )
-                Spacer(Modifier.height(4.dp))
-                SynthKnob(
-                    value = state.delayFeedback,
-                    onValueChange = {
-                        onParamChange(state.copy(delayFeedback = it))
-                        SynthEngine.setParam(ParamIds.DELAY_FEEDBACK, it)
-                    },
-                    label = "Fdbk",
-                    valueDisplay = "%.0f".format(state.delayFeedback * 100),
-                    accentColor = KnobAmber,
-                    size = 48.dp
-                )
-            }
-
-            // Divider
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(120.dp)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(PurpleMid.copy(alpha = 0.3f))
-            )
-
-            // ── Distortion ──
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Distortion", color = KnobRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                SynthKnob(
-                    value = state.distortionDrive,
-                    onValueChange = {
-                        onParamChange(state.copy(distortionDrive = it))
-                        SynthEngine.setParam(ParamIds.DIST_DRIVE, it)
-                    },
-                    label = "Drive",
-                    valueDisplay = "%.1fx".format(1f + 19f * state.distortionDrive * state.distortionDrive),
-                    accentColor = KnobRed,
-                    size = 48.dp
-                )
-                Spacer(Modifier.height(4.dp))
-                SynthKnob(
-                    value = state.distortionMix,
-                    onValueChange = {
-                        onParamChange(state.copy(distortionMix = it))
-                        SynthEngine.setParam(ParamIds.DIST_MIX, it)
-                    },
-                    label = "Mix",
-                    valueDisplay = "%.0f".format(state.distortionMix * 100),
-                    accentColor = KnobRed,
-                    size = 48.dp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Global bypass toggle
+        // Bypass toggle
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
@@ -172,7 +42,191 @@ fun EffectsPanel(
                 },
                 label = "Bypass All",
                 enabledColor = KnobRed,
-                disabledColor = PurpleMid.copy(alpha = 0.3f)
+                disabledColor = BgPanel.copy(alpha = 0.3f)
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Reverb
+        Text("REVERB", color = KnobCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            RealKnob(
+                value = state.reverbMix,
+                onValueChange = {
+                    onParamChange(state.copy(reverbMix = it))
+                    SynthEngine.setParam(ParamIds.REVERB_MIX, it)
+                },
+                label = "Reverb Mix",
+                valueDisplay = "%.0f".format(state.reverbMix * 100),
+                accentColor = KnobCyan, ledColor = LedCyan,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.REVERB_MIX,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.REVERB_MIX) }
+            )
+            RealKnob(
+                value = state.reverbDecay,
+                onValueChange = {
+                    onParamChange(state.copy(reverbDecay = it))
+                    SynthEngine.setParam(ParamIds.REVERB_DECAY, it)
+                },
+                label = "Reverb Decay",
+                valueDisplay = "%.0f".format(state.reverbDecay * 100),
+                accentColor = KnobCyan, ledColor = LedCyan,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.REVERB_DECAY,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.REVERB_DECAY) }
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Delay
+        Text("DELAY", color = KnobOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            RealKnob(
+                value = state.delayMix,
+                onValueChange = {
+                    onParamChange(state.copy(delayMix = it))
+                    SynthEngine.setParam(ParamIds.DELAY_MIX, it)
+                },
+                label = "Delay Mix",
+                valueDisplay = "%.0f".format(state.delayMix * 100),
+                accentColor = KnobOrange, ledColor = LedOrange,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.DELAY_MIX,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.DELAY_MIX) }
+            )
+            RealKnob(
+                value = state.delayTime,
+                onValueChange = {
+                    onParamChange(state.copy(delayTime = it))
+                    SynthEngine.setParam(ParamIds.DELAY_TIME, it)
+                },
+                label = "Delay Time",
+                valueDisplay = "%.0fms".format(state.delayTime * 2000),
+                accentColor = KnobOrange, ledColor = LedOrange,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.DELAY_TIME,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.DELAY_TIME) }
+            )
+            RealKnob(
+                value = state.delayFeedback,
+                onValueChange = {
+                    onParamChange(state.copy(delayFeedback = it))
+                    SynthEngine.setParam(ParamIds.DELAY_FEEDBACK, it)
+                },
+                label = "Delay Fdbk",
+                valueDisplay = "%.0f".format(state.delayFeedback * 100),
+                accentColor = KnobOrange, ledColor = LedOrange,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.DELAY_FEEDBACK,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.DELAY_FEEDBACK) }
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Distortion
+        Text("DISTORTION", color = KnobRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            RealKnob(
+                value = state.distortionDrive,
+                onValueChange = {
+                    onParamChange(state.copy(distortionDrive = it))
+                    SynthEngine.setParam(ParamIds.DIST_DRIVE, it)
+                },
+                label = "Dist Drive",
+                valueDisplay = "%.0f".format(state.distortionDrive * 100),
+                accentColor = KnobRed, ledColor = LedRed,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.DIST_DRIVE,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.DIST_DRIVE) }
+            )
+            RealKnob(
+                value = state.distortionMix,
+                onValueChange = {
+                    onParamChange(state.copy(distortionMix = it))
+                    SynthEngine.setParam(ParamIds.DIST_MIX, it)
+                },
+                label = "Dist Mix",
+                valueDisplay = "%.0f".format(state.distortionMix * 100),
+                accentColor = KnobRed, ledColor = LedRed,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.DIST_MIX,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.DIST_MIX) }
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Chorus
+        Text("CHORUS", color = KnobGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            RealKnob(
+                value = state.chorusRate,
+                onValueChange = {
+                    onParamChange(state.copy(chorusRate = it))
+                    SynthEngine.setParam(ParamIds.CHORUS_RATE, it)
+                },
+                label = "Chorus Rate",
+                valueDisplay = "%.1fHz".format(0.01f + 19.99f * state.chorusRate),
+                accentColor = KnobGreen, ledColor = LedGreen,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.CHORUS_RATE,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.CHORUS_RATE) }
+            )
+            RealKnob(
+                value = state.chorusDepth,
+                onValueChange = {
+                    onParamChange(state.copy(chorusDepth = it))
+                    SynthEngine.setParam(ParamIds.CHORUS_DEPTH, it)
+                },
+                label = "Chorus Depth",
+                valueDisplay = "%.0f".format(state.chorusDepth * 100),
+                accentColor = KnobGreen, ledColor = LedGreen,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.CHORUS_DEPTH,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.CHORUS_DEPTH) }
+            )
+            RealKnob(
+                value = state.chorusMix,
+                onValueChange = {
+                    onParamChange(state.copy(chorusMix = it))
+                    SynthEngine.setParam(ParamIds.CHORUS_MIX, it)
+                },
+                label = "Chorus Mix",
+                valueDisplay = "%.0f".format(state.chorusMix * 100),
+                accentColor = KnobGreen, ledColor = LedGreen,
+                size = 48.dp,
+                learnMode = learnMode,
+                isSelected = selectedParamId == ParamIds.CHORUS_MIX,
+                onLearnSelect = { onLearnSelect?.invoke(ParamIds.CHORUS_MIX) }
             )
         }
     }

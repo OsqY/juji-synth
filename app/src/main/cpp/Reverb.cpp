@@ -6,6 +6,8 @@ Reverb::Reverb() = default;
 
 void Reverb::init(double sampleRate) {
     sampleRate_ = sampleRate;
+    mixSmoother_.reset(0.0f);
+    mixSmoother_.setCoefficient(0.15f); // ~7ms at 44.1kHz
     reset();
 }
 
@@ -22,7 +24,9 @@ void Reverb::setDamping(double damp) {
 }
 
 float Reverb::process(float input) {
-    if (mix_ == 0.0f) return input;
+    // Smooth the mix parameter to avoid zipper noise
+    float smoothMix = mixSmoother_.process(static_cast<float>(mix_));
+    if (smoothMix == 0.0f) return input;
 
     float wet = 0.0f;
     float feedback_factor = 0.5f + 0.5f * static_cast<float>(decay_);
@@ -56,9 +60,8 @@ float Reverb::process(float input) {
 
     wet *= 0.5f; // Normalize
 
-    // Dry/wet mix
-    return input * (1.0f - static_cast<float>(mix_))
-         + wet * static_cast<float>(mix_);
+    // Dry/wet mix (with smoothed parameter)
+    return input * (1.0f - smoothMix) + wet * smoothMix;
 }
 
 void Reverb::reset() {
@@ -67,4 +70,5 @@ void Reverb::reset() {
     for (auto& idx : combIndices_) idx = 0;
     for (auto& idx : allpassIndices_) idx = 0;
     for (auto& state : combFilterState_) state = 0.0f;
+    mixSmoother_.reset(0.0f);
 }

@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     onDismiss: () -> Unit,
     settingsDataStore: SettingsDataStore? = null,
+    onSettingsApplied: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // --- local mutable copies ---
@@ -58,6 +59,7 @@ fun SettingsScreen(
                 bufferSize = selectedBufferSize,
                 outputMode = selectedOutputMode
             )
+            onSettingsApplied()
         }
     }
 
@@ -68,7 +70,7 @@ fun SettingsScreen(
             .fillMaxHeight(0.55f)
             .clip(RoundedCornerShape(12.dp))
             .background(BgPanel)
-            .border(1.dp, PurpleMid.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+            .border(1.dp, BgPanel.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
             .padding(16.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -80,7 +82,7 @@ fun SettingsScreen(
             ) {
                 Text(
                     text = "AUDIO SETTINGS",
-                    color = PurpleLight,
+                    color = KnobCyan,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
@@ -157,7 +159,7 @@ private fun SettingsSection(
     Column {
         Text(
             text = title,
-            color = PurplePrimary,
+            color = KnobCyan,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 4.dp)
@@ -166,7 +168,7 @@ private fun SettingsSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(6.dp))
-                .background(SurfaceDark)
+                .background(BgGunmetal)
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
             Column { content() }
@@ -194,15 +196,15 @@ private fun SettingsRadioOption(
             selected = selected,
             onClick = onClick,
             colors = RadioButtonDefaults.colors(
-                selectedColor = PurplePrimary,
-                unselectedColor = PurpleMid.copy(alpha = 0.6f)
+                selectedColor = KnobCyan,
+                unselectedColor = PanelHighlight.copy(alpha = 0.6f)
             ),
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(8.dp))
         Text(
             text = label,
-            color = if (selected) PurpleLight else TextSecondary,
+            color = if (selected) KnobCyan else TextSecondary,
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
         )

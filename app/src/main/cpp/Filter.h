@@ -51,8 +51,12 @@ private:
     double band_ = 0.0;
     double notch_ = 0.0;
 
-    double f_ = 0.0; // frequency parameter
+    double f_ = 0.0; // current (smoothed) frequency parameter
     double q_ = 0.0; // resonance parameter
+    double targetF_ = 0.01; // target frequency coefficient (recalculated on param change)
+    double effectiveF_ = 0.01; // smoothed frequency coefficient for envelope modulation
+
+    void recalcCoefficients();
 };
 
 #endif // JUJISYNTH_FILTER_H

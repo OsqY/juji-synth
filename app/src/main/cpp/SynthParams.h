@@ -81,10 +81,18 @@ struct DistortionParams {
     bool active = false;
 };
 
+struct ChorusParams {
+    float rate = 0.3f;     // 0.0-1.0
+    float depth = 0.0f;    // 0.0-1.0
+    float mix = 0.0f;      // 0.0-1.0
+    bool active = false;
+};
+
 struct SynthEffectsSection {
     ReverbParams reverb;
     DelayParams delay;
     DistortionParams distortion;
+    ChorusParams chorus;
     bool bypass = false;
 };
 

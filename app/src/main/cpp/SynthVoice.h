@@ -1,6 +1,8 @@
 #ifndef JUJISYNTH_SYNTHVOICE_H
 #define JUJISYNTH_SYNTHVOICE_H
 
+#include <cstdint>
+
 #include "Oscillator.h"
 #include "Filter.h"
 #include "Envelope.h"
@@ -62,6 +64,18 @@ public:
     /** Set pitch bend */
     void setPitchBend(float bend) { pitchBend_ = bend; }
 
+    /** Set oscillator mix (0.0=only OSC1, 1.0=only OSC2) */
+    void setOscMix(float mix) { oscMix_ = mix; }
+
+    /** Enable/disable oscillator hard sync (OSC2 synced to OSC1) */
+    void setOscSyncEnabled(bool sync) { oscSyncEnabled_ = sync; }
+
+    /** Set modulation wheel value (0.0-1.0) */
+    void setModWheel(float wheel) { modWheel_ = wheel; }
+
+    /** Set sub oscillator level (0.0-1.0) */
+    void setSubOscLevel(float level) { subOscLevel_ = level; }
+
 private:
     Oscillator osc1_;
     Oscillator osc2_;
@@ -78,6 +92,11 @@ private:
     double sampleRate_ = 44100.0;
     float detune_ = 0.0f;
     float pitchBend_ = 0.0f;
+    float oscMix_ = 0.5f;
+    bool oscSyncEnabled_ = false;
+    float modWheel_ = 0.0f;
+    float subOscLevel_ = 0.0f;
+    double subPhase_ = 0.0;
 
     double midiNoteToFrequency(int midiNote) const;
 };

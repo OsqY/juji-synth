@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.sp
 import com.jujisynth.audio.SynthEngine
 import com.jujisynth.model.SequencerStep
 import com.jujisynth.ui.theme.*
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 /**
  * 16-step sequencer with play/stop/reset and tempo.
@@ -29,7 +31,10 @@ fun SequencerView(
     onPlayingChange: (Boolean) -> Unit,
     tempo: Float,
     onTempoChange: (Float) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    learnMode: Boolean = false,
+    selectedParamId: Int? = null,
+    onLearnSelect: ((Int) -> Unit)? = null
 ) {
     SynthPanel(title = "SEQUENCER", modifier = modifier) {
         // Transport
@@ -37,7 +42,7 @@ fun SequencerView(
             // Play/Pause
             Box(
                 modifier = Modifier.size(28.dp).clip(RoundedCornerShape(6.dp))
-                    .background(if (playing) KnobGreen else PurpleMid)
+                    .background(if (playing) KnobGreen else BgPanel)
                     .clickable { onPlayingChange(!playing) },
                 contentAlignment = Alignment.Center
             ) {
@@ -46,7 +51,7 @@ fun SequencerView(
             // Reset
             Box(
                 modifier = Modifier.size(28.dp).clip(RoundedCornerShape(6.dp))
-                    .background(PurpleMid).clickable { onPlayingChange(false) },
+                    .background(BgPanel).clickable { onPlayingChange(false) },
                 contentAlignment = Alignment.Center
             ) {
                 Text("↺", color = Color.White, fontSize = 12.sp)
@@ -54,7 +59,7 @@ fun SequencerView(
             // Tempo
             SynthKnob(
                 value = tempo / 300f,
-                onValueChange = { onTempoChange(it * 300f); SynthEngine.setParam(60, it) },
+                onValueChange = { val bpm = it * 300f; onTempoChange(bpm); SynthEngine.setParam(60, bpm) },
                 label = "Tempo", valueDisplay = "%.0f".format(tempo),
                 accentColor = KnobAmber, size = 28.dp
             )
@@ -74,7 +79,7 @@ fun SequencerView(
 
                         Box(
                             modifier = Modifier
-                                .size(width = 20.dp, height = 16.dp)
+                                .size(width = 28.dp, height = 22.dp)
                                 .clip(RoundedCornerShape(3.dp))
                                 .background(when {
                                     isCurrent && hasNote -> SeqStepCurrent
@@ -86,10 +91,21 @@ fun SequencerView(
                                     val newStep = if (hasNote) step.copy(note = -1)
                                     else step.copy(note = 60 + stepIdx)
                                     onStepChange(stepIdx, newStep)
+                                    // Preview: play the note briefly
+                                    if (newStep.note >= 0 && !playing) {
+                                        SynthEngine.noteOn(newStep.note, 100)
+                                        GlobalScope.launch {
+                                            kotlinx.coroutines.delay(100)
+                                            SynthEngine.noteOff(newStep.note)
+                                        }
+                                    }
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            if (hasNote) Text("●", color = Color.White, fontSize = 6.sp)
+                            if (hasNote) {
+                                val noteName = midiNoteToName(step.note)
+                                Text(noteName, color = Color.White, fontSize = 7.sp)
+                            }
                         }
                     }
                 }
@@ -97,4 +113,12 @@ fun SequencerView(
             }
         }
     }
+}
+
+private fun midiNoteToName(note: Int): String {
+    val names = arrayOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+    if (note < 0) return "--"
+    val octave = (note / 12) - 1
+    val name = names[note % 12]
+    return "$name$octave"
 }

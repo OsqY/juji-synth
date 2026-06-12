@@ -39,6 +39,12 @@ public:
     /** Sync: reset this oscillator's phase */
     void sync();
 
+    /** Returns true if the last process() call caused a phase wrap-around */
+    bool didPhaseWrap() const { return phaseWrapped_; }
+
+    /** Clear the phase-wrap flag */
+    void clearPhaseWrap() { phaseWrapped_ = false; }
+
 private:
     void rebuildWavetable();
     float interpolate();
@@ -54,6 +60,7 @@ private:
     static constexpr int TABLE_SIZE = 4096;
     double tableIncrement_ = 0.0;
     double tableIndex_ = 0.0;
+    bool phaseWrapped_ = false;
 };
 
 #endif // JUJISYNTH_OSCILLATOR_H

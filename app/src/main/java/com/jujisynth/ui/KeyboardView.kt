@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -29,6 +31,9 @@ import com.jujisynth.ui.theme.*
  * 2-octave piano keyboard with multi-touch (per-pointer gesture lifecycle),
  * note labels, 3D key rendering, pitch-bend strip, and octave offset.
  */
+
+private const val OCTAVE_COUNT = 6
+
 @Composable
 fun KeyboardView(
     activeNotes: Set<Int> = emptySet(),
@@ -51,7 +56,7 @@ fun KeyboardView(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
-            .background(BgKnobArea)
+            .background(BgPanel)
     ) {
         // ── Pitch bend strip ────────────────────────────────────────────
         PitchBendStrip(onPitchBend = currentOnPitchBend)
@@ -113,16 +118,16 @@ private fun PitchBendStrip(onPitchBend: (Float) -> Unit) {
             drawRect(
                 brush = Brush.horizontalGradient(
                     colors = listOf(
-                        PurpleMid.copy(alpha = 0.6f),
-                        PurpleDark.copy(alpha = 0.3f),
-                        PurpleMid.copy(alpha = 0.6f)
+                        BgPanel.copy(alpha = 0.6f),
+                        BgPanel.copy(alpha = 0.3f),
+                        BgPanel.copy(alpha = 0.6f)
                     )
                 ),
                 size = size
             )
             val centreX = w / 2f
             drawLine(
-                color = PurpleSecondary.copy(alpha = 0.8f),
+                color = KnobCyan.copy(alpha = 0.8f),
                 start = Offset(centreX, 0f),
                 end = Offset(centreX, h),
                 strokeWidth = 2f
@@ -155,82 +160,94 @@ private fun KeyboardKeys(
     octaveOffset: Int
 ) {
     val textMeasurer = rememberTextMeasurer()
+    val scrollState = rememberScrollState()
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
-            // key = octaveOffset → restarts gesture detector when octave changes
-            .pointerInput(octaveOffset) {
-                awaitPointerEventScope {
-                    val activePointers = mutableMapOf<Long, Int>()
-                    try {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Main)
-                            for (change in event.changes) {
-                                val ptrId = change.id.value
-                                when {
-                                    !change.pressed -> {
-                                        val oldNote = activePointers.remove(ptrId)
-                                        if (oldNote != null && oldNote >= 0) onNoteOff(oldNote)
-                                        change.consume()
-                                    }
-                                    ptrId !in activePointers -> {
-                                        val note = noteAtPosition(
-                                            x = change.position.x, y = change.position.y,
-                                            viewWidth = size.width.toFloat(), viewHeight = size.height.toFloat(),
-                                            whiteKeyToNote = whiteKeyToNote, blackKeyOffsets = blackKeyOffsets,
-                                            whiteIdxToBlackNote = whiteIdxToBlackNote, octaveOffset = octaveOffset
-                                        )
-                                        if (note >= 0) {
-                                            activePointers[ptrId] = note
-                                            onNoteOn(note)
+    ) {
+        val keyboardWidth = maxWidth * (OCTAVE_COUNT / 2f)
+
+        Box(
+            modifier = Modifier
+                .width(keyboardWidth)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(4.dp))
+                .background(BgPanel)
+                .horizontalScroll(scrollState)
+                // key = octaveOffset → restarts gesture detector when octave changes
+                .pointerInput(octaveOffset) {
+                    awaitPointerEventScope {
+                        val activePointers = mutableMapOf<Long, Int>()
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                for (change in event.changes) {
+                                    val ptrId = change.id.value
+                                    when {
+                                        !change.pressed -> {
+                                            val oldNote = activePointers.remove(ptrId)
+                                            if (oldNote != null && oldNote >= 0) onNoteOff(oldNote)
+                                            change.consume()
                                         }
-                                        change.consume()
-                                    }
-                                    else -> {
-                                        val oldNote = activePointers[ptrId]
-                                        val newNote = noteAtPosition(
-                                            x = change.position.x, y = change.position.y,
-                                            viewWidth = size.width.toFloat(), viewHeight = size.height.toFloat(),
-                                            whiteKeyToNote = whiteKeyToNote, blackKeyOffsets = blackKeyOffsets,
-                                            whiteIdxToBlackNote = whiteIdxToBlackNote, octaveOffset = octaveOffset
-                                        )
-                                        when {
-                                            newNote >= 0 && newNote != oldNote -> {
-                                                if (oldNote != null) onNoteOff(oldNote)
-                                                activePointers[ptrId] = newNote
-                                                onNoteOn(newNote)
+                                        ptrId !in activePointers -> {
+                                            val note = noteAtPosition(
+                                                x = change.position.x, y = change.position.y,
+                                                viewWidth = size.width.toFloat(), viewHeight = size.height.toFloat(),
+                                                whiteKeyToNote = whiteKeyToNote, blackKeyOffsets = blackKeyOffsets,
+                                                whiteIdxToBlackNote = whiteIdxToBlackNote, octaveOffset = octaveOffset
+                                            )
+                                            if (note >= 0) {
+                                                activePointers[ptrId] = note
+                                                onNoteOn(note)
                                             }
-                                            newNote < 0 && oldNote != null -> {
-                                                onNoteOff(oldNote)
-                                                activePointers.remove(ptrId)
-                                            }
+                                            change.consume()
                                         }
-                                        change.consume()
+                                        else -> {
+                                            val oldNote = activePointers[ptrId]
+                                            val newNote = noteAtPosition(
+                                                x = change.position.x, y = change.position.y,
+                                                viewWidth = size.width.toFloat(), viewHeight = size.height.toFloat(),
+                                                whiteKeyToNote = whiteKeyToNote, blackKeyOffsets = blackKeyOffsets,
+                                                whiteIdxToBlackNote = whiteIdxToBlackNote, octaveOffset = octaveOffset
+                                            )
+                                            when {
+                                                newNote >= 0 && newNote != oldNote -> {
+                                                    if (oldNote != null) onNoteOff(oldNote)
+                                                    activePointers[ptrId] = newNote
+                                                    onNoteOn(newNote)
+                                                }
+                                                newNote < 0 && oldNote != null -> {
+                                                    onNoteOff(oldNote)
+                                                    activePointers.remove(ptrId)
+                                                }
+                                            }
+                                            change.consume()
+                                        }
                                     }
                                 }
                             }
+                        } finally {
+                            // CRITICAL: release all tracked notes when gesture detector is cancelled
+                            activePointers.values.forEach { note -> if (note >= 0) onNoteOff(note) }
+                            activePointers.clear()
                         }
-                    } finally {
-                        // CRITICAL: release all tracked notes when gesture detector is cancelled
-                        activePointers.values.forEach { note -> if (note >= 0) onNoteOff(note) }
-                        activePointers.clear()
                     }
                 }
+        ) {
+            Canvas(modifier = Modifier.width(keyboardWidth).fillMaxHeight()) {
+                drawKeyboard(
+                    viewWidth = size.width,
+                    viewHeight = size.height,
+                    activeNotes = activeNotes,
+                    whiteKeyToNote = whiteKeyToNote,
+                    blackKeyOffsets = blackKeyOffsets,
+                    whiteIdxToBlackNote = whiteIdxToBlackNote,
+                    octaveOffset = octaveOffset,
+                    textMeasurer = textMeasurer
+                )
             }
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawKeyboard(
-                viewWidth = size.width,
-                viewHeight = size.height,
-                activeNotes = activeNotes,
-                whiteKeyToNote = whiteKeyToNote,
-                blackKeyOffsets = blackKeyOffsets,
-                whiteIdxToBlackNote = whiteIdxToBlackNote,
-                octaveOffset = octaveOffset,
-                textMeasurer = textMeasurer
-            )
         }
     }
 }
@@ -261,14 +278,15 @@ private fun noteAtPosition(
     whiteIdxToBlackNote: Map<Int, Int>,
     octaveOffset: Int
 ): Int {
-    val keyWidth = viewWidth / 14f
-    val blackKeyWidth = keyWidth * 0.6f
+    val totalWhiteKeys = OCTAVE_COUNT * 7
+    val keyWidth = viewWidth / totalWhiteKeys.toFloat()
+    val blackKeyWidth = keyWidth * 0.55f
     val blackKeyHeight = viewHeight * 0.65f
     val baseOctaveMidi = 48 + (octaveOffset - 3) * 12 // MIDI 48 = C3 = offset 3
 
     // 1) Black-key hit test (only top portion of the keyboard)
     if (y <= blackKeyHeight) {
-        for (octave in 0 until 2) {
+        for (octave in 0 until OCTAVE_COUNT) {
             for ((whiteIdx, offsetRat) in blackKeyOffsets) {
                 val baseWhiteX = octave * 7 * keyWidth
                 val centreX = baseWhiteX + offsetRat * keyWidth
@@ -284,7 +302,7 @@ private fun noteAtPosition(
 
     // 2) White key (fall-through)
     val whiteIndex = (x / keyWidth).toInt()
-    if (whiteIndex < 0 || whiteIndex >= 14) return -1
+    if (whiteIndex < 0 || whiteIndex >= totalWhiteKeys) return -1
     val octave = whiteIndex / 7
     val whiteNote = whiteIndex % 7
     return baseOctaveMidi + octave * 12 + whiteKeyToNote[whiteNote]
@@ -313,14 +331,14 @@ private fun DrawScope.drawKeyboard(
     octaveOffset: Int,
     textMeasurer: TextMeasurer
 ) {
-    val keyWidth = viewWidth / 14f
-    val blackKeyWidth = keyWidth * 0.6f
+    val keyWidth = viewWidth / (OCTAVE_COUNT * 7).toFloat()
+    val blackKeyWidth = keyWidth * 0.55f
     val blackKeyHeight = viewHeight * 0.65f
     val pressedOffset = 1.5.dp.toPx()
     val baseOctaveMidi = 48 + (octaveOffset - 3) * 12
 
     // ── White keys ──────────────────────────────────────────────────────
-    for (octave in 0 until 2) {
+    for (octave in 0 until OCTAVE_COUNT) {
         for (whiteIdx in 0 until 7) {
             val semitone = baseOctaveMidi + octave * 12 + whiteKeyToNote[whiteIdx]
             val isPressed = semitone in activeNotes
@@ -373,7 +391,7 @@ private fun DrawScope.drawKeyboard(
     }
 
     // ── Black keys ──────────────────────────────────────────────────────
-    for (octave in 0 until 2) {
+    for (octave in 0 until OCTAVE_COUNT) {
         for ((whiteIdx, offsetRat) in blackKeyOffsets) {
             val semitone = baseOctaveMidi + octave * 12 + whiteIdxToBlackNote[whiteIdx]!!
             val isPressed = semitone in activeNotes
@@ -415,7 +433,7 @@ private fun DrawScope.drawKeyboard(
 
             // Thin outline
             drawRect(
-                color = PurpleMid.copy(alpha = 0.4f),
+                color = BgPanel.copy(alpha = 0.4f),
                 topLeft = Offset(x, offY),
                 size = Size(blackKeyWidth, blackKeyHeight),
                 style = Stroke(width = 0.5f)
@@ -426,11 +444,11 @@ private fun DrawScope.drawKeyboard(
     // ── Note labels on white keys ───────────────────────────────────────
     val noteNames = arrayOf("C", "D", "E", "F", "G", "A", "B")
     val labelStyle = TextStyle(
-        color = Color(0xFF707080),
-        fontSize = 9.sp
+        color = Color(0xFF333333),
+        fontSize = 11.sp
     )
 
-    for (octave in 0 until 2) {
+    for (octave in 0 until OCTAVE_COUNT) {
         for (whiteIdx in 0 until 7) {
             val x = (octave * 7 + whiteIdx) * keyWidth
             val midiNote = baseOctaveMidi + octave * 12 + whiteKeyToNote[whiteIdx]
@@ -453,11 +471,11 @@ private fun DrawScope.drawKeyboard(
     // ── Note labels on black keys ────────────────────────────────────────
     val blackNoteNames = mapOf(1 to "C#", 2 to "D#", 4 to "F#", 5 to "G#", 6 to "A#")
     val blackLabelStyle = TextStyle(
-        color = Color(0xFF505060),
-        fontSize = 7.sp
+        color = Color(0xFF9A9AB0),
+        fontSize = 9.sp
     )
 
-    for (octave in 0 until 2) {
+    for (octave in 0 until OCTAVE_COUNT) {
         for ((whiteIdx, offsetRat) in blackKeyOffsets) {
             val semitone = baseOctaveMidi + octave * 12 + whiteIdxToBlackNote[whiteIdx]!!
             val isBlackPressed = semitone in activeNotes

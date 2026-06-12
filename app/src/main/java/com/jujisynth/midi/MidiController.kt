@@ -37,6 +37,10 @@ class MidiController(context: Context) {
 
     private var outputPort: MidiOutputPort? = null
 
+    // Sustain pedal state
+    private var sustainOn = false
+    private val sustainedNotes = mutableSetOf<Int>()
+
     // Standard CC mappings
     private val ccMappings = mapOf(
         1 to ModWheelDestination,    // Mod Wheel
@@ -47,6 +51,9 @@ class MidiController(context: Context) {
     )
 
     companion object {
+        /** Callback fired on every incoming MIDI CC for MIDI Learn capture. */
+        var onCcLearnCallback: ((ccNumber: Int, value: Float) -> Unit)? = null
+
         const val ModWheelDestination = 52
         const val VolumeDestination = 50
         const val PanDestination = -1     // Not implemented yet
@@ -127,18 +134,37 @@ class MidiController(context: Context) {
                 if (velocity > 0) {
                     SynthEngine.noteOn(note, velocity)
                 } else {
-                    SynthEngine.noteOff(note)
+                    // Note on with velocity 0 = note off
+                    if (sustainOn) {
+                        sustainedNotes.add(note)
+                    } else {
+                        SynthEngine.noteOff(note)
+                    }
                 }
             }
             0x80 -> { // Note Off (some controllers send this instead of 0x90 with velocity 0)
                 val note = msg[offset + 1].toInt() and 0x7F
-                SynthEngine.noteOff(note)
+                if (sustainOn) {
+                    sustainedNotes.add(note)
+                } else {
+                    SynthEngine.noteOff(note)
+                }
             }
-            0xB0 -> { // Control Change
+             0xB0 -> { // Control Change
                 val controller = msg[offset + 1].toInt() and 0x7F
                 val value = (msg[offset + 2].toInt() and 0x7F) / 127.0f
+
+                // Fire learn callback (allows MIDI Learn to capture this CC)
+                onCcLearnCallback?.invoke(controller, value)
+
                 val paramId = ccMappings[controller]
-                if (paramId != null && paramId >= 0) {
+                if (controller == 64) { // Sustain pedal
+                    sustainOn = value > 0.5f
+                    if (!sustainOn) {
+                        sustainedNotes.forEach { SynthEngine.noteOff(it) }
+                        sustainedNotes.clear()
+                    }
+                } else if (paramId != null && paramId >= 0) {
                     SynthEngine.setParam(paramId, value)
                 }
             }

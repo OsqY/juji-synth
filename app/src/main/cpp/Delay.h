@@ -2,9 +2,12 @@
 #define JUJISYNTH_DELAY_H
 
 #include <array>
+#include "Smoother.h"
 
 /**
  * Digital delay effect with feedback and optional tempo sync.
+ * Uses linear interpolation on reads and parameter smoothing
+ * to prevent zipper noise when tweaking controls.
  */
 class Delay {
 public:
@@ -21,7 +24,7 @@ public:
 
 private:
     double sampleRate_ = 44100.0;
-    double mix_ = 0.3;
+    double mix_ = 0.0;
     double delayTimeMs_ = 300.0;
     double feedback_ = 0.3;
     bool tempoSync_ = false;
@@ -30,6 +33,8 @@ private:
     std::array<float, MAX_DELAY_SAMPLES> buffer_{};
     int writeIndex_ = 0;
     int delaySamples_ = 0;
+    float smoothDelaySamples_ = 0.0f; // smoothed read position for linear interp
+    Smoother mixSmoother_;
     float lastOutput_ = 0.0f;
 };
 

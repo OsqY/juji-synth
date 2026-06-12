@@ -73,9 +73,11 @@ float Oscillator::process() {
 
     float sample = interpolate();
 
+    phaseWrapped_ = false;
     tableIndex_ += tableIncrement_;
     if (tableIndex_ >= TABLE_SIZE) {
         tableIndex_ -= TABLE_SIZE;
+        phaseWrapped_ = true;
     }
 
     return sample * static_cast<float>(amplitude_);

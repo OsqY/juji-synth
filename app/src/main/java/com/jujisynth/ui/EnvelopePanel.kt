@@ -20,7 +20,10 @@ import com.jujisynth.ui.theme.*
 fun EnvelopePanel(
     state: SynthState,
     onParamChange: (SynthState) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    learnMode: Boolean = false,
+    selectedParamId: Int? = null,
+    onLearnSelect: ((Int) -> Unit)? = null
 ) {
     SynthPanel(title = "ENVELOPES", modifier = modifier) {
         // ADSR curve visualization
@@ -60,112 +63,150 @@ fun EnvelopePanel(
 
         Spacer(Modifier.height(8.dp))
 
-        // AMP ENV row
+        // AMP ENV row (2x2 grid)
         Text("AMP ENV", color = KnobAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            SynthKnob(
-                value = state.ampAttack,
-                onValueChange = {
-                    onParamChange(state.copy(ampAttack = it))
-                    SynthEngine.setParam(ParamIds.AMP_ATTACK, it)
-                },
-                label = "Attack",
-                valueDisplay = "%.0fms".format(state.ampAttack * 10000),
-                accentColor = KnobAmber,
-                size = 60.dp
-            )
-            SynthKnob(
-                value = state.ampDecay,
-                onValueChange = {
-                    onParamChange(state.copy(ampDecay = it))
-                    SynthEngine.setParam(ParamIds.AMP_DECAY, it)
-                },
-                label = "Decay",
-                valueDisplay = "%.0fms".format(state.ampDecay * 10000),
-                accentColor = KnobAmber,
-                size = 60.dp
-            )
-            SynthKnob(
-                value = state.ampSustain,
-                onValueChange = {
-                    onParamChange(state.copy(ampSustain = it))
-                    SynthEngine.setParam(ParamIds.AMP_SUSTAIN, it)
-                },
-                label = "Sustain",
-                valueDisplay = "%.0f".format(state.ampSustain * 100),
-                accentColor = KnobAmber,
-                size = 60.dp
-            )
-            SynthKnob(
-                value = state.ampRelease,
-                onValueChange = {
-                    onParamChange(state.copy(ampRelease = it))
-                    SynthEngine.setParam(ParamIds.AMP_RELEASE, it)
-                },
-                label = "Release",
-                valueDisplay = "%.0fms".format(state.ampRelease * 10000),
-                accentColor = KnobAmber,
-                size = 60.dp
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                RealKnob(
+                    value = state.ampAttack,
+                    onValueChange = {
+                        onParamChange(state.copy(ampAttack = it))
+                        SynthEngine.setParam(ParamIds.AMP_ATTACK, it)
+                    },
+                    label = "Attack",
+                    valueDisplay = "%.0fms".format(state.ampAttack * 10000),
+                    accentColor = KnobAmber,
+                    size = 44.dp,
+                    learnMode = learnMode,
+                    isSelected = selectedParamId == ParamIds.AMP_ATTACK,
+                    onLearnSelect = { onLearnSelect?.invoke(ParamIds.AMP_ATTACK) }
+                )
+                RealKnob(
+                    value = state.ampDecay,
+                    onValueChange = {
+                        onParamChange(state.copy(ampDecay = it))
+                        SynthEngine.setParam(ParamIds.AMP_DECAY, it)
+                    },
+                    label = "Decay",
+                    valueDisplay = "%.0fms".format(state.ampDecay * 10000),
+                    accentColor = KnobAmber,
+                    size = 44.dp,
+                    learnMode = learnMode,
+                    isSelected = selectedParamId == ParamIds.AMP_DECAY,
+                    onLearnSelect = { onLearnSelect?.invoke(ParamIds.AMP_DECAY) }
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                RealKnob(
+                    value = state.ampSustain,
+                    onValueChange = {
+                        onParamChange(state.copy(ampSustain = it))
+                        SynthEngine.setParam(ParamIds.AMP_SUSTAIN, it)
+                    },
+                    label = "Sustain",
+                    valueDisplay = "%.0f".format(state.ampSustain * 100),
+                    accentColor = KnobAmber,
+                    size = 44.dp,
+                    learnMode = learnMode,
+                    isSelected = selectedParamId == ParamIds.AMP_SUSTAIN,
+                    onLearnSelect = { onLearnSelect?.invoke(ParamIds.AMP_SUSTAIN) }
+                )
+                RealKnob(
+                    value = state.ampRelease,
+                    onValueChange = {
+                        onParamChange(state.copy(ampRelease = it))
+                        SynthEngine.setParam(ParamIds.AMP_RELEASE, it)
+                    },
+                    label = "Release",
+                    valueDisplay = "%.0fms".format(state.ampRelease * 10000),
+                    accentColor = KnobAmber,
+                    size = 44.dp,
+                    learnMode = learnMode,
+                    isSelected = selectedParamId == ParamIds.AMP_RELEASE,
+                    onLearnSelect = { onLearnSelect?.invoke(ParamIds.AMP_RELEASE) }
+                )
+            }
         }
 
         Spacer(Modifier.height(10.dp))
 
-        // FILTER ENV row
+        // FILTER ENV row (2x2 grid)
         Text("FILTER ENV", color = KnobGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            SynthKnob(
-                value = state.filterAttack,
-                onValueChange = {
-                    onParamChange(state.copy(filterAttack = it))
-                    SynthEngine.setParam(ParamIds.FILTER_ATTACK, it)
-                },
-                label = "Attack",
-                valueDisplay = "%.0fms".format(state.filterAttack * 10000),
-                accentColor = KnobGreen,
-                size = 60.dp
-            )
-            SynthKnob(
-                value = state.filterDecay,
-                onValueChange = {
-                    onParamChange(state.copy(filterDecay = it))
-                    SynthEngine.setParam(ParamIds.FILTER_DECAY, it)
-                },
-                label = "Decay",
-                valueDisplay = "%.0fms".format(state.filterDecay * 10000),
-                accentColor = KnobGreen,
-                size = 60.dp
-            )
-            SynthKnob(
-                value = state.filterSustain,
-                onValueChange = {
-                    onParamChange(state.copy(filterSustain = it))
-                    SynthEngine.setParam(ParamIds.FILTER_SUSTAIN, it)
-                },
-                label = "Sustain",
-                valueDisplay = "%.0f".format(state.filterSustain * 100),
-                accentColor = KnobGreen,
-                size = 60.dp
-            )
-            SynthKnob(
-                value = state.filterRelease,
-                onValueChange = {
-                    onParamChange(state.copy(filterRelease = it))
-                    SynthEngine.setParam(ParamIds.FILTER_RELEASE, it)
-                },
-                label = "Release",
-                valueDisplay = "%.0fms".format(state.filterRelease * 10000),
-                accentColor = KnobGreen,
-                size = 60.dp
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                RealKnob(
+                    value = state.filterAttack,
+                    onValueChange = {
+                        onParamChange(state.copy(filterAttack = it))
+                        SynthEngine.setParam(ParamIds.FILTER_ATTACK, it)
+                    },
+                    label = "Attack",
+                    valueDisplay = "%.0fms".format(state.filterAttack * 10000),
+                    accentColor = KnobGreen, ledColor = LedGreen,
+                    size = 44.dp,
+                    learnMode = learnMode,
+                    isSelected = selectedParamId == ParamIds.FILTER_ATTACK,
+                    onLearnSelect = { onLearnSelect?.invoke(ParamIds.FILTER_ATTACK) }
+                )
+                RealKnob(
+                    value = state.filterDecay,
+                    onValueChange = {
+                        onParamChange(state.copy(filterDecay = it))
+                        SynthEngine.setParam(ParamIds.FILTER_DECAY, it)
+                    },
+                    label = "Decay",
+                    valueDisplay = "%.0fms".format(state.filterDecay * 10000),
+                    accentColor = KnobGreen, ledColor = LedGreen,
+                    size = 44.dp,
+                    learnMode = learnMode,
+                    isSelected = selectedParamId == ParamIds.FILTER_DECAY,
+                    onLearnSelect = { onLearnSelect?.invoke(ParamIds.FILTER_DECAY) }
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                RealKnob(
+                    value = state.filterSustain,
+                    onValueChange = {
+                        onParamChange(state.copy(filterSustain = it))
+                        SynthEngine.setParam(ParamIds.FILTER_SUSTAIN, it)
+                    },
+                    label = "Sustain",
+                    valueDisplay = "%.0f".format(state.filterSustain * 100),
+                    accentColor = KnobGreen, ledColor = LedGreen,
+                    size = 44.dp,
+                    learnMode = learnMode,
+                    isSelected = selectedParamId == ParamIds.FILTER_SUSTAIN,
+                    onLearnSelect = { onLearnSelect?.invoke(ParamIds.FILTER_SUSTAIN) }
+                )
+                RealKnob(
+                    value = state.filterRelease,
+                    onValueChange = {
+                        onParamChange(state.copy(filterRelease = it))
+                        SynthEngine.setParam(ParamIds.FILTER_RELEASE, it)
+                    },
+                    label = "Release",
+                    valueDisplay = "%.0fms".format(state.filterRelease * 10000),
+                    accentColor = KnobGreen, ledColor = LedGreen,
+                    size = 44.dp,
+                    learnMode = learnMode,
+                    isSelected = selectedParamId == ParamIds.FILTER_RELEASE,
+                    onLearnSelect = { onLearnSelect?.invoke(ParamIds.FILTER_RELEASE) }
+                )
+            }
         }
     }
 }

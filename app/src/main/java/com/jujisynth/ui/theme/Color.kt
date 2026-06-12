@@ -2,49 +2,73 @@ package com.jujisynth.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Deep purple palette — Minilogue-inspired dark synth aesthetic
-val PurpleDarkest = Color(0xFF0D0520)
-val PurpleDark = Color(0xFF1A0D2E)
-val PurpleMid = Color(0xFF2D1B4E)
-val PurplePrimary = Color(0xFF6C2BD9)
-val PurpleSecondary = Color(0xFF9B51FF)
-val PurpleLight = Color(0xFFC084FF)
-val PurpleAccent = Color(0xFFE0B0FF)
-val PurpleGlow = Color(0x7F6C2BD9)
+// ── Hardware Synth Color Palette ─────────────────────────────────
+// Dark anodized aluminum / brushed metal aesthetic
 
-// Surfaces
-val SurfaceDark = Color(0xFF121212)
-val SurfaceLight = Color(0xFF1E1E2E)
-val SurfaceCard = Color(0xFF252536)
-val SurfaceKnob = Color(0xFF2A2A3E)
+// Chassis / Background
+val BgGunmetal = Color(0xFF121214)       // darkest chassis
+val BgPanel = Color(0xFF1E1E22)           // panel surface (brushed)
+val PanelHighlight = Color(0xFF3A3A40)    // top-edge bevel
+val PanelShadow = Color(0xFF0E0E10)       // bottom-edge shadow
+val PanelDivider = Color(0xFF2A2A30)      // between sections
+
+// Screw heads
+val ScrewHead = Color(0xFF6A6A70)
+val ScrewHighlight = Color(0xFF9A9AA0)
+val ScrewSlot = Color(0xFF3A3A40)
 
 // Text
-val TextPrimary = Color(0xFFFFFFFF)
-val TextSecondary = Color(0xFFB0B0C0)
-val TextMuted = Color(0xFF707080)
+val TextPrimary = Color(0xFFE8E8EC)
+val TextSecondary = Color(0xFF9A9AA5)
+val TextMuted = Color(0xFF606068)
 
-// Knob accent colors (visual variety)
-val KnobAmber = Color(0xFFFFC107)
-val KnobCyan = Color(0xFF00BCD4)
-val KnobGreen = Color(0xFF4CAF50)
-val KnobPink = Color(0xFFE91E63)
-val KnobOrange = Color(0xFFFF9800)
+// Knob accents (color-coded per section)
+val KnobAmber = Color(0xFFFFB300)   // oscillators
+val KnobCyan = Color(0xFF00BCD4)     // filter
+val KnobGreen = Color(0xFF4CAF50)    // envelopes
+val KnobPink = Color(0xFFE91E63)     // LFO
+val KnobOrange = Color(0xFFFF9800)   // delay / misc
+val KnobRed = Color(0xFFE53935)      // distortion / effects
 
-// Knob red (for distortion)
-val KnobRed = Color(0xFFE53935)
+// LED ring colors (glow effect)
+val LedAmber = Color(0x80FFB300)
+val LedCyan = Color(0x8000BCD4)
+val LedGreen = Color(0x804CAF50)
+val LedPink = Color(0x80E91E63)
+val LedOrange = Color(0x80FF9800)
+val LedRed = Color(0x80E53935)
+
+// Knob metal
+val KnobFace = Color(0xFF2D2D35)
+val KnobRim = Color(0xFF4A4A52)
+val KnobIndicator = Color(0xFFE8E8EC)
+
+// LCD Display
+val LcdBackground = Color(0xFF0A0A0E)
+val LcdText = Color(0xFF00E676)       // bright green, classic LCD
+val LcdGlow = Color(0x0D00E676)       // faint screen glow
 
 // Keyboard
-val KeyWhite = Color(0xFFF5F5F5)
-val KeyBlack = Color(0xFF1A1A2E)
+val KeyWhite = Color(0xFFF0F0F2)
+val KeyBlack = Color(0xFF2A2A32)
 val KeyPressed = Color(0xFF9B51FF)
-val KeyPlaying = Color(0xFF6C2BD9)
+val KeyPlaying = Color(0xFF7B3BCC)
+val KeyBorder = Color(0xFFD0D0D4)
 
 // Sequencer
 val SeqStepActive = Color(0xFF6C2BD9)
-val SeqStepInactive = Color(0xFF2A2A3E)
+val SeqStepInactive = Color(0xFF2A2A32)
 val SeqStepCurrent = Color(0xFF9B51FF)
 
-// Screen backgrounds
-val BgPrimary = Color(0xFF120828)
-val BgPanel = Color(0xFF1A1030)
-val BgKnobArea = Color(0xFF221840)
+// Oscilloscope
+val ScopeBackground = Color(0xFF050508)
+val ScopeTrace = Color(0xFF00FF41)     // CRT green
+val ScopeGrid = Color(0x1A00FF41)      // faint grid lines
+
+// Transport / buttons
+val TransportGreen = Color(0xFF2E7D32)
+val TransportRed = Color(0xFFC62828)
+val TransportAmber = Color(0xFFF9A825)
+
+// MIDI learn indicator
+val MidiLearnGlow = Color(0xFFFF1744)

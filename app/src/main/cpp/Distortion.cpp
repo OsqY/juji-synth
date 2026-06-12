@@ -2,7 +2,10 @@
 #include <algorithm>
 #include <cmath>
 
-Distortion::Distortion() = default;
+Distortion::Distortion() {
+    driveSmoother_.reset(1.0f);
+    driveSmoother_.setCoefficient(0.3f); // ~3ms at 44.1kHz
+}
 
 void Distortion::setDrive(double drive) {
     drive_ = std::clamp(drive, 0.0, 1.0);
@@ -15,14 +18,17 @@ void Distortion::setMix(double mix) {
 }
 
 float Distortion::process(float input) {
+    // Smooth the drive factor to avoid zipper noise
+    float smoothDrive = driveSmoother_.process(static_cast<float>(driveFactor_));
+
     if (drive_ == 0.0 || mix_ == 0.0f) return input;
 
     // Waveshape with tanh for soft clipping
-    float shaped = std::tanh(input * static_cast<float>(driveFactor_));
+    float shaped = std::tanh(input * smoothDrive);
 
     // Normalize to maintain perceived level
-    if (driveFactor_ > 1.0f) {
-        shaped /= std::tanh(static_cast<float>(driveFactor_));
+    if (smoothDrive > 1.0f) {
+        shaped /= std::tanh(smoothDrive);
     }
 
     // Dry/wet mix

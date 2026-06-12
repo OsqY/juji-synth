@@ -22,13 +22,13 @@ import com.jujisynth.ui.theme.*
 fun LfoPanel(
     state: SynthState,
     onParamChange: (SynthState) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    learnMode: Boolean = false,
+    selectedParamId: Int? = null,
+    onLearnSelect: ((Int) -> Unit)? = null
 ) {
     SynthPanel(title = "LFO", modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             // ── LFO1 ──
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -45,10 +45,10 @@ fun LfoPanel(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(if (selected) KnobPink.copy(alpha = 0.2f) else PurpleMid.copy(alpha = 0.15f))
+                                .background(if (selected) KnobPink.copy(alpha = 0.2f) else BgPanel.copy(alpha = 0.15f))
                                 .border(
                                     1.dp,
-                                    if (selected) KnobPink else PurpleMid.copy(alpha = 0.3f),
+                                    if (selected) KnobPink else BgPanel.copy(alpha = 0.3f),
                                     RoundedCornerShape(4.dp)
                                 )
                                 .clickable {
@@ -67,12 +67,18 @@ fun LfoPanel(
                         }
                     }
                 }
+                LfoAnimationView(
+                    waveform = state.lfo1Waveform,
+                    rate = state.lfo1Rate,
+                    depth = state.lfo1Depth,
+                    accentColor = KnobPink
+                )
                 Spacer(Modifier.height(6.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SynthKnob(
+                    RealKnob(
                         value = state.lfo1Rate,
                         onValueChange = {
                             onParamChange(state.copy(lfo1Rate = it))
@@ -80,10 +86,13 @@ fun LfoPanel(
                         },
                         label = "Rate",
                         valueDisplay = "%.1fHz".format(0.01f + 49.99f * state.lfo1Rate * state.lfo1Rate),
-                        accentColor = KnobPink,
-                        size = 60.dp
+                        accentColor = KnobPink, ledColor = LedPink,
+                        size = 60.dp,
+                        learnMode = learnMode,
+                        isSelected = selectedParamId == ParamIds.LFO1_RATE,
+                        onLearnSelect = { onLearnSelect?.invoke(ParamIds.LFO1_RATE) }
                     )
-                    SynthKnob(
+                    RealKnob(
                         value = state.lfo1Depth,
                         onValueChange = {
                             onParamChange(state.copy(lfo1Depth = it))
@@ -91,8 +100,11 @@ fun LfoPanel(
                         },
                         label = "Depth",
                         valueDisplay = "%.0f".format(state.lfo1Depth * 100),
-                        accentColor = KnobPink,
-                        size = 60.dp
+                        accentColor = KnobPink, ledColor = LedPink,
+                        size = 60.dp,
+                        learnMode = learnMode,
+                        isSelected = selectedParamId == ParamIds.LFO1_DEPTH,
+                        onLearnSelect = { onLearnSelect?.invoke(ParamIds.LFO1_DEPTH) }
                     )
                 }
             }
@@ -103,7 +115,7 @@ fun LfoPanel(
                     .width(1.dp)
                     .height(160.dp)
                     .clip(RoundedCornerShape(1.dp))
-                    .background(PurpleMid.copy(alpha = 0.3f))
+                    .background(BgPanel.copy(alpha = 0.3f))
             )
 
             // ── LFO2 ──
@@ -122,10 +134,10 @@ fun LfoPanel(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(if (selected) KnobOrange.copy(alpha = 0.2f) else PurpleMid.copy(alpha = 0.15f))
+                                .background(if (selected) KnobOrange.copy(alpha = 0.2f) else BgPanel.copy(alpha = 0.15f))
                                 .border(
                                     1.dp,
-                                    if (selected) KnobOrange else PurpleMid.copy(alpha = 0.3f),
+                                    if (selected) KnobOrange else BgPanel.copy(alpha = 0.3f),
                                     RoundedCornerShape(4.dp)
                                 )
                                 .clickable {
@@ -144,12 +156,18 @@ fun LfoPanel(
                         }
                     }
                 }
+                LfoAnimationView(
+                    waveform = state.lfo2Waveform,
+                    rate = state.lfo2Rate,
+                    depth = state.lfo2Depth,
+                    accentColor = KnobOrange
+                )
                 Spacer(Modifier.height(6.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    SynthKnob(
+                    RealKnob(
                         value = state.lfo2Rate,
                         onValueChange = {
                             onParamChange(state.copy(lfo2Rate = it))
@@ -157,10 +175,13 @@ fun LfoPanel(
                         },
                         label = "Rate",
                         valueDisplay = "%.1fHz".format(0.01f + 49.99f * state.lfo2Rate * state.lfo2Rate),
-                        accentColor = KnobOrange,
-                        size = 60.dp
+                        accentColor = KnobOrange, ledColor = LedOrange,
+                        size = 60.dp,
+                        learnMode = learnMode,
+                        isSelected = selectedParamId == ParamIds.LFO2_RATE,
+                        onLearnSelect = { onLearnSelect?.invoke(ParamIds.LFO2_RATE) }
                     )
-                    SynthKnob(
+                    RealKnob(
                         value = state.lfo2Depth,
                         onValueChange = {
                             onParamChange(state.copy(lfo2Depth = it))
@@ -168,8 +189,11 @@ fun LfoPanel(
                         },
                         label = "Depth",
                         valueDisplay = "%.0f".format(state.lfo2Depth * 100),
-                        accentColor = KnobOrange,
-                        size = 60.dp
+                        accentColor = KnobOrange, ledColor = LedOrange,
+                        size = 60.dp,
+                        learnMode = learnMode,
+                        isSelected = selectedParamId == ParamIds.LFO2_DEPTH,
+                        onLearnSelect = { onLearnSelect?.invoke(ParamIds.LFO2_DEPTH) }
                     )
                 }
             }

@@ -79,7 +79,18 @@ Sequencer::StepEvent Sequencer::process(int numSamples) {
         }
 
         // Advance to next step
-        currentStep_ = (currentStep_ + 1) % SEQUENCER_STEPS;
+        currentStep_++;
+        if (currentStep_ >= SEQUENCER_STEPS) {
+            if (looping_) {
+                currentStep_ = 0;
+            } else {
+                // Non-looping: stop at end of sequence
+                currentStep_ = SEQUENCER_STEPS - 1;
+                playing_ = false;
+                tickCounter_ = 0.0;
+                return event;
+            }
+        }
         const auto& step = steps_[currentStep_];
 
         if (step.note >= 0) {

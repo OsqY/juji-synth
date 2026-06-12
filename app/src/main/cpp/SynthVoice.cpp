@@ -12,6 +12,7 @@ void SynthVoice::init(double sampleRate) {
     filter_.init(sampleRate);
     ampEnv_.init(sampleRate);
     filterEnv_.init(sampleRate);
+    subPhase_ = 0.0;
 }
 
 void SynthVoice::noteOn(int midiNote, int velocity) {
@@ -44,7 +45,8 @@ void SynthVoice::noteOff() {
 float SynthVoice::process() {
     if (!active_) return 0.0f;
 
-    double pitchBendSemitones = pitchBend_ * 2.0; // ±2 semitones
+    // Apply pitch bend and mod wheel
+    double pitchBendSemitones = pitchBend_ * 2.0 + modWheel_ * 0.5; // ±2 + mod wheel up to 0.5 semitones
     double bendFactor = std::pow(2.0, pitchBendSemitones / 12.0);
     double freq = midiNoteToFrequency(midiNote_) * bendFactor;
 
@@ -56,8 +58,20 @@ float SynthVoice::process() {
     float osc1Out = osc1_.process();
     float osc2Out = osc2_.process();
 
-    // Mix oscillators (balanced mix, each at 50% if both active)
-    float mixedOut = (osc1Out + osc2Out) * 0.5f;
+    // Oscillator sync: if OSC1 phase wrapped, sync OSC2
+    if (oscSyncEnabled_ && osc1_.didPhaseWrap()) {
+        osc2_.sync();
+    }
+
+    // Mix oscillators using oscMix parameter
+    float mixedOut = osc1Out * (1.0f - oscMix_) + osc2Out * oscMix_;
+
+    // Add sub-oscillator (square wave one octave below)
+    double subFreq = midiNoteToFrequency(midiNote_) * 0.5 * bendFactor;
+    subPhase_ += subFreq / sampleRate_;
+    if (subPhase_ >= 1.0) subPhase_ -= 1.0;
+    float subSample = (subPhase_ < 0.5f) ? 1.0f : -1.0f;
+    mixedOut += subSample * subOscLevel_;
 
     // Process envelope
     float ampEnv = ampEnv_.process();

@@ -29,6 +29,8 @@ public:
 
     void setTempo(double bpm);         // 30-300
     void setPlaying(bool playing);
+    void setLooping(bool loop) { looping_ = loop; }
+    bool isLooping() const { return looping_; }
     bool isPlaying() const { return playing_; }
 
     /** Process a block of samples, returns current step events */
@@ -52,6 +54,7 @@ private:
     double sampleRate_ = 44100.0;
     std::array<SequencerStep, SEQUENCER_STEPS> steps_{};
     bool playing_ = false;
+    bool looping_ = true;
     int currentStep_ = 0;
     double tempo_ = 120.0;
 

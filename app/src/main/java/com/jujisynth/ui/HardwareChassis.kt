@@ -3,100 +3,123 @@ package com.jujisynth.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.unit.dp
 import com.jujisynth.ui.theme.*
 
+/**
+ * Hardware chassis wrapper with dark gunmetal aesthetic.
+ * Includes screw heads at corners, subtle grid pattern, and bevelled edges.
+ */
 @Composable
 fun HardwareChassis(
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
+    content: @Composable ColumnScope.() -> Unit
 ) {
-    Box(
+    Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        Color(0xFF1E1835),  // lighter center
-                        Color(0xFF150E28),  // darker edge
-                    )
+            .drawBehind {
+                // Top/left highlight (bevel illusion)
+                drawLine(
+                    color = PanelHighlight,
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx()
                 )
-            )
-            .border(
-                2.dp,
-                Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF3A2A5E), // light edge (top-left)
-                        Color(0xFF1A0D2E), // dark edge (bottom-right)
-                        Color(0xFF2D1B4E),
-                        Color(0xFF0D0520),
-                    )
-                ),
-                RoundedCornerShape(12.dp)
-            )
-            .padding(8.dp)
-    ) {
-        // Screw holes at corners
-        Canvas(modifier = Modifier.matchParentSize()) {
-            val cornerOffset = 14f
-            val screwRadius = 3f
-            val positions = listOf(
-                Offset(cornerOffset, cornerOffset),
-                Offset(size.width - cornerOffset, cornerOffset),
-                Offset(cornerOffset, size.height - cornerOffset),
-                Offset(size.width - cornerOffset, size.height - cornerOffset)
-            )
-            for (pos in positions) {
-                // Screw hole outer ring (dark)
-                drawCircle(
-                    color = Color(0xFF0D0520),
-                    radius = screwRadius + 1f,
-                    center = pos
+                drawLine(
+                    color = PanelHighlight,
+                    start = Offset(0f, 0f),
+                    end = Offset(0f, size.height),
+                    strokeWidth = 1.dp.toPx()
                 )
-                // Screw hole inner (slightly lighter)
-                drawCircle(
-                    color = Color(0xFF2A1A4E),
-                    radius = screwRadius,
-                    center = pos
+                // Bottom/right shadow (bevel illusion)
+                drawLine(
+                    color = PanelShadow,
+                    start = Offset(0f, size.height),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = 1.dp.toPx()
                 )
-                // Screw highlight (top-left arc)
-                drawCircle(
-                    color = Color(0xFF4A3A6E).copy(alpha = 0.5f),
-                    radius = screwRadius * 0.5f,
-                    center = Offset(pos.x - 0.5f, pos.y - 0.5f)
+                drawLine(
+                    color = PanelShadow,
+                    start = Offset(size.width, 0f),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = 1.dp.toPx()
                 )
-            }
-        }
-        content()
-    }
-}
 
-@Composable
-fun SectionDivider(
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        PurpleMid.copy(alpha = 0.5f),
-                        Color.Transparent
+                // Subtle grid pattern (faint lines at 30dp spacing)
+                val gridSpacing = 30.dp.toPx()
+                val gridColor = Color.White.copy(alpha = 0.03f)
+                // Vertical lines
+                var x = gridSpacing
+                while (x < size.width) {
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(x, 0f),
+                        end = Offset(x, size.height),
+                        strokeWidth = 1f
                     )
+                    x += gridSpacing
+                }
+                // Horizontal lines
+                var y = gridSpacing
+                while (y < size.height) {
+                    drawLine(
+                        color = gridColor,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1f
+                    )
+                    y += gridSpacing
+                }
+
+                // 4 screw heads at corners
+                val cornerOffset = 14.dp.toPx()
+                val screwOuterRadius = 3.dp.toPx()
+                val screwInnerRadius = 1.dp.toPx()
+                val screwSlotLen = 2.5.dp.toPx()
+                val positions = listOf(
+                    Offset(cornerOffset, cornerOffset),
+                    Offset(size.width - cornerOffset, cornerOffset),
+                    Offset(cornerOffset, size.height - cornerOffset),
+                    Offset(size.width - cornerOffset, size.height - cornerOffset)
                 )
-            )
-            .padding(vertical = 4.dp)
+                for (pos in positions) {
+                    // Outer screw head
+                    drawCircle(
+                        color = ScrewHead,
+                        radius = screwOuterRadius,
+                        center = pos
+                    )
+                    // Inner highlight dot
+                    drawCircle(
+                        color = ScrewHighlight,
+                        radius = screwInnerRadius,
+                        center = Offset(pos.x - 0.5f, pos.y - 0.5f)
+                    )
+                    // Screw slot (tiny line through center)
+                    drawLine(
+                        color = ScrewSlot,
+                        start = Offset(pos.x - screwSlotLen, pos.y),
+                        end = Offset(pos.x + screwSlotLen, pos.y),
+                        strokeWidth = 1f
+                    )
+                }
+            }
+            .background(BgGunmetal)
+            .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+            .padding(4.dp),
+        content = content
     )
 }
