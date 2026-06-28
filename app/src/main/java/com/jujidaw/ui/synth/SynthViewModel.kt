@@ -11,6 +11,8 @@ import com.jujidaw.model.MidiLearnMode
 import com.jujidaw.model.MidiLearnState
 import com.jujidaw.model.ModulationRoute
 import com.jujidaw.model.SynthState
+import com.jujidaw.model.defaultTrackSynthState
+import com.jujidaw.model.toParamsArray
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,6 +60,9 @@ class SynthViewModel(
 
     private val presetJson = Json { encodeDefaults = true }
 
+    /** Per-track SynthState map for multi-timbral routing. */
+    var trackStates: MutableMap<Int, SynthState> = mutableMapOf(0 to defaultTrackSynthState())
+
     /** External MIDI mapping store; injected from the UI layer because it needs a [Context]. */
     var midiMappingStore: MidiMappingStore? = null
         private set
@@ -75,13 +80,17 @@ class SynthViewModel(
     /** Switch the active synth track (0..15). */
     fun selectTrack(index: Int) {
         if (index !in 0..15) return
-        _uiState.value = _uiState.value.copy(selectedTrack = index)
-        // TODO: load per-track state when multi-timbral support is added
+        val state = trackStates.getOrPut(index) { defaultTrackSynthState() }
+        _uiState.value = _uiState.value.copy(selectedTrack = index, synthState = state)
+        applySynthStateToEngine(state)
     }
 
     /** Replace the current synth state (e.g. after parameter changes from panels). */
     fun updateSynthState(newState: SynthState) {
+        val track = _uiState.value.selectedTrack
+        trackStates[track] = newState
         _uiState.value = _uiState.value.copy(synthState = newState)
+        applySynthStateToEngine(newState)
     }
 
     /** Load a preset by name from the database and apply it to the engine. */
@@ -204,31 +213,7 @@ class SynthViewModel(
         /** Apply a complete [SynthState] to the native engine. */
         fun applySynthStateToEngine(state: SynthState) {
             SynthEngine.resetEffects()
-            val params = floatArrayOf(
-                // Oscillators (9)
-                state.osc1Level, state.osc2Level, state.osc1Waveform.toFloat(), state.osc2Waveform.toFloat(),
-                state.oscDetune, state.subOscLevel, state.noiseLevel, state.oscMix,
-                if (state.oscSync) 1f else 0f,
-                // Filter (4)
-                state.filterCutoff, state.filterResonance, state.filterMode.toFloat(), state.filterEnvAmount,
-                // Amp Envelope (4)
-                state.ampAttack, state.ampDecay, state.ampSustain, state.ampRelease,
-                // Filter Envelope (4)
-                state.filterAttack, state.filterDecay, state.filterSustain, state.filterRelease,
-                // LFO1 (3) + LFO2 (3)
-                state.lfo1Rate, state.lfo1Depth, state.lfo1Waveform.toFloat(),
-                state.lfo2Rate, state.lfo2Depth, state.lfo2Waveform.toFloat(),
-                // Effects: Reverb (2), Delay (3), Distortion (2), Bypass (1), Chorus (3)
-                state.reverbMix, state.reverbDecay,
-                state.delayMix, state.delayTime, state.delayFeedback,
-                state.distortionDrive, state.distortionMix,
-                if (state.effectsBypass) 1f else 0f,
-                state.chorusRate, state.chorusDepth, state.chorusMix,
-                // Master (1)
-                state.masterVolume
-            )
-            require(params.size == 39) { "Synth parameter array must contain exactly 39 entries" }
-            SynthEngine.applySynthState(params)
+            SynthEngine.applySynthState(state.toParamsArray())
             state.modulationRoutes.forEachIndexed { idx, route ->
                 SynthEngine.setModulationRoute(idx, route.source, route.destination, route.amount, route.active)
             }

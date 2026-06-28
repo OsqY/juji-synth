@@ -3,6 +3,7 @@ package com.jujidaw.project
 import com.jujidaw.data.MidiMapping
 import com.jujidaw.model.Arrangement
 import com.jujidaw.model.Pattern
+import com.jujidaw.model.SynthState
 import com.jujidaw.model.TimeSignature
 import kotlinx.serialization.Serializable
 
@@ -101,5 +102,6 @@ data class Project(
     val mixerState: MixerState = MixerState(),
     val midiMappings: List<MidiMapping> = emptyList(),
     val samplePaths: List<String> = emptyList(),
-    val automation: List<AutomationClip> = emptyList()
+    val automation: List<AutomationClip> = emptyList(),
+    val trackSynthStates: Map<Int, SynthState> = emptyMap()
 )
