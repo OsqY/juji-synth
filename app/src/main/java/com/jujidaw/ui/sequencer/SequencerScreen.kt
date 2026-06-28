@@ -74,7 +74,9 @@ fun SequencerScreen(
             onPaste = viewModel::pastePattern,
             onClear = viewModel::clearPattern,
             onBpmChange = viewModel::setBpm,
-            onToggleViewMode = viewModel::toggleViewMode
+            onToggleViewMode = viewModel::toggleViewMode,
+            onToggleAutomation = viewModel::toggleAutomation,
+            showAutomation = uiState.showAutomation
         )
 
         Spacer(Modifier.height(4.dp))
@@ -102,6 +104,17 @@ fun SequencerScreen(
                     )
                 }
             }
+        }
+
+        // Automation lane overlay (piano-roll only, toggled)
+        if (uiState.showAutomation && uiState.viewMode == SequencerViewMode.PIANO_ROLL) {
+            AutomationLaneOverlay(
+                points = uiState.automationPoints,
+                onPointsChange = viewModel::updateAutomationPoints,
+                label = uiState.selectedAutomationParam.label,
+                numSteps = 64,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         Spacer(Modifier.height(4.dp))
@@ -145,7 +158,9 @@ private fun SequencerTopBar(
     onPaste: () -> Unit,
     onClear: () -> Unit,
     onBpmChange: (Float) -> Unit,
-    onToggleViewMode: () -> Unit
+    onToggleViewMode: () -> Unit,
+    onToggleAutomation: () -> Unit,
+    showAutomation: Boolean
 ) {
     SynthPanel(title = "SEQUENCER", accentColor = KnobAmber) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -224,6 +239,20 @@ private fun SequencerTopBar(
             ) {
                 // View mode toggle
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "A",
+                        color = if (showAutomation) KnobAmber else TextPrimary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(
+                                if (showAutomation) KnobAmber.copy(alpha = 0.4f)
+                                else BgPanel.copy(alpha = 0.3f),
+                                RoundedCornerShape(4.dp)
+                            )
+                            .clickable { onToggleAutomation() }
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    )
                     ViewModeButton(
                         label = "STEP",
                         selected = uiState.viewMode == SequencerViewMode.STEP,

@@ -9,6 +9,7 @@ import com.jujidaw.model.NoteEvent
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PianoRollNote
 import com.jujidaw.model.TICKS_PER_STEP
+import com.jujidaw.project.AutomationPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,16 @@ import kotlinx.coroutines.launch
 
 /** View mode for the sequencer screen. */
 enum class SequencerViewMode { STEP, PIANO_ROLL }
+
+/** Automation parameters exposed to the sequencer automation lane. */
+enum class AutomationParam(val id: Int, val label: String) {
+    FILTER_CUTOFF(9, "Filter Cutoff"),
+    FILTER_RES(10, "Filter Res"),
+    AMP_RELEASE(16, "Amp Release"),
+    REVERB_MIX(27, "Reverb Mix"),
+    DELAY_MIX(29, "Delay Mix"),
+    MASTER_VOLUME(38, "Master Vol")
+}
 
 /** A single cell in the 16×16 step grid. */
 data class StepCell(
@@ -56,7 +67,11 @@ data class SequencerUiState(
     val copyBufferPattern: SequencerPattern? = null,
     val showVelocityPopup: Boolean = false,
     val velocityEditTrack: Int = 0,
-    val velocityEditStep: Int = 0
+    val velocityEditStep: Int = 0,
+    val showAutomation: Boolean = false,
+    val selectedAutomationParam: AutomationParam = AutomationParam.FILTER_CUTOFF,
+    val automationPoints: List<AutomationPoint> = emptyList(),
+    val armedAutomationParams: Set<Int> = emptySet<Int>()
 )
 
 /**
@@ -118,6 +133,32 @@ class SequencerViewModel(
         syncActivePatternToTransport()
         // Queue the pattern so the transport can switch on the next bar boundary.
         transportController.queuePattern(id)
+    }
+
+    /** Toggle the automation lane overlay on/off in piano-roll mode. */
+    fun toggleAutomation() {
+        _uiState.value = _uiState.value.copy(showAutomation = !_uiState.value.showAutomation)
+    }
+
+    /** Select which automation parameter to show. */
+    fun selectAutomationParam(param: AutomationParam) {
+        _uiState.value = _uiState.value.copy(selectedAutomationParam = param)
+    }
+
+    /** Replace the automation points for the currently selected param. */
+    fun updateAutomationPoints(points: List<AutomationPoint>) {
+        _uiState.value = _uiState.value.copy(automationPoints = points)
+    }
+
+    /**
+     * Toggle arm state for a parameter. When armed and the transport is playing,
+     * knob movements on that param are recorded as automation points.
+     */
+    fun toggleAutomationArm(paramId: Int) {
+        val current = _uiState.value.armedAutomationParams
+        _uiState.value = _uiState.value.copy(
+            armedAutomationParams = if (paramId in current) current - paramId else current + paramId
+        )
     }
 
     /** Toggle between step and piano-roll view. */
