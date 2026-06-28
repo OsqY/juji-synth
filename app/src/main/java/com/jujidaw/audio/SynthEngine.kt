@@ -79,6 +79,7 @@ object SynthEngine {
     external fun nativeScheduleNoteOn(trackIndex: Int, note: Int, velocity: Float, targetSample: Long): Boolean
     external fun nativeScheduleNoteOff(trackIndex: Int, note: Int, targetSample: Long): Boolean
     external fun nativeSchedulePadTrigger(trackIndex: Int, padIndex: Int, velocity: Float, targetSample: Long): Boolean
+    external fun nativeScheduleAutomation(trackIndex: Int, paramIndex: Int, value: Float, targetSample: Long): Boolean
     external fun nativeClearScheduledEvents()
     external fun nativeSetTransport(playing: Boolean, recording: Boolean, tempoBpm: Float)
     external fun nativeGetPlayheadSample(): Long
@@ -150,6 +151,8 @@ object SynthEngine {
         nativeScheduleNoteOff(trackIndex, note, targetSample)
     fun schedulePadTrigger(trackIndex: Int, padIndex: Int, velocity: Float, targetSample: Long = -1L) =
         nativeSchedulePadTrigger(trackIndex, padIndex, velocity, targetSample)
+    fun scheduleAutomation(trackIndex: Int, paramIndex: Int, value: Float, targetSample: Long = -1L) =
+        nativeScheduleAutomation(trackIndex, paramIndex, value, targetSample)
     fun clearScheduledEvents() = nativeClearScheduledEvents()
     fun setTransport(playing: Boolean, recording: Boolean, tempoBpm: Float) =
         nativeSetTransport(playing, recording, tempoBpm)

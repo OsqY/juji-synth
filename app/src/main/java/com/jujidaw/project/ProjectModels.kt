@@ -7,6 +7,26 @@ import com.jujidaw.model.TimeSignature
 import kotlinx.serialization.Serializable
 
 /**
+ * A single automation point at a tick position with a normalised float value.
+ */
+@Serializable
+data class AutomationPoint(
+    val position: Long = 0L,
+    val value: Float = 0.0f
+)
+
+/**
+ * An automation clip for one (track, param) pair.
+ * Points are expected to be ordered by position.
+ */
+@Serializable
+data class AutomationClip(
+    val trackIndex: Int = 0,
+    val paramIndex: Int = 0,
+    val points: List<AutomationPoint> = emptyList()
+)
+
+/**
  * An insert FX slot on a mixer channel or bus.
  *
  * `effectType` matches [com.jujidaw.audio.SynthEngine.EffectType.value]:
@@ -80,5 +100,6 @@ data class Project(
     val arrangement: Arrangement = Arrangement(),
     val mixerState: MixerState = MixerState(),
     val midiMappings: List<MidiMapping> = emptyList(),
-    val samplePaths: List<String> = emptyList()
+    val samplePaths: List<String> = emptyList(),
+    val automation: List<AutomationClip> = emptyList()
 )

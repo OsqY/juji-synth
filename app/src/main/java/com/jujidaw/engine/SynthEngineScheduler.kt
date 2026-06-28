@@ -12,6 +12,7 @@ interface SynthEngineScheduler {
     fun scheduleNoteOn(trackIndex: Int, note: Int, velocity: Float): Boolean
     fun scheduleNoteOff(trackIndex: Int, note: Int): Boolean
     fun schedulePadTrigger(trackIndex: Int, padIndex: Int, velocity: Float): Boolean
+    fun scheduleAutomation(trackIndex: Int, paramIndex: Int, value: Float, targetSample: Long): Boolean
     fun clearScheduledEvents()
     fun setTransport(playing: Boolean, recording: Boolean, tempoBpm: Float)
     fun getPlayheadSample(): Long
@@ -35,6 +36,9 @@ class NativeSynthEngineScheduler : SynthEngineScheduler {
 
     override fun schedulePadTrigger(trackIndex: Int, padIndex: Int, velocity: Float): Boolean =
         SynthEngine.schedulePadTrigger(trackIndex, padIndex, velocity)
+
+    override fun scheduleAutomation(trackIndex: Int, paramIndex: Int, value: Float, targetSample: Long): Boolean =
+        SynthEngine.scheduleAutomation(trackIndex, paramIndex, value, targetSample)
 
     override fun clearScheduledEvents() = SynthEngine.clearScheduledEvents()
     override fun setTransport(playing: Boolean, recording: Boolean, tempoBpm: Float) =

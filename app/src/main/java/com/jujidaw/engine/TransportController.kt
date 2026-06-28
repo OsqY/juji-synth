@@ -6,6 +6,7 @@ import com.jujidaw.model.Clip
 import com.jujidaw.model.NoteEvent
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
+import com.jujidaw.project.AutomationClip
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.TICKS_PER_BEAT
 import com.jujidaw.model.TICKS_PER_STEP
@@ -47,6 +48,9 @@ class TransportController(
     // for the public control methods which post changes to pending state).
     var transportState: TransportState = TransportState()
         private set
+
+    /** Automation clips loaded for the current arrangement. */
+    var automationClips: MutableList<AutomationClip> = mutableListOf()
 
     var patterns: List<Pattern> = emptyList()
     var arrangement: Arrangement = Arrangement()
@@ -205,7 +209,10 @@ class TransportController(
         // 2. Timeline arrangement
         scheduleArrangement(currentSample, windowEnd, bpm, timeSignature)
 
-        // 3. Loop wrap
+        // 3. Automation events
+        scheduleAutomationEvents(currentSample, windowEnd, bpm)
+
+        // 4. Loop wrap
         checkLoopWrap(currentSample, windowEnd, bpm, timeSignature)
     }
 
@@ -384,6 +391,27 @@ class TransportController(
         } else if (windowEnd >= loopEndSample) {
             // Schedule a wrap on the next block.
             // We rely on the next scheduler tick to actually perform the seek.
+        }
+    }
+
+    /** Load automation clips for scheduling. Replaces any previously loaded clips. */
+    fun loadAutomation(clips: List<AutomationClip>) {
+        automationClips = clips.toMutableList()
+    }
+
+    /**
+     * Schedule all automation events whose tick position falls within the
+     * current lookahead window. Each point is converted to a [tickToSample]
+     * sample offset and pushed to the C++ EventQueue.
+     */
+    fun scheduleAutomationEvents(currentSample: Long, windowEnd: Long, bpm: Float) {
+        for (clip in automationClips) {
+            for (point in clip.points) {
+                val targetSample = tickToSample(point.position, bpm)
+                if (targetSample >= currentSample && targetSample < windowEnd) {
+                    scheduler.scheduleAutomation(clip.trackIndex, clip.paramIndex, point.value, targetSample)
+                }
+            }
         }
     }
 

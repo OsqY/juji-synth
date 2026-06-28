@@ -16,6 +16,7 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
     data class NoteOnEvent(val trackIndex: Int, val note: Int, val velocity: Float)
     data class NoteOffEvent(val trackIndex: Int, val note: Int)
     data class PadTriggerEvent(val trackIndex: Int, val padIndex: Int, val velocity: Float)
+    data class AutomationEvent(val trackIndex: Int, val paramIndex: Int, val value: Float, val targetSample: Long)
     data class AudioClipStartEvent(
         val clipId: String,
         val trackIndex: Int,
@@ -25,6 +26,7 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
     val noteOnEvents = mutableListOf<NoteOnEvent>()
     val noteOffEvents = mutableListOf<NoteOffEvent>()
     val padTriggers = mutableListOf<PadTriggerEvent>()
+    val scheduledAutomation = mutableListOf<AutomationEvent>()
     val audioClipStarts = mutableListOf<AudioClipStartEvent>()
 
     var clearScheduledEventsCount = 0
@@ -71,6 +73,11 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
 
     override fun schedulePadTrigger(trackIndex: Int, padIndex: Int, velocity: Float): Boolean {
         padTriggers.add(PadTriggerEvent(trackIndex, padIndex, velocity))
+        return true
+    }
+
+    override fun scheduleAutomation(trackIndex: Int, paramIndex: Int, value: Float, targetSample: Long): Boolean {
+        scheduledAutomation.add(AutomationEvent(trackIndex, paramIndex, value, targetSample))
         return true
     }
 

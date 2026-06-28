@@ -637,6 +637,16 @@ Java_com_jujidaw_audio_SynthEngine_nativeSchedulePadTrigger(JNIEnv* /*env*/, jcl
     return SynthEngine::getInstance().getAudioEngine().getEventQueue().push(event) ? JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_jujidaw_audio_SynthEngine_nativeScheduleAutomation(JNIEnv* /*env*/, jclass /*clazz*/,
+                                                              jint trackIndex, jint paramIndex,
+                                                              jfloat value, jlong targetSample) {
+    if (trackIndex < 0 || trackIndex >= AudioEngine::MAX_TRACKS) return JNI_FALSE;
+    auto event = jujidaw::ScheduledEvent::makeAutomation(trackIndex, paramIndex, value,
+                                                          static_cast<int64_t>(targetSample));
+    return SynthEngine::getInstance().getAudioEngine().getEventQueue().push(event) ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT void JNICALL
 Java_com_jujidaw_audio_SynthEngine_nativeClearScheduledEvents(JNIEnv* /*env*/, jclass /*clazz*/) {
     SynthEngine::getInstance().getAudioEngine().getEventQueue().clear();
