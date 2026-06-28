@@ -33,6 +33,11 @@ public:
     bool isLooping() const { return looping_; }
     bool isPlaying() const { return playing_; }
 
+    // When disabled, process() is a no-op. Used when the DAW transport is
+    // driving notes from Kotlin instead of the internal step sequencer.
+    void setEnabled(bool enabled) { enabled_ = enabled; }
+    bool isEnabled() const { return enabled_; }
+
     /** Process a block of samples, returns current step events */
     struct StepEvent {
         bool triggerNote = false;
@@ -62,6 +67,7 @@ private:
     double tickCounter_ = 0.0;
     bool lastTriggerState_ = false;
     int lastNote_ = -1;
+    bool enabled_ = true;
 };
 
 #endif // JUJISYNTH_SEQUENCER_H

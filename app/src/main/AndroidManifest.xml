@@ -4,19 +4,21 @@
     <!-- USB MIDI support -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
+    <!-- Audio input for sampler pad recording -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
-        android:name=".JujiSynthApp"
+        android:name=".JujiDawApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.JujiSynth">
+        android:theme="@style/Theme.JujiDaw">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="landscape"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:windowSoftInputMode="adjustNothing">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

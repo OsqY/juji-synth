@@ -1,0 +1,280 @@
+package com.jujidaw.midi
+
+import com.jujidaw.audio.SynthEngine
+import com.jujidaw.data.MidiMapping
+import com.jujidaw.data.MidiMappingStore
+import com.jujidaw.model.MidiTarget
+import com.jujidaw.ui.keyboard.KeyboardTarget
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+/**
+ * Central MIDI router — receives note/CC/pitch-bend events from [MidiController]
+ * and dispatches them to the correct engine call based on the active
+ * [keyboardTarget] and the persisted [mappings].
+ *
+ * ### Learn mode
+ * Call [startLearn] with a [MidiTarget] to capture the next incoming CC.
+ * When captured the mapping is persisted and [onLearnCaptured] fires.
+ *
+ * ### Thread safety
+ * All public methods are safe to call from any thread.  State-flow emissions
+ * happen on the caller's thread; persistence kicks off on [Dispatchers.IO].
+ */
+class MidiRouter(private val mappingStore: MidiMappingStore) {
+
+    // ── scope ──────────────────────────────────────────────────────────────
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // ── Keyboard target ────────────────────────────────────────────────────
+    /** Current note-routing target.  Set by [KeyboardViewModel] on change. */
+    @Volatile
+    var keyboardTarget: KeyboardTarget = KeyboardTarget.Synth
+
+    // ── Mappings ───────────────────────────────────────────────────────────
+    private val _mappings = MutableStateFlow<List<MidiMapping>>(emptyList())
+
+    /** Reactive stream of all active MIDI CC→target mappings. */
+    val mappings: StateFlow<List<MidiMapping>> = _mappings.asStateFlow()
+
+    // ── Learn mode ─────────────────────────────────────────────────────────
+    @Volatile
+    private var _isLearning = false
+
+    /** Whether the router is waiting for the next CC to capture. */
+    val isLearning: Boolean get() = _isLearning
+
+    @Volatile
+    private var _learnTarget: MidiTarget? = null
+
+    /** The target that will be assigned to the next CC (null when idle). */
+    val learnTarget: MidiTarget? get() = _learnTarget
+
+    /**
+     * Callback fired when a CC is captured during learn mode.
+     * Parameters: (ccNumber, target, normalisedValue 0…1).
+     */
+    var onLearnCaptured: ((ccNumber: Int, target: MidiTarget, value: Float) -> Unit)? = null
+
+    // ── Default CCs (when no explicit mapping exists) ──────────────────────
+    private val defaultCcMappings = mapOf(
+        1 to DefaultCc(modWheelDest, "Mod Wheel", false),
+        7 to DefaultCc(volumeDest, "Volume", false),
+        10 to DefaultCc(panDest, "Pan", false),
+        64 to DefaultCc(sustainDest, "Sustain Pedal", true),
+        74 to DefaultCc(filterCutoffDest, "Filter Cutoff", false)
+    )
+
+    private data class DefaultCc(
+        val paramId: Int,
+        val label: String,
+        val isSustain: Boolean
+    )
+
+    companion object {
+        // Synth param IDs for default CCs (must match ParamIds constants)
+        const val modWheelDest = 52
+        const val volumeDest = 50
+        const val panDest = -1       // Not yet implemented as a single param
+        const val sustainDest = -1   // Handled separately
+        const val filterCutoffDest = 10
+    }
+
+    // ── Initialisation ─────────────────────────────────────────────────────
+
+    /** Load persisted mappings from [MidiMappingStore] and start observing. */
+    fun load() {
+        ioScope.launch {
+            mappingStore.mappingsFlow.collect { list ->
+                _mappings.value = list
+            }
+        }
+    }
+
+    // ── Note routing ───────────────────────────────────────────────────────
+
+    /**
+     * Route a MIDI Note On to the correct engine call based on
+     * [keyboardTarget].
+     */
+    fun processNoteOn(note: Int, velocity: Int) {
+        val t = keyboardTarget
+        when (t) {
+            is KeyboardTarget.Synth -> SynthEngine.noteOn(note, velocity)
+            is KeyboardTarget.SamplerA -> {
+                SynthEngine.setSamplerBank(0)
+                SynthEngine.triggerPad(note % 16, velocity)
+            }
+            is KeyboardTarget.SamplerB -> {
+                SynthEngine.setSamplerBank(1)
+                SynthEngine.triggerPad(note % 16, velocity)
+            }
+            is KeyboardTarget.Track -> {
+                SynthEngine.scheduleNoteOn(t.index, note, velocity.toFloat())
+            }
+        }
+    }
+
+    /** Route a MIDI Note Off. */
+    fun processNoteOff(note: Int) {
+        val t = keyboardTarget
+        when (t) {
+            is KeyboardTarget.Synth -> SynthEngine.noteOff(note)
+            is KeyboardTarget.SamplerA, is KeyboardTarget.SamplerB -> {
+                // Sampler pads are one-shot; no note-off required
+            }
+            is KeyboardTarget.Track -> {
+                SynthEngine.scheduleNoteOff(t.index, note)
+            }
+        }
+    }
+
+    // ── CC routing ─────────────────────────────────────────────────────────
+
+    /**
+     * Route a MIDI Control Change.
+     *
+     * 1. If learn mode is active, capture the CC and persist the mapping.
+     * 2. Look up an explicit mapping for [ccNumber].
+     * 3. Fall back to built-in default CC behaviour.
+     */
+    fun processCc(ccNumber: Int, value: Float) {
+        // ── Learn capture ──────────────────────────────────────────────
+        if (_isLearning) {
+            val target = _learnTarget ?: return
+            _isLearning = false
+            _learnTarget = null
+
+            val mapping = MidiMapping(
+                ccNumber = ccNumber,
+                target = target,
+                minValue = 0f,
+                maxValue = 1f
+            )
+            ioScope.launch {
+                mappingStore.addMapping(mapping)
+            }
+
+            // Apply the CC value to the target immediately
+            applyValueToTarget(target, value)
+
+            // Fire callback so the UI can react (toast, highlight, …)
+            onLearnCaptured?.invoke(ccNumber, target, value)
+            return
+        }
+
+        // ── Explicit mapping lookup ────────────────────────────────────
+        val snapshot = _mappings.value
+        val mapping = snapshot.find { it.ccNumber == ccNumber }
+        if (mapping != null) {
+            applyMapping(mapping, value)
+            return
+        }
+
+        // ── Default CC fallback ────────────────────────────────────────
+        val default = defaultCcMappings[ccNumber] ?: return
+        if (default.isSustain) {
+            // Sustain pedal is handled in MidiController directly
+            // (it affects note-off timing).  We still pass the value through
+            // so synth-wide sustain can react if desired.
+            if (value > 0.5f) {
+                SynthEngine.setParam(sustainDest, 1f)
+            } else {
+                SynthEngine.setParam(sustainDest, 0f)
+            }
+        } else if (default.paramId >= 0) {
+            SynthEngine.setParam(default.paramId, value.coerceIn(0f, 1f))
+        }
+    }
+
+    // ── Pitch bend ─────────────────────────────────────────────────────────
+
+    /** Route MIDI Pitch Bend (-1 … +1). */
+    fun processPitchBend(value: Float) {
+        SynthEngine.setParam(51, value.coerceIn(-1f, 1f))
+    }
+
+    // ── Learn control ──────────────────────────────────────────────────────
+
+    /** Enter learn mode for the given [target]. */
+    fun startLearn(target: MidiTarget) {
+        _isLearning = true
+        _learnTarget = target
+    }
+
+    /** Cancel learn mode without capturing. */
+    fun stopLearn() {
+        _isLearning = false
+        _learnTarget = null
+    }
+
+    // ── Mapping helpers ────────────────────────────────────────────────────
+
+    /** Apply a [MidiMapping] (including its range clamping) to the engine. */
+    fun applyMapping(mapping: MidiMapping, rawValue: Float) {
+        val clamped = rawValue.coerceIn(0f, 1f)
+        val scaled = mapping.minValue + clamped * (mapping.maxValue - mapping.minValue)
+        applyValueToTarget(mapping.effectiveTarget(), scaled)
+    }
+
+    /**
+     * Apply a normalised [value] (0…1 unless otherwise specified) directly
+     * to the given [target] without any mapping table lookup.
+     */
+    fun applyValueToTarget(target: MidiTarget, value: Float) {
+        when (target) {
+            is MidiTarget.SynthParam -> {
+                SynthEngine.setParam(target.paramId, value.coerceIn(0f, 1f))
+            }
+
+            is MidiTarget.ChannelFader -> {
+                // Map 0…1 → -60…+12 dB
+                SynthEngine.setChannelFader(target.track, value * 72f - 60f)
+            }
+
+            is MidiTarget.ChannelPan -> {
+                // Map 0…1 → -1…+1
+                SynthEngine.setChannelPan(target.track, value * 2f - 1f)
+            }
+
+            is MidiTarget.ChannelMute -> {
+                SynthEngine.setChannelMute(target.track, value > 0.5f)
+            }
+
+            is MidiTarget.ChannelSolo -> {
+                SynthEngine.setChannelSolo(target.track, value > 0.5f)
+            }
+
+            is MidiTarget.ChannelArm -> {
+                SynthEngine.setChannelArm(target.track, value > 0.5f)
+            }
+
+            is MidiTarget.SendLevel -> {
+                SynthEngine.setSendLevel(target.track, target.bus, value.coerceIn(0f, 1f))
+            }
+
+            is MidiTarget.BusFader -> {
+                // Map 0…1 → -60…+12 dB
+                SynthEngine.setBusFader(target.bus, value * 72f - 60f)
+            }
+
+            is MidiTarget.MasterFader -> {
+                SynthEngine.setMasterFader(value * 72f - 60f)
+            }
+
+            is MidiTarget.InsertParam -> {
+                SynthEngine.setInsertParam(target.track, target.slot, target.paramId, value.coerceIn(0f, 1f))
+            }
+
+            is MidiTarget.PerformFx -> {
+                // Perform FX are toggled through MixerViewModel;
+                // direct MIDI control is a future enhancement.
+            }
+        }
+    }
+}

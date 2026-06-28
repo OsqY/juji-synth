@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Juji Synth</string>
+    <string name="app_name">Juji DAW</string>
     <string name="presets">Presets</string>
     <string name="sequencer">Sequencer</string>
     <string name="effects">Effects</string>
     <string name="manual">Manual</string>
     <string name="settings">Settings</string>
+    <string name="keyboard">Keyboard</string>
+    <string name="mixer">Mixer</string>
+    <string name="project">Project</string>
     <string name="midi">MIDI</string>
 </resources>

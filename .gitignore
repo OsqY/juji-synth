@@ -16,3 +16,5 @@ app/build
 *.hprof
 .navili*
 __pycache__
+# Local Pi runtime state
+.atl/

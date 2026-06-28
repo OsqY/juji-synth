@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.jujisynth"
+    namespace = "com.jujidaw"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.jujisynth.app"
+        applicationId = "com.jujidaw.app"
         minSdk = 31
         targetSdk = 35
         versionCode = 1

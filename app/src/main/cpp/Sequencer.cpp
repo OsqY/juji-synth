@@ -65,7 +65,7 @@ Sequencer::StepEvent Sequencer::process(int numSamples) {
     StepEvent event;
     event.triggerNote = false;
 
-    if (!playing_) return event;
+    if (!enabled_ || !playing_) return event;
 
     tickCounter_ += numSamples;
 

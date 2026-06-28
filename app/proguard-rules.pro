@@ -15,4 +15,4 @@
 }
 
 # Keep Room entities
--keep class com.jujisynth.data.** { *; }
+-keep class com.jujidaw.data.** { *; }

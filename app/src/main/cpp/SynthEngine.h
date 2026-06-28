@@ -3,10 +3,21 @@
 
 #include "AudioEngine.h"
 #include <oboe/Oboe.h>
+#include <string>
+
+/**
+ * Result of an audio stream startup attempt.
+ */
+struct StartResult {
+    bool ok = false;
+    std::string message;
+    int sampleRate = 0;
+    int framesPerBurst = 0;
+};
 
 /**
  * SynthEngine wraps AudioEngine with Oboe audio stream management.
- * 
+ *
  * - Creates and manages the Oboe audio callback
  * - Handles stream startup/teardown
  * - Provides JNI-friendly interface
@@ -16,9 +27,13 @@ class SynthEngine : public oboe::AudioStreamCallback {
 public:
     static SynthEngine& getInstance();
 
-    bool start();
+    StartResult start();
     bool stop();
     bool isRunning() const { return isRunning_; }
+
+    const std::string& getLastError() const { return lastError_; }
+    int getSampleRate() const { return sampleRate_; }
+    int getFramesPerBurst() const { return framesPerBurst_; }
 
     // AudioStreamCallback interface
     oboe::DataCallbackResult onAudioReady(
@@ -40,9 +55,14 @@ private:
     SynthEngine(const SynthEngine&) = delete;
     SynthEngine& operator=(const SynthEngine&) = delete;
 
+    StartResult tryOpenStream(bool lowLatency, bool exclusive);
+
     AudioEngine engine_;
     std::shared_ptr<oboe::AudioStream> stream_;
     bool isRunning_ = false;
+    std::string lastError_;
+    int sampleRate_ = 0;
+    int framesPerBurst_ = 0;
 };
 
 #endif // JUJISYNTH_SYNTHENGINE_H

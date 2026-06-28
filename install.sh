@@ -1,5 +1,5 @@
 #!/bin/bash
-# install.sh — Build and install Juji Synth on a connected Android device
+# install.sh — Build and install Juji DAW on a connected Android device
 #
 # Usage:
 #   ./install.sh              Build debug APK and install
@@ -55,16 +55,16 @@ echo "📱 Device found! $DEVICES device(s) connected."
 
 if [ "$REINSTALL" = true ]; then
     echo "🗑️  Uninstalling previous version..."
-    adb uninstall com.jujisynth.app 2>/dev/null || true
+    adb uninstall com.jujidaw.app 2>/dev/null || true
 fi
 
-echo "📲 Installing Juji Synth..."
+echo "📲 Installing Juji DAW..."
 adb install -r "$APK_PATH"
 
 echo ""
-echo "✅ Juji Synth installed successfully!"
+echo "✅ Juji DAW installed successfully!"
 echo ""
-echo "   Launch the app from your app drawer (icon: 'Juji Synth')"
-echo "   or run: adb shell monkey -p com.jujisynth.app 1"
+echo "   Launch the app from your app drawer (icon: 'Juji DAW')"
+echo "   or run: adb shell monkey -p com.jujidaw.app 1"
 echo ""
-echo "📋 To view logcat: adb logcat -s JujiSynth"
+echo "📋 To view logcat: adb logcat -s JujiDaw"

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "juji-synth"
+rootProject.name = "juji-daw"
 include(":app")
