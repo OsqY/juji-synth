@@ -1,11 +1,8 @@
 # multi-timbral-routing Specification
 
 ## Purpose
-
-Each DAW track carries its own `SynthState` preset (oscillator, filter, envelope, LFO, effects parameters). When a track is selected as the active instrument, the engine loads that track's preset via `SynthEngine.applySynthState()`. Notes from each track are routed through a MIDI channel to the corresponding `MixerChannel` (0–15), reusing the existing 16-channel mixer with zero new C++.
-
-## ADDED Requirements
-
+TBD - created by archiving change jujidaw-daw-completion. Update Purpose after archive.
+## Requirements
 ### Requirement: Per-track SynthState
 Each track SHALL have an independent `SynthState` that defines its sound. The `SynthState` is stored in the project model and serialised in the project JSON.
 
@@ -46,7 +43,7 @@ Each track SHALL be assigned a MIDI channel (0–15) that maps to the correspond
 - **THEN** the note's `trackIndex` is 3
 
 ### Requirement: Single engine, shared voices
-All tracks share one `SynthInstrument` and one `SamplerInstrument`. Per-track sound switching is done by swapping `SynthState` on track focus, not by instantiating new synths. Voice stealing is global.
+All tracks SHALL share one `SynthInstrument` and one `SamplerInstrument`. Per-track sound switching SHALL be done by swapping `SynthState` on track focus, not by instantiating new synths. Voice stealing SHALL be global.
 
 #### Scenario: Many tracks, limited voices
 - **WHEN** the user plays a chord on track 0 and another chord on track 1
@@ -68,3 +65,4 @@ A track with no pattern, clip, or notes loaded SHALL produce silence. Its mixer 
 - **WHEN** a track has no clips or patterns
 - **THEN** its `MixerChannel` produces silence (no instrument, no voice allocated)
 - **AND** the channel strip still shows its fader, pan, and insert state (for future use)
+
