@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.jujidaw.JujiDawApp
 import com.jujidaw.R
 import com.jujidaw.model.TICKS_PER_STEP
-import com.jujidaw.ui.MainSynthScreen
+import com.jujidaw.ui.synth.SynthScreen
 import com.jujidaw.ui.keyboard.KeyboardScreen
 import com.jujidaw.ui.mixer.MixerScreen
 import com.jujidaw.ui.pads.PadsScreen
@@ -60,12 +60,12 @@ private enum class MainTab(
     val label: String,
     val icon: ImageVector
 ) {
-    PADS("Pads", Icons.Filled.Dashboard),
-    SYNTH("Synth", Icons.Filled.Tune),
-    KEYBOARD("Keys", Icons.Filled.MusicNote),
-    SEQUENCER("Seq", Icons.Filled.ViewModule),
     TIMELINE("Timeline", Icons.AutoMirrored.Filled.ViewList),
     MIXER("Mixer", Icons.Filled.Equalizer),
+    SYNTH("Synth", Icons.Filled.Tune),
+    PADS("Pads", Icons.Filled.Dashboard),
+    KEYBOARD("Keys", Icons.Filled.MusicNote),
+    SEQUENCER("Seq", Icons.Filled.ViewModule),
     PROJECT("Project", Icons.Filled.Folder);
 }
 
@@ -174,12 +174,12 @@ fun MainScreen(modifier: Modifier = Modifier) {
 
             Box(modifier = Modifier.weight(1f)) {
                 when (tabs[selectedTab]) {
-                    MainTab.PADS -> PadsScreen()
-                    MainTab.SYNTH -> MainSynthScreen()
-                    MainTab.KEYBOARD -> KeyboardScreen()
-                    MainTab.SEQUENCER -> SequencerScreen()
                     MainTab.TIMELINE -> TimelineScreen()
                     MainTab.MIXER -> MixerScreen()
+                    MainTab.SYNTH -> SynthScreen()
+                    MainTab.PADS -> PadsScreen()
+                    MainTab.KEYBOARD -> KeyboardScreen()
+                    MainTab.SEQUENCER -> SequencerScreen()
                     MainTab.PROJECT -> ProjectScreen()
                 }
             }
