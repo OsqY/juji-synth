@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jujidaw.audio.AudioConverter
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.audio.TimeStretchListener
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -140,35 +141,25 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
                     .resolve("samples")
                     .apply { mkdirs() }
 
-                val ext = context.contentResolver.getType(uri)?.let { type ->
-                    when {
-                        type.contains("wav", ignoreCase = true) -> ".wav"
-                        type.contains("mp3", ignoreCase = true) -> ".mp3"
-                        type.contains("flac", ignoreCase = true) -> ".flac"
-                        else -> ".wav"
-                    }
-                } ?: ".wav"
-
-                val outFile = File(samplesDir, "pad_${globalIndex}_${System.currentTimeMillis()}$ext")
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    outFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
+                val wavFile = File(samplesDir, "pad_${globalIndex}_${System.currentTimeMillis()}.wav")
+                val converted = AudioConverter.convertToWav(context, uri, wavFile.absolutePath)
+                if (!converted) {
+                    showToast("Failed to decode audio format")
+                    return@launch
                 }
 
-                val ok = SynthEngine.loadSampleToPad(outFile.absolutePath, globalIndex)
+                val ok = SynthEngine.loadSampleToPad(wavFile.absolutePath, globalIndex)
                 if (ok) {
                     _uiState.update { state ->
                         val loaded = state.padLoaded.toMutableList().apply { set(globalIndex, true) }
                         val names = state.padNames.toMutableList().apply {
-                            set(globalIndex, outFile.nameWithoutExtension)
+                            set(globalIndex, wavFile.nameWithoutExtension)
                         }
                         state.copy(padLoaded = loaded, padNames = names)
                     }
                     showToast("Sample loaded")
                 } else {
-                    val reason = SynthEngine.getNativeLastError() ?: "Unsupported format or missing data chunk"
-                    showToast("Failed to load sample: $reason")
+                    showToast("Import failed: file could not be loaded")
                 }
             } catch (e: Exception) {
                 showToast("Import error: ${e.message}")
