@@ -2,8 +2,11 @@ package com.jujidaw.ui.mixer
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jujidaw.JujiDawApp
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.model.MidiTarget
+import com.jujidaw.model.TimeSignature
+import com.jujidaw.model.TransportPosition
 import com.jujidaw.midi.MidiRouter
 import com.jujidaw.project.AutomationPoint
 import kotlinx.coroutines.delay
@@ -135,12 +138,14 @@ class MixerViewModel : ViewModel() {
 
     fun setChannelFader(trackIndex: Int, db: Float) {
         val clamped = db.coerceIn(-60f, 12f)
+        recordAutomationIfArmed(39, (clamped + 60f) / 72f)
         SynthEngine.setChannelFader(trackIndex, clamped)
         updateChannel(trackIndex) { it.copy(faderDb = clamped) }
     }
 
     fun setChannelPan(trackIndex: Int, pan: Float) {
         val clamped = pan.coerceIn(-1f, 1f)
+        recordAutomationIfArmed(40, (clamped + 1f) / 2f)
         SynthEngine.setChannelPan(trackIndex, clamped)
         updateChannel(trackIndex) { it.copy(pan = clamped) }
     }
@@ -255,6 +260,25 @@ class MixerViewModel : ViewModel() {
     /** Call this when the user draws/edits automation points in the lane overlay. */
     fun updateAutomationPoints(points: List<AutomationPoint>) {
         _uiState.value = _uiState.value.copy(automationPoints = points)
+    }
+
+    fun toggleAutomationArm(paramId: Int) {
+        val current = _uiState.value.armedAutomationParams
+        _uiState.value = _uiState.value.copy(
+            armedAutomationParams = if (paramId in current) current - paramId else current + paramId
+        )
+    }
+
+    fun recordAutomationIfArmed(paramId: Int, value: Float): Boolean {
+        if (paramId !in _uiState.value.armedAutomationParams) return false
+        val transport = JujiDawApp.instance.transportController
+        if (!transport.transportState.playing) return false
+        val tick = transport.transportState.position.toTicks(
+            transport.transportState.timeSignature
+        )
+        val updated = _uiState.value.automationPoints + AutomationPoint(tick, value)
+        _uiState.value = _uiState.value.copy(automationPoints = updated)
+        return true
     }
 
     fun addAutomationPoint(paramId: String, tick: Long, value: Float) {
