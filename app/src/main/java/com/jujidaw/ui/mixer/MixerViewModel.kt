@@ -125,7 +125,7 @@ class MixerViewModel : ViewModel() {
                     channels = newChannels,
                     master = _uiState.value.master.copy(level = masterLevel.coerceIn(0f, 1f))
                 )
-                delay(50)
+                delay(200)
             }
         }
     }

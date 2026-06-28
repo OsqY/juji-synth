@@ -33,7 +33,11 @@ class JujiDawApp : Application() {
         MidiRouter(MidiMappingStore(this)).also { it.load() }
     }
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Current project name (null = no project loaded / autosave only).
+    var currentProjectName: String? = null
+
+    /** App-wide scope for fire-and-forget work (auto-save, etc.). */
+    val applicationScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()

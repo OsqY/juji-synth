@@ -25,6 +25,7 @@ class SettingsDataStore(private val context: Context) {
         private val SAMPLE_RATE = intPreferencesKey("sample_rate")
         private val BUFFER_SIZE = intPreferencesKey("buffer_size")
         private val OUTPUT_MODE = stringPreferencesKey("output_mode")
+        private val LAST_PROJECT = stringPreferencesKey("last_project")
     }
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { preferences ->
@@ -33,6 +34,16 @@ class SettingsDataStore(private val context: Context) {
             bufferSize = preferences[BUFFER_SIZE] ?: 256,
             outputMode = preferences[OUTPUT_MODE] ?: "stereo"
         )
+    }
+
+    suspend fun getLastProjectName(): String? {
+        return context.settingsDataStore.data.first()[LAST_PROJECT]
+    }
+
+    suspend fun setLastProjectName(name: String?) {
+        context.settingsDataStore.edit { preferences ->
+            if (name == null) preferences.remove(LAST_PROJECT) else preferences[LAST_PROJECT] = name
+        }
     }
 
     suspend fun saveSettings(sampleRate: Int, bufferSize: Int, outputMode: String) {

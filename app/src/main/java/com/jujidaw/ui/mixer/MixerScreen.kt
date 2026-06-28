@@ -572,7 +572,7 @@ private fun VerticalFader(
                     }
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(value, min, max, range) {
                 detectDragGestures { change, dragAmount ->
                     val fractionDelta = -dragAmount.y / size.height
                     val newValue = (value + fractionDelta * range).coerceIn(min, max)

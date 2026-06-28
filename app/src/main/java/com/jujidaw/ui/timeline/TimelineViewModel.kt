@@ -85,7 +85,7 @@ class TimelineViewModel(
                     position = TransportPosition.fromTicks(tick, _transportState.value.timeSignature)
                 )
                 // TODO(integrator): poll per-track level from C++ mixer when API available
-                delay(50)
+                delay(100)
             }
         }
     }
