@@ -33,6 +33,8 @@ import com.jujidaw.JujiDawApp
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.model.MidiTarget
 import com.jujidaw.ui.SynthKnob
+import com.jujidaw.project.AutomationPoint
+import com.jujidaw.ui.sequencer.AutomationLaneOverlay
 import com.jujidaw.ui.theme.*
 
 /**
@@ -191,10 +193,11 @@ fun MixerScreen(
             tonalElevation = 0.dp,
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
         ) {
-            AutomationPlaceholderSheet(
+            AutomationMixerContent(
                 selectedParam = state.selectedAutomationParam,
+                automationPoints = state.automationPoints,
                 onParamSelect = viewModel::selectAutomationParam,
-                onAddPoint = viewModel::addAutomationPoint,
+                onPointsUpdate = viewModel::updateAutomationPoints,
                 onDismiss = viewModel::dismissAutomationSheet
             )
         }
@@ -949,18 +952,19 @@ private fun InsertSlotRow(
 // ═══════════════════════════════════════════════════════════════════
 
 @Composable
-private fun AutomationPlaceholderSheet(
+private fun AutomationMixerContent(
     selectedParam: String?,
+    automationPoints: List<AutomationPoint>,
     onParamSelect: (String?) -> Unit,
-    onAddPoint: (String, Long, Float) -> Unit,
+    onPointsUpdate: (List<AutomationPoint>) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val params = listOf(
+    val paramList = listOf(
         "fader_0" to "Track 1 Fader",
         "pan_0" to "Track 1 Pan",
-        "mute_0" to "Track 1 Mute",
-        "sendA_0" to "Track 1 Send A",
-        "masterFader" to "Master Fader"
+        "cutoff_0" to "Cutoff",
+        "res_0" to "Resonance",
+        "master" to "Master Vol"
     )
 
     var chosen by remember { mutableStateOf(selectedParam) }
@@ -969,7 +973,7 @@ private fun AutomationPlaceholderSheet(
         modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = "Automation",
@@ -978,18 +982,12 @@ private fun AutomationPlaceholderSheet(
             fontWeight = FontWeight.Bold
         )
 
-        Text(
-            text = "Select a parameter to automate:",
-            color = TextSecondary,
-            fontSize = 11.sp
-        )
-
         // Param chips
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            params.forEach { (id, label) ->
+            paramList.forEach { (id, label) ->
                 val isSelected = chosen == id
                 Box(
                     modifier = Modifier
@@ -1012,7 +1010,6 @@ private fun AutomationPlaceholderSheet(
                         text = label,
                         color = if (isSelected) KnobCyan else TextSecondary,
                         fontSize = 9.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1
                     )
                 }
@@ -1020,32 +1017,13 @@ private fun AutomationPlaceholderSheet(
         }
 
         if (chosen != null) {
-            Text(
-                text = "Selected: $chosen",
-                color = TextPrimary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold
+            AutomationLaneOverlay(
+                points = automationPoints,
+                onPointsChange = onPointsUpdate,
+                label = chosen!!,
+                numSteps = 64,
+                modifier = Modifier.fillMaxWidth()
             )
-            Text(
-                text = "Automation editor is a placeholder. " +
-                        "Integrate with TransportController.setAutomationPoint when available.",
-                color = TextMuted,
-                fontSize = 10.sp
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(KnobCyan.copy(alpha = 0.2f))
-                    .border(1.dp, KnobCyan, RoundedCornerShape(8.dp))
-                    .clickable {
-                        onAddPoint(chosen!!, 0L, 0.5f)
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Add Placeholder Point", color = KnobCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
         }
 
         Spacer(Modifier.height(8.dp))

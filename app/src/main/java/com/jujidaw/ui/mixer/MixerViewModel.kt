@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.model.MidiTarget
 import com.jujidaw.midi.MidiRouter
+import com.jujidaw.project.AutomationPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +58,8 @@ data class MixerUiState(
     val showInsertSheet: Boolean = false,
     val showAutomationSheet: Boolean = false,
     val selectedAutomationParam: String? = null,
+    val automationPoints: List<AutomationPoint> = emptyList(),
+    val armedAutomationParams: Set<Int> = emptySet(),
     val toastMessage: String? = null,
     val activePerformFx: Set<PerformFxType> = emptySet(),
     // MIDI Learn
@@ -249,6 +252,11 @@ class MixerViewModel : ViewModel() {
     }
 
     /** Placeholder for automation point writing. */
+    /** Call this when the user draws/edits automation points in the lane overlay. */
+    fun updateAutomationPoints(points: List<AutomationPoint>) {
+        _uiState.value = _uiState.value.copy(automationPoints = points)
+    }
+
     fun addAutomationPoint(paramId: String, tick: Long, value: Float) {
         // TODO: TransportController does not yet expose setAutomationPoint.
         // When available, call it here and mirror into arrangement state.

@@ -9,6 +9,8 @@ import com.jujidaw.model.NoteEvent
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PianoRollNote
 import com.jujidaw.model.TICKS_PER_STEP
+import com.jujidaw.model.TimeSignature
+import com.jujidaw.model.TransportPosition
 import com.jujidaw.project.AutomationPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -148,6 +150,24 @@ class SequencerViewModel(
     /** Replace the automation points for the currently selected param. */
     fun updateAutomationPoints(points: List<AutomationPoint>) {
         _uiState.value = _uiState.value.copy(automationPoints = points)
+    }
+
+    /**
+     * Record an automation point if the given param is armed and the transport
+     * is currently playing. Call this from knob/slider change handlers to
+     * implement live touch recording.
+     *
+     * @return true if a point was recorded, false if ignored (not armed or stopped).
+     */
+    fun recordAutomationIfArmed(paramId: Int, value: Float): Boolean {
+        if (paramId !in _uiState.value.armedAutomationParams) return false
+        if (!transportController.transportState.playing) return false
+        val tick = transportController.transportState.position.toTicks(
+            transportController.transportState.timeSignature
+        )
+        val updatedPoints = _uiState.value.automationPoints + AutomationPoint(tick, value)
+        _uiState.value = _uiState.value.copy(automationPoints = updatedPoints)
+        return true
     }
 
     /**
