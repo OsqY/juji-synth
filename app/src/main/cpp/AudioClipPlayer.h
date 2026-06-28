@@ -34,7 +34,8 @@ private:
     double sampleRate_ = 48000.0;
     std::shared_ptr<SampleBuffer> buffer_;
     std::atomic<bool> active_{false};
-    int64_t readPos_ = 0;
+    double readPos_ = 0.0;
+    float speed_ = 1.0f;
     int fadeInSamples_ = 0;
     int fadeOutSamples_ = 0;
     int samplesPlayed_ = 0;

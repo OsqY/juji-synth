@@ -14,8 +14,13 @@ void AudioClipPlayer::setBuffer(std::shared_ptr<SampleBuffer> buffer) {
 
 void AudioClipPlayer::start(int64_t startOffsetInBuffer, int fadeInSamples, int fadeOutSamples) {
     if (!buffer_ || !buffer_->isLoaded()) return;
-    readPos_ = startOffsetInBuffer;
-    if (readPos_ < 0) readPos_ = 0;
+    readPos_ = static_cast<double>(startOffsetInBuffer);
+    if (readPos_ < 0.0) readPos_ = 0.0;
+    if (buffer_->getSampleRate() > 0 && sampleRate_ > 0.0) {
+        speed_ = static_cast<float>(buffer_->getSampleRate()) / static_cast<float>(sampleRate_);
+    } else {
+        speed_ = 1.0f;
+    }
     fadeInSamples_ = std::max(0, fadeInSamples);
     fadeOutSamples_ = std::max(0, fadeOutSamples);
     samplesPlayed_ = 0;
@@ -36,18 +41,19 @@ float AudioClipPlayer::process() {
         return 0.0f;
     }
 
+    int readIdx = static_cast<int>(readPos_);
     float sample = 0.0f;
     if (channels == 1) {
-        sample = buffer_->getSample(static_cast<int>(readPos_), 0);
+        sample = buffer_->getSampleInterpolated(static_cast<float>(readPos_), 0);
     } else {
-        // Down-mix stereo to mono
-        float left = buffer_->getSample(static_cast<int>(readPos_), 0);
-        float right = buffer_->getSample(static_cast<int>(readPos_), 1);
+        // Down-mix stereo to mono, using linear interpolation for pitch accuracy
+        float left = buffer_->getSampleInterpolated(static_cast<float>(readPos_), 0);
+        float right = buffer_->getSampleInterpolated(static_cast<float>(readPos_), 1);
         sample = (left + right) * 0.5f;
     }
 
     // Apply fade-in / fade-out ramps
-    int remaining = frames - static_cast<int>(readPos_) - 1;
+    int remaining = frames - readIdx - 1;
     if (fadeInSamples_ > 0 && samplesPlayed_ < fadeInSamples_) {
         sample *= static_cast<float>(samplesPlayed_) / static_cast<float>(fadeInSamples_);
     }
@@ -56,10 +62,10 @@ float AudioClipPlayer::process() {
     }
 
     sample *= gain_;
-    readPos_++;
+    readPos_ += speed_;
     samplesPlayed_++;
 
-    if (readPos_ >= frames) {
+    if (readIdx >= frames) {
         active_.store(false, std::memory_order_release);
     }
 

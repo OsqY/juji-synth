@@ -142,8 +142,9 @@ object AudioConverter {
                     val base = f * frameSize
                     var sum = 0L
                     for (ch in 0 until channels) {
-                        sum += ((pcmData[base + ch * 2 + 1].toInt() and 0xFF) shl 8) or
-                                (pcmData[base + ch * 2].toInt() and 0xFF)
+                        val hi = pcmData[base + ch * 2 + 1].toInt()
+                        val lo = pcmData[base + ch * 2].toInt() and 0xFF
+                        sum += (hi shl 8) or lo
                     }
                     val mono = (sum / channels).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                     downmixed[f * 2] = (mono and 0xFF).toByte()

@@ -14,6 +14,9 @@ void SamplerVoice::start(const SampleBuffer* buf, int midiNote, int vel) {
     active = true;
 
     playbackSpeed = getSpeedForSemitones(pitch);
+    if (buf && buf->getSampleRate() > 0 && buf->getSampleRate() != static_cast<int>(sampleRate)) {
+        playbackSpeed *= static_cast<float>(buf->getSampleRate()) / static_cast<float>(sampleRate);
+    }
 
     if (reverse) {
         position = static_cast<float>(buf ? buf->getNumFrames() - 1 : 0);

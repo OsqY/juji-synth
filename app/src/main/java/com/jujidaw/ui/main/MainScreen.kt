@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Equalizer
@@ -123,51 +125,45 @@ fun MainScreen(modifier: Modifier = Modifier) {
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(BgGunmetal)
-        ) {
+        ) {    
             if (isLandscape) {
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
                         .width(80.dp)
                         .background(BgPanel)
+                        .verticalScroll(rememberScrollState())
                 ) {
                     PersistentTransportBar(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
-                    NavigationRail(
-                        modifier = Modifier.weight(1f),
-                        containerColor = BgPanel,
-                        contentColor = TextPrimary,
-                        header = { Spacer(Modifier.height(4.dp)) }
-                    ) {
-                        tabs.forEachIndexed { index, tab ->
-                            NavigationRailItem(
-                                icon = {
-                                    Icon(
-                                        imageVector = tab.icon,
-                                        contentDescription = tab.label
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = tab.label,
-                                        fontSize = 9.sp,
-                                        maxLines = 1
-                                    )
-                                },
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                colors = NavigationRailItemDefaults.colors(
-                                    selectedIconColor = Color.Black,
-                                    selectedTextColor = KnobAmber,
-                                    indicatorColor = KnobAmber,
-                                    unselectedIconColor = TextSecondary,
-                                    unselectedTextColor = TextMuted
+                    tabs.forEachIndexed { index, tab ->
+                        NavigationRailItem(
+                            icon = {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = tab.label
                                 )
+                            },
+                            label = {
+                                Text(
+                                    text = tab.label,
+                                    fontSize = 9.sp,
+                                    maxLines = 1
+                                )
+                            },
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            colors = NavigationRailItemDefaults.colors(
+                                selectedIconColor = Color.Black,
+                                selectedTextColor = KnobAmber,
+                                indicatorColor = KnobAmber,
+                                unselectedIconColor = TextSecondary,
+                                unselectedTextColor = TextMuted
                             )
-                        }
+                        )
                     }
                 }
             }
