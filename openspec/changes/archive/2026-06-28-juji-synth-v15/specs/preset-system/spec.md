@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Audibly distinct presets
 Each fallback preset SHALL have parameter values that are audibly different from other presets. Presets within the same category SHALL use contrasting waveforms, filter ranges, envelope shapes, and effect settings.
