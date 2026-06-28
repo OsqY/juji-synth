@@ -3,6 +3,7 @@
 
 #include "Instrument.h"
 #include "SynthParams.h"
+#include "AutomationParamIds.h"
 #include "SynthVoice.h"
 #include "LFO.h"
 #include "ModulationMatrix.h"
@@ -186,6 +187,12 @@ public:
     // automation snapshot and propagate it to the live DSP graph. Idempotent
     // and lock-free with respect to `applyBlockAutomation`.
     void processBlockAutomation();
+
+    // Called by the AUTOMATION event handler to apply a single parameter value
+    // (absolute, not offset). paramIndex 0-38 maps to the SynthParams array
+    // layout (setAllParamsFromArray order). Writes directly to pendingParams_
+    // and sets paramsPending_ = true for atomic swap on the next audio block.
+    void applyAutomationParam(int paramIndex, float value);
 
     // Called once per audio buffer from the host to swap pending param state
     // and apply it to the live DSP graph.

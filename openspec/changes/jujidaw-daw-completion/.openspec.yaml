@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-06-28
+goal: Make JujiDAW a fully functional phone DAW by adding automation lanes
+  (manual draw + live touch recording) for synth and mixer params, implementing
+  per-channel presets via MIDI routing, and removing the legacy synth-first UI
+  in favor of an arrangement-first phone layout with quick-start templates.

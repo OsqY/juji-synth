@@ -107,14 +107,28 @@ void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample
                 break;
             }
             case ScheduledEventType::AUTOMATION: {
-                // Automation events are routed through the synth instrument's
-                // block-automation snapshot for now. Expand to per-track
-                // automation once the mixer graph supports it.
-                auto* instr = engine.getChannel(track).getInstrument();
-                auto* synth = dynamic_cast<SynthInstrument*>(instr);
-                if (synth) {
-                    // TODO: map paramIndex to SynthAutomation field
-                    (void)synth;
+                int pi = event.data.automation.paramIndex;
+                float val = event.data.automation.value;
+                if (pi <= AUTOMATION_SYNTH_PARAM_MAX) {
+                    auto* instr = engine.getChannel(track).getInstrument();
+                    auto* synth = dynamic_cast<SynthInstrument*>(instr);
+                    if (synth) {
+                        synth->applyAutomationParam(pi, val);
+                    }
+                } else if (pi >= AUTOMATION_MIXER_PARAM_FIRST && pi <= AUTOMATION_MIXER_PARAM_LAST) {
+                    MixerCommand cmd;
+                    cmd.track = static_cast<uint8_t>(track);
+                    cmd.value = val;
+                    switch (pi) {
+                        case AUTOMATION_FADER:  cmd.type = MixerCommandType::SetFader; break;
+                        case AUTOMATION_PAN:    cmd.type = MixerCommandType::SetPan; break;
+                        case AUTOMATION_MUTE:   cmd.type = MixerCommandType::SetMute; cmd.booleanValue = val > 0.5f; break;
+                        case AUTOMATION_SOLO:   cmd.type = MixerCommandType::SetSolo; cmd.booleanValue = val > 0.5f; break;
+                        case AUTOMATION_ARM:    cmd.type = MixerCommandType::SetArm; cmd.booleanValue = val > 0.5f; break;
+                        case AUTOMATION_SENDA:  cmd.type = MixerCommandType::SetSendA; break;
+                        case AUTOMATION_SENDB:  cmd.type = MixerCommandType::SetSendB; break;
+                    }
+                    engine.pushMixerCommand(cmd);
                 }
                 break;
             }

@@ -295,6 +295,52 @@ void SynthInstrument::setAllParamsFromArray(const float* values, int count) {
     paramsPending_.store(true, std::memory_order_release);
 }
 
+void SynthInstrument::applyAutomationParam(int paramIndex, float value) {
+    switch (paramIndex) {
+        case 0:  pendingParams_.oscillators.osc1.level = value; break;
+        case 1:  pendingParams_.oscillators.osc2.level = value; break;
+        case 2:  pendingParams_.oscillators.osc1.waveform = static_cast<int>(value); break;
+        case 3:  pendingParams_.oscillators.osc2.waveform = static_cast<int>(value); break;
+        case 4:  pendingParams_.oscillators.osc1.detune = value; break;
+        case 5:  pendingParams_.oscillators.subOscLevel = value; break;
+        case 6:  pendingParams_.oscillators.noiseLevel = value; break;
+        case 7:  pendingParams_.oscillators.oscMix = value; break;
+        case 8:  pendingParams_.oscillators.syncEnabled = value > 0.5f; break;
+        case 9:  pendingParams_.filter.cutoff = value; break;
+        case 10: pendingParams_.filter.resonance = value; break;
+        case 11: pendingParams_.filter.mode = static_cast<int>(value); break;
+        case 12: pendingParams_.filter.envelopeAmount = value; break;
+        case 13: pendingParams_.envelopes.attack = value; break;
+        case 14: pendingParams_.envelopes.decay = value; break;
+        case 15: pendingParams_.envelopes.sustain = value; break;
+        case 16: pendingParams_.envelopes.release = value; break;
+        case 17: pendingParams_.envelopes.filterAttack = value; break;
+        case 18: pendingParams_.envelopes.filterDecay = value; break;
+        case 19: pendingParams_.envelopes.filterSustain = value; break;
+        case 20: pendingParams_.envelopes.filterRelease = value; break;
+        case 21: pendingParams_.lfos.lfo1.rate = value; break;
+        case 22: pendingParams_.lfos.lfo1.depth = value; break;
+        case 23: pendingParams_.lfos.lfo1.waveform = static_cast<int>(value); break;
+        case 24: pendingParams_.lfos.lfo2.rate = value; break;
+        case 25: pendingParams_.lfos.lfo2.depth = value; break;
+        case 26: pendingParams_.lfos.lfo2.waveform = static_cast<int>(value); break;
+        case 27: pendingParams_.effects.reverb.mix = value; break;
+        case 28: pendingParams_.effects.reverb.decay = value; break;
+        case 29: pendingParams_.effects.delay.mix = value; break;
+        case 30: pendingParams_.effects.delay.time = value; break;
+        case 31: pendingParams_.effects.delay.feedback = value; break;
+        case 32: pendingParams_.effects.distortion.drive = value; break;
+        case 33: pendingParams_.effects.distortion.mix = value; break;
+        case 34: pendingParams_.effects.bypass = value > 0.5f; break;
+        case 35: pendingParams_.effects.chorus.rate = value; break;
+        case 36: pendingParams_.effects.chorus.depth = value; break;
+        case 37: pendingParams_.effects.chorus.mix = value; break;
+        case 38: pendingParams_.master.volume = value; break;
+        default: return;
+    }
+    paramsPending_ = true;
+}
+
 #define SET_AND_SYNC(field, value) \
     pendingParams_.field = value; \
     paramsPending_ = true;
