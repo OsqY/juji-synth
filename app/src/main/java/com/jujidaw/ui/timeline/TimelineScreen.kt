@@ -28,12 +28,12 @@ import com.jujidaw.audio.SynthEngine
 import com.jujidaw.model.AudioClip
 import com.jujidaw.model.AutomationCurve
 import com.jujidaw.model.Clip
+import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
-import com.jujidaw.model.PPQ
 import com.jujidaw.model.TICKS_PER_STEP
-import com.jujidaw.model.TransportState
 import com.jujidaw.model.TransportPosition
+import com.jujidaw.model.TransportState
 import com.jujidaw.ui.LcdDisplay
 import com.jujidaw.ui.theme.*
 
@@ -101,9 +101,6 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
             transport = transport,
             snap = snap,
             zoom = zoom,
-            onPlay = { viewModel.play() },
-            onStop = { viewModel.stop() },
-            onRecord = { viewModel.toggleRecording() },
             onToggleLoop = { viewModel.toggleLoop() },
             onTogglePunch = { viewModel.togglePunch() },
             onLoopStart = { viewModel.setLoopStartToPlayhead() },
@@ -113,47 +110,48 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
             onBpmChange = { viewModel.setTempo(it) },
             onNudge = { viewModel.nudgePlayhead(it) },
             onSnapChange = { viewModel.setSnap(it) },
-            onZoomChange = { viewModel.setZoom(it) }
+            onZoomChange = { viewModel.setZoom(it) },
         )
 
         Spacer(Modifier.height(2.dp))
 
         // Pattern selector row
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(32.dp)
-                .background(BgPanel)
-                .padding(horizontal = 4.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(32.dp)
+                    .background(BgPanel)
+                    .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 "PATTERN",
                 color = TextSecondary,
                 fontSize = 8.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(end = 4.dp)
+                modifier = Modifier.padding(end = 4.dp),
             )
             for (i in 0 until 16) {
                 Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (selectedPatternId == i) KnobAmber else BgGunmetal)
-                        .border(
-                            1.dp,
-                            if (selectedPatternId == i) KnobAmber else PanelHighlight.copy(alpha = 0.3f),
-                            RoundedCornerShape(4.dp)
-                        )
-                        .clickable { viewModel.selectPattern(i) },
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (selectedPatternId == i) KnobAmber else BgGunmetal)
+                            .border(
+                                1.dp,
+                                if (selectedPatternId == i) KnobAmber else PanelHighlight.copy(alpha = 0.3f),
+                                RoundedCornerShape(4.dp),
+                            ).clickable { viewModel.selectPattern(i) },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         "${i + 1}",
                         color = if (selectedPatternId == i) Color.Black else TextPrimary,
                         fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -165,10 +163,11 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
             // Track headers
             Column(
-                modifier = Modifier
-                    .width(headerWidth)
-                    .fillMaxHeight()
-                    .background(BgPanel)
+                modifier =
+                    Modifier
+                        .width(headerWidth)
+                        .fillMaxHeight()
+                        .background(BgPanel),
             ) {
                 Box(modifier = Modifier.fillMaxWidth().height(rulerHeight).background(BgGunmetal))
                 for (i in 0 until 16) {
@@ -180,7 +179,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                             onSelect = { viewModel.selectTrack(i) },
                             onMute = { viewModel.toggleMuteTrack(i) },
                             onSolo = { viewModel.toggleSoloTrack(i) },
-                            onArm = { viewModel.toggleArmTrack(i) }
+                            onArm = { viewModel.toggleArmTrack(i) },
                         )
                     }
                 }
@@ -188,28 +187,30 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
 
             // Timeline content
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(BgPanel)
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures(
-                            onDragStart = { followPlayhead = false },
-                            onHorizontalDrag = { change, dragAmount ->
-                                if (draggedClipId == null) {
-                                    scrollX = (scrollX - dragAmount).coerceIn(0f, maxScrollX)
-                                    change.consume()
-                                }
-                            }
-                        )
-                    }
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(BgPanel)
+                        .pointerInput(Unit) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { followPlayhead = false },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    if (draggedClipId == null) {
+                                        scrollX = (scrollX - dragAmount).coerceIn(0f, maxScrollX)
+                                        change.consume()
+                                    }
+                                },
+                            )
+                        },
             ) {
                 Box(modifier = Modifier.offset { IntOffset(-scrollX.toInt(), 0) }) {
                     Box(
-                        modifier = Modifier
-                            .width(with(density) { totalWidthPx.toDp() })
-                            .fillMaxHeight()
+                        modifier =
+                            Modifier
+                                .width(with(density) { totalWidthPx.toDp() })
+                                .fillMaxHeight(),
                     ) {
                         // Grid + track dividers
                         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -219,7 +220,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                     color = PanelHighlight.copy(alpha = 0.25f),
                                     start = Offset(x, 0f),
                                     end = Offset(x, size.height),
-                                    strokeWidth = 1f
+                                    strokeWidth = 1f,
                                 )
                                 for (beat in 1 until 4) {
                                     val bx = x + beat * barWidthPx / 4f
@@ -227,7 +228,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                         color = PanelHighlight.copy(alpha = 0.1f),
                                         start = Offset(bx, 0f),
                                         end = Offset(bx, size.height),
-                                        strokeWidth = 0.5f
+                                        strokeWidth = 0.5f,
                                     )
                                 }
                             }
@@ -238,7 +239,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                     color = PanelDivider,
                                     start = Offset(0f, y),
                                     end = Offset(size.width, y),
-                                    strokeWidth = 1f
+                                    strokeWidth = 1f,
                                 )
                             }
                         }
@@ -247,7 +248,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                         TimelineRuler(
                             barWidthPx = barWidthPx,
                             totalBars = totalBars,
-                            modifier = Modifier.height(rulerHeight).fillMaxWidth()
+                            modifier = Modifier.height(rulerHeight).fillMaxWidth(),
                         )
 
                         // Invisible tap targets for empty track lanes
@@ -256,18 +257,20 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                             key(trackIdx) {
                                 val top = rulerPx + trackIdx * trackHeightPx
                                 Box(
-                                    modifier = Modifier
-                                        .offset { IntOffset(0, top.toInt()) }
-                                        .width(with(density) { totalWidthPx.toDp() })
-                                        .height(with(density) { trackHeightPx.toDp() })
-                                        .pointerInput(trackIdx) {
-                                            detectTapGestures { offset ->
-                                                val tapTick = viewModel.snapTick(
-                                                    ((offset.x + scrollX) / tickWidthPx).toLong()
-                                                )
-                                                viewModel.addPatternClip(trackIdx, tapTick)
-                                            }
-                                        }
+                                    modifier =
+                                        Modifier
+                                            .offset { IntOffset(0, top.toInt()) }
+                                            .width(with(density) { totalWidthPx.toDp() })
+                                            .height(with(density) { trackHeightPx.toDp() })
+                                            .pointerInput(trackIdx) {
+                                                detectTapGestures { offset ->
+                                                    val tapTick =
+                                                        viewModel.snapTick(
+                                                            ((offset.x + scrollX) / tickWidthPx).toLong(),
+                                                        )
+                                                    viewModel.addPatternClip(trackIdx, tapTick)
+                                                }
+                                            },
                                 )
                             }
                         }
@@ -281,20 +284,22 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                 if (draggedClipId != clip.id) {
                                     ClipItem(
                                         clip = clip,
-                                        pattern = (clip as? PatternClip)?.let { pc ->
-                                            patterns.find { it.id == pc.patternId }
-                                        },
+                                        pattern =
+                                            (clip as? PatternClip)?.let { pc ->
+                                                patterns.find { it.id == pc.patternId }
+                                            },
                                         tickWidthPx = tickWidthPx,
-                                        modifier = Modifier
-                                            .offset { IntOffset(left.toInt(), top.toInt()) }
-                                            .width(with(density) { width.toDp() })
-                                            .height(with(density) { trackHeightPx.toDp() })
-                                            .padding(2.dp),
+                                        modifier =
+                                            Modifier
+                                                .offset { IntOffset(left.toInt(), top.toInt()) }
+                                                .width(with(density) { width.toDp() })
+                                                .height(with(density) { trackHeightPx.toDp() })
+                                                .padding(2.dp),
                                         onTap = { viewModel.toggleMuteClip(clip.id) },
                                         onLongPress = { draggedClipId = clip.id },
                                         onTrim = { newDuration ->
                                             viewModel.trimClip(clip.id, newDuration)
-                                        }
+                                        },
                                     )
                                 }
                             }
@@ -309,41 +314,43 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                 var currentOffset by remember { mutableStateOf(Offset.Zero) }
 
                                 Box(
-                                    modifier = Modifier
-                                        .offset {
-                                            IntOffset(
-                                                (startLeft + currentOffset.x).toInt(),
-                                                (startTop + currentOffset.y).toInt()
-                                            )
-                                        }
-                                        .width(with(density) { (clip.durationTicks * tickWidthPx).toDp() })
-                                        .height(with(density) { trackHeightPx.toDp() })
-                                        .padding(2.dp)
-                                        .pointerInput(draggedClipId) {
-                                            detectDragGestures(
-                                                onDrag = { change, dragAmount ->
-                                                    change.consume()
-                                                    currentOffset += dragAmount
-                                                },
-                                                onDragEnd = {
-                                                    val deltaTicks = (currentOffset.x / tickWidthPx).toLong()
-                                                    val deltaTracks = (currentOffset.y / trackHeightPx).toInt()
-                                                    val newTick = viewModel.snapTick(
-                                                        (clip.startTick + deltaTicks).coerceAtLeast(0)
-                                                    )
-                                                    val newTrack = (clip.trackIndex + deltaTracks).coerceIn(0, 15)
-                                                    viewModel.moveClip(clip.id, newTick, newTrack)
-                                                    draggedClipId = null
-                                                }
-                                            )
-                                        }
+                                    modifier =
+                                        Modifier
+                                            .offset {
+                                                IntOffset(
+                                                    (startLeft + currentOffset.x).toInt(),
+                                                    (startTop + currentOffset.y).toInt(),
+                                                )
+                                            }.width(with(density) { (clip.durationTicks * tickWidthPx).toDp() })
+                                            .height(with(density) { trackHeightPx.toDp() })
+                                            .padding(2.dp)
+                                            .pointerInput(draggedClipId) {
+                                                detectDragGestures(
+                                                    onDrag = { change, dragAmount ->
+                                                        change.consume()
+                                                        currentOffset += dragAmount
+                                                    },
+                                                    onDragEnd = {
+                                                        val deltaTicks = (currentOffset.x / tickWidthPx).toLong()
+                                                        val deltaTracks = (currentOffset.y / trackHeightPx).toInt()
+                                                        val newTick =
+                                                            viewModel.snapTick(
+                                                                (clip.startTick + deltaTicks).coerceAtLeast(0),
+                                                            )
+                                                        val newTrack = (clip.trackIndex + deltaTracks).coerceIn(0, 15)
+                                                        viewModel.moveClip(clip.id, newTick, newTrack)
+                                                        draggedClipId = null
+                                                    },
+                                                )
+                                            },
                                 ) {
                                     ClipContent(
                                         clip = clip,
-                                        pattern = (clip as? PatternClip)?.let { pc ->
-                                            patterns.find { it.id == pc.patternId }
-                                        },
-                                        isGhost = true
+                                        pattern =
+                                            (clip as? PatternClip)?.let { pc ->
+                                                patterns.find { it.id == pc.patternId }
+                                            },
+                                        isGhost = true,
                                     )
                                 }
                             }
@@ -351,16 +358,16 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
 
                         // Playhead line
                         Box(
-                            modifier = Modifier
-                                .offset {
-                                    IntOffset(
-                                        playheadPx.toInt(),
-                                        with(density) { rulerHeight.toPx().toInt() }
-                                    )
-                                }
-                                .width(2.dp)
-                                .fillMaxHeight()
-                                .background(KnobAmber)
+                            modifier =
+                                Modifier
+                                    .offset {
+                                        IntOffset(
+                                            playheadPx.toInt(),
+                                            with(density) { rulerHeight.toPx().toInt() },
+                                        )
+                                    }.width(2.dp)
+                                    .fillMaxHeight()
+                                    .background(KnobAmber),
                         )
                     }
                 }
@@ -384,43 +391,46 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                 },
                 onDeletePoint = { id -> viewModel.deleteAutomationPoint(id) },
                 onClose = { viewModel.selectAutomationParam(null) },
-                modifier = Modifier.height(140.dp).fillMaxWidth()
+                modifier = Modifier.height(140.dp).fillMaxWidth(),
             )
         }
 
         // Quick automation param selector (shown when lane is closed)
         if (selectedParam == null) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
-                    .background(BgPanel)
-                    .padding(horizontal = 4.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                        .background(BgPanel)
+                        .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     "AUTO",
                     color = TextSecondary,
                     fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
-                val params = listOf(
-                    "track.0.synth.filter.cutoff" to "Filter Cutoff",
-                    "track.0.synth.amp.level" to "Amp Level",
-                    "track.0.synth.lfo1.rate" to "LFO Rate",
-                    "track.0.synth.master.volume" to "Master Vol"
-                )
+                val params =
+                    listOf(
+                        "track.0.synth.filter.cutoff" to "Filter Cutoff",
+                        "track.0.synth.amp.level" to "Amp Level",
+                        "track.0.synth.lfo1.rate" to "LFO Rate",
+                        "track.0.synth.master.volume" to "Master Vol",
+                    )
                 params.forEach { (id, label) ->
                     Box(
-                        modifier = Modifier
-                            .height(28.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(BgGunmetal)
-                            .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                            .clickable { viewModel.selectAutomationParam(id) }
-                            .padding(horizontal = 8.dp),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .height(28.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(BgGunmetal)
+                                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                .clickable { viewModel.selectAutomationParam(id) }
+                                .padding(horizontal = 8.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(label, color = TextPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                     }
@@ -439,9 +449,6 @@ private fun TransportStrip(
     transport: TransportState,
     snap: TimelineViewModel.Snap,
     zoom: Float,
-    onPlay: () -> Unit,
-    onStop: () -> Unit,
-    onRecord: () -> Unit,
     onToggleLoop: () -> Unit,
     onTogglePunch: () -> Unit,
     onLoopStart: () -> Unit,
@@ -451,45 +458,32 @@ private fun TransportStrip(
     onBpmChange: (Float) -> Unit,
     onNudge: (Long) -> Unit,
     onSnapChange: (TimelineViewModel.Snap) -> Unit,
-    onZoomChange: (Float) -> Unit
+    onZoomChange: (Float) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(BgPanel)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(BgPanel)
+                .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        TransportButton(
-            label = if (transport.playing) "■" else "▶",
-            active = transport.playing,
-            activeColor = TransportGreen,
-            onClick = if (transport.playing) onStop else onPlay,
-            modifier = Modifier.size(40.dp)
-        )
-        TransportButton(
-            label = "●",
-            active = transport.recording,
-            activeColor = TransportRed,
-            onClick = onRecord,
-            modifier = Modifier.size(40.dp)
-        )
         TransportButton(
             label = "↻",
             active = transport.loopEnabled,
             activeColor = TransportAmber,
             onClick = onToggleLoop,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(36.dp),
         )
         TransportButton(
-            label = "P",
+            label = "PUNCH",
             active = transport.punchEnabled,
             activeColor = KnobCyan,
             onClick = onTogglePunch,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(40.dp),
         )
 
         Spacer(Modifier.width(4.dp))
@@ -500,83 +494,87 @@ private fun TransportStrip(
             label = "TIME",
             color = KnobAmber,
             fontSize = 12.sp,
-            modifier = Modifier.width(84.dp)
+            modifier = Modifier.width(84.dp),
         )
         LcdDisplay(
             value = "%.1f".format(transport.tempoBpm),
             label = "BPM",
             color = KnobGreen,
             fontSize = 12.sp,
-            modifier = Modifier.width(64.dp)
+            modifier = Modifier.width(64.dp),
         )
 
         Spacer(Modifier.width(4.dp))
 
         Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(BgGunmetal)
-                .clickable { onNudge(-TICKS_PER_STEP.toLong()) },
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(BgGunmetal)
+                    .clickable { onNudge(-TICKS_PER_STEP.toLong()) },
+            contentAlignment = Alignment.Center,
         ) { Text("◀", color = TextPrimary, fontSize = 10.sp) }
         Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(BgGunmetal)
-                .clickable { onNudge(TICKS_PER_STEP.toLong()) },
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(BgGunmetal)
+                    .clickable { onNudge(TICKS_PER_STEP.toLong()) },
+            contentAlignment = Alignment.Center,
         ) { Text("▶", color = TextPrimary, fontSize = 10.sp) }
 
         Spacer(Modifier.width(4.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                TinyButton("L-", onLoopStart)
-                TinyButton("L+", onLoopEnd)
+                LabeledTinyButton("◀ Loop", onLoopStart)
+                LabeledTinyButton("Loop ▶", onLoopEnd)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                TinyButton("I-", onPunchIn)
-                TinyButton("O+", onPunchOut)
+                LabeledTinyButton("◀ P.In", onPunchIn)
+                LabeledTinyButton("P.Out ▶", onPunchOut)
             }
         }
 
         Spacer(Modifier.weight(1f))
 
         Box(
-            modifier = Modifier
-                .height(28.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(BgGunmetal)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                .clickable {
-                    val values = TimelineViewModel.Snap.values()
-                    val next = values[(snap.ordinal + 1) % values.size]
-                    onSnapChange(next)
-                }
-                .padding(horizontal = 8.dp),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .height(28.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(BgGunmetal)
+                    .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                    .clickable {
+                        val values = TimelineViewModel.Snap.values()
+                        val next = values[(snap.ordinal + 1) % values.size]
+                        onSnapChange(next)
+                    }.padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Text(snap.label, color = TextPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(BgGunmetal)
-                    .clickable { onZoomChange(zoom + 0.2f) },
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(BgGunmetal)
+                        .clickable { onZoomChange(zoom + 0.2f) },
+                contentAlignment = Alignment.Center,
             ) { Text("+", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
             Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(BgGunmetal)
-                    .clickable { onZoomChange(zoom - 0.2f) },
-                contentAlignment = Alignment.Center
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(BgGunmetal)
+                        .clickable { onZoomChange(zoom - 0.2f) },
+                contentAlignment = Alignment.Center,
             ) { Text("−", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
         }
     }
@@ -588,39 +586,43 @@ private fun TransportButton(
     active: Boolean,
     activeColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (active) activeColor else BgGunmetal)
-            .border(
-                1.dp,
-                if (active) activeColor else PanelHighlight.copy(alpha = 0.3f),
-                RoundedCornerShape(6.dp)
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (active) activeColor else BgGunmetal)
+                .border(
+                    1.dp,
+                    if (active) activeColor else PanelHighlight.copy(alpha = 0.3f),
+                    RoundedCornerShape(6.dp),
+                ).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             color = if (active) Color.White else TextPrimary,
             fontSize = if (label.length == 1) 14.sp else 12.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
     }
 }
 
 @Composable
-private fun TinyButton(label: String, onClick: () -> Unit) {
+private fun LabeledTinyButton(
+    label: String,
+    onClick: () -> Unit,
+) {
     Box(
-        modifier = Modifier
-            .size(20.dp)
-            .clip(RoundedCornerShape(3.dp))
-            .background(BgGunmetal)
-            .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(3.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(width = 44.dp, height = 20.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(BgGunmetal)
+                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(3.dp))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Text(label, color = TextSecondary, fontSize = 7.sp, fontWeight = FontWeight.Bold)
     }
@@ -638,28 +640,29 @@ private fun TrackHeader(
     onSelect: () -> Unit,
     onMute: () -> Unit,
     onSolo: () -> Unit,
-    onArm: () -> Unit
+    onArm: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .background(if (isSelected) PanelHighlight.copy(alpha = 0.25f) else Color.Transparent)
-            .clickable { onSelect() }
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .background(if (isSelected) PanelHighlight.copy(alpha = 0.25f) else Color.Transparent)
+                .clickable { onSelect() }
+                .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
             text = "${index + 1}",
             color = if (isSelected) KnobAmber else TextSecondary,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(16.dp)
+            modifier = Modifier.width(16.dp),
         )
         Column(
             verticalArrangement = Arrangement.spacedBy(2.dp),
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 TrackButton("M", state.mute, KnobRed, onMute, Modifier.size(22.dp))
@@ -667,23 +670,25 @@ private fun TrackHeader(
                 TrackButton("R", state.arm, TransportRed, onArm, Modifier.size(22.dp))
             }
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(TextMuted)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(TextMuted),
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(state.level)
-                        .background(
-                            when {
-                                state.level > 0.9f -> KnobRed
-                                state.level > 0.7f -> KnobAmber
-                                else -> KnobGreen
-                            }
-                        )
+                    modifier =
+                        Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(state.level)
+                            .background(
+                                when {
+                                    state.level > 0.9f -> KnobRed
+                                    state.level > 0.7f -> KnobAmber
+                                    else -> KnobGreen
+                                },
+                            ),
                 )
             }
         }
@@ -696,25 +701,25 @@ private fun TrackButton(
     active: Boolean,
     activeColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(3.dp))
-            .background(if (active) activeColor else BgGunmetal)
-            .border(
-                1.dp,
-                if (active) activeColor else PanelHighlight.copy(alpha = 0.3f),
-                RoundedCornerShape(3.dp)
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(3.dp))
+                .background(if (active) activeColor else BgGunmetal)
+                .border(
+                    1.dp,
+                    if (active) activeColor else PanelHighlight.copy(alpha = 0.3f),
+                    RoundedCornerShape(3.dp),
+                ).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
             color = if (active) Color.White else TextSecondary,
             fontSize = 7.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
     }
 }
@@ -727,7 +732,7 @@ private fun TrackButton(
 private fun TimelineRuler(
     barWidthPx: Float,
     totalBars: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     Box(modifier = modifier) {
@@ -737,9 +742,10 @@ private fun TimelineRuler(
                 color = TextMuted,
                 fontSize = 8.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .offset(x = with(density) { (b * barWidthPx).toDp() })
-                    .padding(start = 2.dp, top = 4.dp)
+                modifier =
+                    Modifier
+                        .offset(x = with(density) { (b * barWidthPx).toDp() })
+                        .padding(start = 2.dp, top = 4.dp),
             )
         }
     }
@@ -757,39 +763,41 @@ private fun ClipItem(
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
-    onTrim: (newDurationTicks: Long) -> Unit
+    onTrim: (newDurationTicks: Long) -> Unit,
 ) {
-    val bg = when {
-        clip.mute -> TextMuted.copy(alpha = 0.5f)
-        clip is PatternClip -> KnobAmber.copy(alpha = 0.75f)
-        clip is AudioClip -> KnobCyan.copy(alpha = 0.75f)
-        else -> TextMuted
-    }
+    val bg =
+        when {
+            clip.mute -> TextMuted.copy(alpha = 0.5f)
+            clip is PatternClip -> KnobAmber.copy(alpha = 0.75f)
+            clip is AudioClip -> KnobCyan.copy(alpha = 0.75f)
+            else -> TextMuted
+        }
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(bg)
-            .border(
-                1.dp,
-                if (clip.mute) TextMuted else Color.White.copy(alpha = 0.4f),
-                RoundedCornerShape(4.dp)
-            )
-            .pointerInput(clip.id) {
-                detectTapGestures(
-                    onTap = { onTap() },
-                    onLongPress = { onLongPress() }
-                )
-            }
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(bg)
+                .border(
+                    1.dp,
+                    if (clip.mute) TextMuted else Color.White.copy(alpha = 0.4f),
+                    RoundedCornerShape(4.dp),
+                ).pointerInput(clip.id) {
+                    detectTapGestures(
+                        onTap = { onTap() },
+                        onLongPress = { onLongPress() },
+                    )
+                },
     ) {
         Text(
-            text = when (clip) {
-                is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
-                is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
-            },
+            text =
+                when (clip) {
+                    is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
+                    is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
+                },
             color = Color.Black,
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(4.dp).align(Alignment.TopStart)
+            modifier = Modifier.padding(4.dp).align(Alignment.TopStart),
         )
 
         if (clip is AudioClip) {
@@ -802,7 +810,9 @@ private fun ClipItem(
                     drawRect(
                         color = Color.Black.copy(alpha = 0.25f),
                         topLeft = Offset(i * w + 1f, (size.height - h) / 2),
-                        size = androidx.compose.ui.geometry.Size(w - 2f, h)
+                        size =
+                            androidx.compose.ui.geometry
+                                .Size(w - 2f, h),
                     )
                 }
             }
@@ -811,32 +821,35 @@ private fun ClipItem(
         if (!clip.mute) {
             var trimDelta by remember { mutableStateOf(0f) }
             Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .width(14.dp)
-                    .fillMaxHeight()
-                    .pointerInput(clip.id) {
-                        detectHorizontalDragGestures(
-                            onHorizontalDrag = { change, dragAmount ->
-                                change.consume()
-                                trimDelta += dragAmount
-                            },
-                            onDragEnd = {
-                                val deltaTicks = (trimDelta / tickWidthPx).toLong()
-                                val newDuration = (clip.durationTicks + deltaTicks)
-                                    .coerceAtLeast(TICKS_PER_STEP.toLong())
-                                onTrim(newDuration)
-                                trimDelta = 0f
-                            }
-                        )
-                    }
+                modifier =
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(14.dp)
+                        .fillMaxHeight()
+                        .pointerInput(clip.id) {
+                            detectHorizontalDragGestures(
+                                onHorizontalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    trimDelta += dragAmount
+                                },
+                                onDragEnd = {
+                                    val deltaTicks = (trimDelta / tickWidthPx).toLong()
+                                    val newDuration =
+                                        (clip.durationTicks + deltaTicks)
+                                            .coerceAtLeast(TICKS_PER_STEP.toLong())
+                                    onTrim(newDuration)
+                                    trimDelta = 0f
+                                },
+                            )
+                        },
             ) {
                 Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .fillMaxHeight(0.6f)
-                        .align(Alignment.Center)
-                        .background(Color.White.copy(alpha = 0.5f))
+                    modifier =
+                        Modifier
+                            .width(2.dp)
+                            .fillMaxHeight(0.6f)
+                            .align(Alignment.Center)
+                            .background(Color.White.copy(alpha = 0.5f)),
                 )
             }
         }
@@ -848,33 +861,36 @@ private fun ClipContent(
     clip: Clip,
     pattern: Pattern?,
     isGhost: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val bg = when {
-        clip.mute -> TextMuted.copy(alpha = 0.5f)
-        clip is PatternClip -> KnobAmber.copy(alpha = if (isGhost) 0.9f else 0.75f)
-        clip is AudioClip -> KnobCyan.copy(alpha = if (isGhost) 0.9f else 0.75f)
-        else -> TextMuted
-    }
+    val bg =
+        when {
+            clip.mute -> TextMuted.copy(alpha = 0.5f)
+            clip is PatternClip -> KnobAmber.copy(alpha = if (isGhost) 0.9f else 0.75f)
+            clip is AudioClip -> KnobCyan.copy(alpha = if (isGhost) 0.9f else 0.75f)
+            else -> TextMuted
+        }
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(bg)
-            .border(
-                1.dp,
-                if (isGhost) KnobAmber else Color.White.copy(alpha = 0.4f),
-                RoundedCornerShape(4.dp)
-            )
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(bg)
+                .border(
+                    1.dp,
+                    if (isGhost) KnobAmber else Color.White.copy(alpha = 0.4f),
+                    RoundedCornerShape(4.dp),
+                ),
     ) {
         Text(
-            text = when (clip) {
-                is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
-                is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
-            },
+            text =
+                when (clip) {
+                    is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
+                    is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
+                },
             color = Color.Black,
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(4.dp)
+            modifier = Modifier.padding(4.dp),
         )
     }
 }
@@ -894,24 +910,24 @@ private fun AutomationLane(
     onMovePoint: (Long, Long, Float) -> Unit,
     onDeletePoint: (Long) -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.background(BgPanel).padding(4.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
                 text = "AUTO: $paramId",
                 color = KnobAmber,
                 fontSize = 10.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.weight(1f))
             TextButton(
                 onClick = {
                     points.maxByOrNull { it.point.tick }?.let { onDeletePoint(it.id) }
-                }
+                },
             ) {
                 Text("DEL LAST", color = KnobRed, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             }
@@ -920,11 +936,12 @@ private fun AutomationLane(
             }
         }
         BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color(0xFF1A1A1E))
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF1A1A1E)),
         ) {
             val density = LocalDensity.current
             val hPx = with(density) { maxHeight.toPx() }
@@ -936,7 +953,7 @@ private fun AutomationLane(
                         PanelHighlight.copy(alpha = 0.15f),
                         Offset(x, 0f),
                         Offset(x, size.height),
-                        1f
+                        1f,
                     )
                 }
                 val sorted = points.sortedBy { it.point.tick }
@@ -961,15 +978,16 @@ private fun AutomationLane(
 
             // Tap empty space to add
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(paramId) {
-                        detectTapGestures { offset ->
-                            val tick = (offset.x / tickWidthPx).toLong().coerceAtLeast(0)
-                            val value = 1f - (offset.y / hPx).coerceIn(0f, 1f)
-                            onAddPoint(tick, value.coerceIn(0f, 1f))
-                        }
-                    }
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(paramId) {
+                            detectTapGestures { offset ->
+                                val tick = (offset.x / tickWidthPx).toLong().coerceAtLeast(0)
+                                val value = 1f - (offset.y / hPx).coerceIn(0f, 1f)
+                                onAddPoint(tick, value.coerceIn(0f, 1f))
+                            }
+                        },
             )
 
             // Draggable point overlays
@@ -979,30 +997,33 @@ private fun AutomationLane(
                 var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
                 Box(
-                    modifier = Modifier
-                        .offset(
-                            x = xDp + with(density) { dragOffset.x.toDp() },
-                            y = yDp + with(density) { dragOffset.y.toDp() }
-                        )
-                        .size(24.dp)
-                        .pointerInput(p.id) {
-                            detectDragGestures(
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    dragOffset += dragAmount
-                                },
-                                onDragEnd = {
-                                    val newTick = ((p.point.tick * tickWidthPx + dragOffset.x) / tickWidthPx)
-                                        .toLong()
-                                        .coerceAtLeast(0)
-                                    val newValue = 1f - ((p.point.value * hPx + dragOffset.y) / hPx)
-                                        .coerceIn(0f, 1f)
-                                    onMovePoint(p.id, newTick, newValue)
-                                    dragOffset = Offset.Zero
-                                }
-                            )
-                        },
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .offset(
+                                x = xDp + with(density) { dragOffset.x.toDp() },
+                                y = yDp + with(density) { dragOffset.y.toDp() },
+                            ).size(24.dp)
+                            .pointerInput(p.id) {
+                                detectDragGestures(
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffset += dragAmount
+                                    },
+                                    onDragEnd = {
+                                        val newTick =
+                                            ((p.point.tick * tickWidthPx + dragOffset.x) / tickWidthPx)
+                                                .toLong()
+                                                .coerceAtLeast(0)
+                                        val newValue =
+                                            1f -
+                                                ((p.point.value * hPx + dragOffset.y) / hPx)
+                                                    .coerceIn(0f, 1f)
+                                        onMovePoint(p.id, newTick, newValue)
+                                        dragOffset = Offset.Zero
+                                    },
+                                )
+                            },
+                    contentAlignment = Alignment.Center,
                 ) {
                     // Invisible touch target; visuals drawn by Canvas above
                 }

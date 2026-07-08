@@ -18,7 +18,6 @@ import org.junit.Before
 import org.junit.Test
 
 class TransportControllerTest {
-
     // ---- shared test fixtures ----
 
     private lateinit var fakeScheduler: FakeSynthEngineScheduler
@@ -28,12 +27,13 @@ class TransportControllerTest {
     fun setUp() {
         fakeScheduler = FakeSynthEngineScheduler()
         // cancelled scope prevents the scheduler coroutine from ever running
-        controller = TransportController(
-            sampleRate = 48000,
-            lookaheadMs = 5000,     // 5 s lookahead so one tick covers a full clip
-            coroutineScope = CoroutineScope(Job().also { it.cancel() }),
-            scheduler = fakeScheduler
-        )
+        controller =
+            TransportController(
+                sampleRate = 48000,
+                lookaheadMs = 5000, // 5 s lookahead so one tick covers a full clip
+                coroutineScope = CoroutineScope(Job().also { it.cancel() }),
+                scheduler = fakeScheduler,
+            )
     }
 
     // ================================================================
@@ -75,19 +75,29 @@ class TransportControllerTest {
         val pattern = simplePattern(id = 0, lengthTicks = 960L, noteStart = 60, noteCount = 1)
         controller.loadPatterns(listOf(pattern))
 
-        val clip = PatternClip(
-            id = "pc-1", trackIndex = 0, startTick = 0L,
-            durationTicks = 1920L, patternId = 0
-        )
+        val clip =
+            PatternClip(
+                id = "pc-1",
+                trackIndex = 0,
+                startTick = 0L,
+                durationTicks = 1920L,
+                patternId = 0,
+            )
         val windowEnd = controller.tickToSample(9600, 120f) // far ahead
 
         controller.schedulePatternClip(clip, 0L, windowEnd, 120f)
 
         // Exactly 2 note-ons (one per rep) — no ghost third
-        assertEquals("Should schedule exactly 2 note-on events for 2 reps",
-            2, fakeScheduler.noteOnEvents.size)
-        assertEquals("Should schedule exactly 2 note-off events",
-            2, fakeScheduler.noteOffEvents.size)
+        assertEquals(
+            "Should schedule exactly 2 note-on events for 2 reps",
+            2,
+            fakeScheduler.noteOnEvents.size,
+        )
+        assertEquals(
+            "Should schedule exactly 2 note-off events",
+            2,
+            fakeScheduler.noteOffEvents.size,
+        )
         assertEquals("Note-on rep 0", 60, fakeScheduler.noteOnEvents[0].note)
         assertEquals("Note-on rep 1", 60, fakeScheduler.noteOnEvents[1].note)
     }
@@ -100,19 +110,27 @@ class TransportControllerTest {
     fun schedulePatternClip_partialTail_truncatesLastRepNotes() {
         // Pattern: 2 beats (960 ticks) with note at tick 0 (dur 480) and note at tick 480 (dur 480).
         // Clip duration is 1440 ticks = 1 full rep + 480 tick tail.
-        val pattern = Pattern(
-            id = 0, lengthSteps = 16, lengthTicks = 960L,
-            notes = listOf(
-                NoteEvent(note = 60, velocity = 0.8f, startTick = 0L, durationTicks = 480L, trackIndex = 0),
-                NoteEvent(note = 64, velocity = 0.8f, startTick = 480L, durationTicks = 480L, trackIndex = 0)
+        val pattern =
+            Pattern(
+                id = 0,
+                lengthSteps = 16,
+                lengthTicks = 960L,
+                notes =
+                    listOf(
+                        NoteEvent(note = 60, velocity = 0.8f, startTick = 0L, durationTicks = 480L, trackIndex = 0),
+                        NoteEvent(note = 64, velocity = 0.8f, startTick = 480L, durationTicks = 480L, trackIndex = 0),
+                    ),
             )
-        )
         controller.loadPatterns(listOf(pattern))
 
-        val clip = PatternClip(
-            id = "pc-2", trackIndex = 0, startTick = 0L,
-            durationTicks = 1440L, patternId = 0
-        )
+        val clip =
+            PatternClip(
+                id = "pc-2",
+                trackIndex = 0,
+                startTick = 0L,
+                durationTicks = 1440L,
+                patternId = 0,
+            )
         val windowEnd = controller.tickToSample(9600, 120f)
 
         controller.schedulePatternClip(clip, 0L, windowEnd, 120f)
@@ -121,10 +139,16 @@ class TransportControllerTest {
         // Rep 1 (partial 480 ticks): note 60 at local tick 0 (global 960) fits within 1440 (end=1440>960),
         //   note 64 at local tick 480 (global 1440) has maxEndTick=1440 => end=1440 => noteEndTick==startTick => skipped.
         // Expected: 3 note-ons, 3 note-offs.
-        assertEquals("Expected 3 note-ons (2 full + 1 truncated)",
-            3, fakeScheduler.noteOnEvents.size)
-        assertEquals("Expected 3 note-offs",
-            3, fakeScheduler.noteOffEvents.size)
+        assertEquals(
+            "Expected 3 note-ons (2 full + 1 truncated)",
+            3,
+            fakeScheduler.noteOnEvents.size,
+        )
+        assertEquals(
+            "Expected 3 note-offs",
+            3,
+            fakeScheduler.noteOffEvents.size,
+        )
 
         assertEquals("Full rep note 60", 60, fakeScheduler.noteOnEvents[0].note)
         assertEquals("Full rep note 64", 64, fakeScheduler.noteOnEvents[1].note)
@@ -149,10 +173,16 @@ class TransportControllerTest {
         assertEquals("Active pattern should be 0", 0, controller.activePatternId)
 
         // 2 notes in the pattern
-        assertEquals("Should schedule 2 note-ons",
-            2, fakeScheduler.noteOnEvents.size)
-        assertEquals("Should schedule 2 note-offs",
-            2, fakeScheduler.noteOffEvents.size)
+        assertEquals(
+            "Should schedule 2 note-ons",
+            2,
+            fakeScheduler.noteOnEvents.size,
+        )
+        assertEquals(
+            "Should schedule 2 note-offs",
+            2,
+            fakeScheduler.noteOffEvents.size,
+        )
     }
 
     // ================================================================
@@ -178,10 +208,15 @@ class TransportControllerTest {
         controller.scheduleNextBlock()
 
         // The bar-boundary pendingSwitchSample should have been resolved.
-        assertTrue("Pending switch sample should be resolved",
-            controller.pendingSwitchSample > 0)
-        assertEquals("Pattern 0 still active before boundary",
-            0, controller.activePatternId)
+        assertTrue(
+            "Pending switch sample should be resolved",
+            controller.pendingSwitchSample > 0,
+        )
+        assertEquals(
+            "Pattern 0 still active before boundary",
+            0,
+            controller.activePatternId,
+        )
 
         // Note-ons from pattern 0 scheduled in first 2 blocks
         val noteOnsBeforeSwitch = fakeScheduler.noteOnEvents.size
@@ -193,12 +228,17 @@ class TransportControllerTest {
         assertEquals("Pattern 1 should be active after switch", 1, controller.activePatternId)
         assertEquals("Queued pattern consumed", -1, controller.queuedPatternId)
         assertEquals("Pending switch sample reset", -1L, controller.pendingSwitchSample)
-        assertEquals("Transport position reset to bar 0",
-            0, controller.transportState.position.bar)
+        assertEquals(
+            "Transport position reset to bar 0",
+            0,
+            controller.transportState.position.bar,
+        )
 
         // A note-off should have been sent for the previously held note 60
-        assertTrue("At least one note-off should have been sent for held notes",
-            fakeScheduler.noteOffEvents.any { it.trackIndex == 0 && it.note == 60 })
+        assertTrue(
+            "At least one note-off should have been sent for held notes",
+            fakeScheduler.noteOffEvents.any { it.trackIndex == 0 && it.note == 60 },
+        )
     }
 
     // ================================================================
@@ -209,11 +249,13 @@ class TransportControllerTest {
     fun scheduleNextBlock_loopWrap_resetsPlayheadAndClearsEvents() {
         val pattern = simplePattern(id = 0, lengthTicks = 960L, noteStart = 60, noteCount = 1)
         controller.loadPatterns(listOf(pattern))
-        controller.loadArrangement(Arrangement(
-            loopEnabled = true,
-            loopStartTick = 0L,
-            loopEndTick = 960L  // 2 beats
-        ))
+        controller.loadArrangement(
+            Arrangement(
+                loopEnabled = true,
+                loopStartTick = 0L,
+                loopEndTick = 960L, // 2 beats
+            ),
+        )
 
         controller.queuePattern(0)
 
@@ -224,14 +266,25 @@ class TransportControllerTest {
         controller.scheduleNextBlock()
 
         // Loop wrap should have fired: clear events, set playhead to loop start
-        assertTrue("clearScheduledEvents should have been called",
-            fakeScheduler.clearScheduledEventsCount >= 1)
-        assertEquals("Playhead should be reset to loop start",
-            controller.tickToSample(0L, 120f), fakeScheduler.lastSetPlayheadSample)
-        assertEquals("Playhead sample should be loop start",
-            0L, fakeScheduler.controlledPlayheadSample)
-        assertEquals("Transport position should be reset to bar 0",
-            0, controller.transportState.position.bar)
+        assertTrue(
+            "clearScheduledEvents should have been called",
+            fakeScheduler.clearScheduledEventsCount >= 1,
+        )
+        assertEquals(
+            "Playhead should be reset to loop start",
+            controller.tickToSample(0L, 120f),
+            fakeScheduler.lastSetPlayheadSample,
+        )
+        assertEquals(
+            "Playhead sample should be loop start",
+            0L,
+            fakeScheduler.controlledPlayheadSample,
+        )
+        assertEquals(
+            "Transport position should be reset to bar 0",
+            0,
+            controller.transportState.position.bar,
+        )
     }
 
     // ================================================================
@@ -246,41 +299,61 @@ class TransportControllerTest {
         controller.scheduleNoteOn(track = 1, note = 67, velocity = 0.8f)
 
         // Verify heldNotes is tracking them
-        assertEquals("Should have 2 held notes on track 0",
-            setOf(60, 64), controller.heldNotes[0])
-        assertEquals("Should have 1 held note on track 1",
-            setOf(67), controller.heldNotes[1])
+        assertEquals(
+            "Should have 2 held notes on track 0",
+            setOf(60, 64),
+            controller.heldNotes[0],
+        )
+        assertEquals(
+            "Should have 1 held note on track 1",
+            setOf(67),
+            controller.heldNotes[1],
+        )
 
         // Count note-off events so far (none yet — we only did note-ons)
         // scheduleNoteOn calls scheduler.scheduleNoteOn() which records in fake
         assertEquals("3 note-ons recorded", 3, fakeScheduler.noteOnEvents.size)
-        assertEquals("0 note-offs recorded before stop",
-            0, fakeScheduler.noteOffEvents.size)
+        assertEquals(
+            "0 note-offs recorded before stop",
+            0,
+            fakeScheduler.noteOffEvents.size,
+        )
 
         // Now stop — this should send note-offs for all held notes
         controller.stop()
 
         // Expected: 3 additional note-offs (one per held note)
-        assertEquals("Should have 3 note-offs after stop",
-            3, fakeScheduler.noteOffEvents.size)
+        assertEquals(
+            "Should have 3 note-offs after stop",
+            3,
+            fakeScheduler.noteOffEvents.size,
+        )
 
         // Verify the actual note-off events
-        assertTrue("Note-off for note 60 track 0",
+        assertTrue(
+            "Note-off for note 60 track 0",
             fakeScheduler.noteOffEvents.any {
                 it.trackIndex == 0 && it.note == 60
-            })
-        assertTrue("Note-off for note 64 track 0",
+            },
+        )
+        assertTrue(
+            "Note-off for note 64 track 0",
             fakeScheduler.noteOffEvents.any {
                 it.trackIndex == 0 && it.note == 64
-            })
-        assertTrue("Note-off for note 67 track 1",
+            },
+        )
+        assertTrue(
+            "Note-off for note 67 track 1",
             fakeScheduler.noteOffEvents.any {
                 it.trackIndex == 1 && it.note == 67
-            })
+            },
+        )
 
         // heldNotes should be cleared
-        assertTrue("heldNotes should be empty after stop",
-            controller.heldNotes.isEmpty())
+        assertTrue(
+            "heldNotes should be empty after stop",
+            controller.heldNotes.isEmpty(),
+        )
     }
 
     // ================================================================
@@ -289,13 +362,14 @@ class TransportControllerTest {
 
     @Test
     fun scheduleNextBlock_startsAudioClipAtCorrectOffset() {
-        val audioClip = AudioClip(
-            id = "audio-1",
-            trackIndex = 2,
-            startTick = 480L,         // starts at beat 1
-            durationTicks = 960L,
-            audioFilePath = "samples/kick.wav"
-        )
+        val audioClip =
+            AudioClip(
+                id = "audio-1",
+                trackIndex = 2,
+                startTick = 480L, // starts at beat 1
+                durationTicks = 960L,
+                audioFilePath = "samples/kick.wav",
+            )
         controller.loadArrangement(Arrangement(clips = listOf(audioClip)))
 
         // Playhead at tick 0
@@ -309,32 +383,42 @@ class TransportControllerTest {
         assertEquals(2, startEvent.trackIndex)
         // offsetInBuffer = clipStartSample - currentSample
         val clipStartSample = controller.tickToSample(480L, 120f) // 24000
-        assertEquals("Offset should be clip start sample",
-            clipStartSample.toInt(), startEvent.startOffsetInBuffer)
+        assertEquals(
+            "Offset should be clip start sample",
+            clipStartSample.toInt(),
+            startEvent.startOffsetInBuffer,
+        )
     }
 
     @Test
     fun scheduleNextBlock_doesNotStartAudioClipTwice() {
-        val audioClip = AudioClip(
-            id = "audio-1",
-            trackIndex = 2,
-            startTick = 0L,
-            durationTicks = 960L,
-            audioFilePath = "samples/kick.wav"
-        )
+        val audioClip =
+            AudioClip(
+                id = "audio-1",
+                trackIndex = 2,
+                startTick = 0L,
+                durationTicks = 960L,
+                audioFilePath = "samples/kick.wav",
+            )
         controller.loadArrangement(Arrangement(clips = listOf(audioClip)))
 
         // First schedule — clip starts
         fakeScheduler.controlledPlayheadSample = 0L
         controller.scheduleNextBlock()
-        assertEquals("Clip started on first tick",
-            1, fakeScheduler.audioClipStarts.size)
+        assertEquals(
+            "Clip started on first tick",
+            1,
+            fakeScheduler.audioClipStarts.size,
+        )
 
         // Second schedule — clip already in startedClips, should not re-start
         fakeScheduler.controlledPlayheadSample = 100L
         controller.scheduleNextBlock()
-        assertEquals("Clip should not be started again",
-            1, fakeScheduler.audioClipStarts.size)
+        assertEquals(
+            "Clip should not be started again",
+            1,
+            fakeScheduler.audioClipStarts.size,
+        )
     }
 
     // ================================================================
@@ -343,11 +427,13 @@ class TransportControllerTest {
 
     @Test
     fun setRecording_enablesPunchRangeFromArrangement() {
-        controller.loadArrangement(Arrangement(
-            punchEnabled = true,
-            punchInTick = 480L,
-            punchOutTick = 1440L
-        ))
+        controller.loadArrangement(
+            Arrangement(
+                punchEnabled = true,
+                punchInTick = 480L,
+                punchOutTick = 1440L,
+            ),
+        )
 
         controller.setRecording(true)
 
@@ -360,13 +446,15 @@ class TransportControllerTest {
 
     @Test
     fun setRecording_disabled_disablesPunchRange() {
-        controller.loadArrangement(Arrangement(
-            punchEnabled = true,
-            punchInTick = 480L,
-            punchOutTick = 1440L
-        ))
+        controller.loadArrangement(
+            Arrangement(
+                punchEnabled = true,
+                punchInTick = 480L,
+                punchOutTick = 1440L,
+            ),
+        )
 
-        controller.setRecording(true)  // punch is on
+        controller.setRecording(true) // punch is on
         assertTrue("Punch should be enabled initially", fakeScheduler.lastPunchEnabled)
 
         controller.setRecording(false) // punch should be disabled
@@ -382,18 +470,25 @@ class TransportControllerTest {
         val pattern = simplePattern(id = 0, lengthTicks = 960L)
         controller.loadPatterns(listOf(pattern))
 
-        val clip = PatternClip(
-            id = "pc-behind", trackIndex = 0, startTick = 0L,
-            durationTicks = 960L, patternId = 0
-        )
+        val clip =
+            PatternClip(
+                id = "pc-behind",
+                trackIndex = 0,
+                startTick = 0L,
+                durationTicks = 960L,
+                patternId = 0,
+            )
         // Playhead already past the clip end
         val clipEndSample = controller.tickToSample(960L, 120f)
         val windowEnd = clipEndSample + controller.tickToSample(960L, 120f)
 
         controller.schedulePatternClip(clip, clipEndSample + 1, windowEnd, 120f)
 
-        assertEquals("No notes should be scheduled for a finished clip",
-            0, fakeScheduler.noteOnEvents.size)
+        assertEquals(
+            "No notes should be scheduled for a finished clip",
+            0,
+            fakeScheduler.noteOnEvents.size,
+        )
     }
 
     @Test
@@ -401,14 +496,21 @@ class TransportControllerTest {
         val pattern = simplePattern(id = 0, lengthTicks = 960L)
         controller.loadPatterns(listOf(pattern))
 
-        val clip = PatternClip(
-            id = "pc-ahead", trackIndex = 0, startTick = 9600L,
-            durationTicks = 960L, patternId = 0
-        )
+        val clip =
+            PatternClip(
+                id = "pc-ahead",
+                trackIndex = 0,
+                startTick = 9600L,
+                durationTicks = 960L,
+                patternId = 0,
+            )
         controller.schedulePatternClip(clip, 0L, controller.tickToSample(4800L, 120f), 120f)
 
-        assertEquals("No notes should be scheduled for a clip ahead of the window",
-            0, fakeScheduler.noteOnEvents.size)
+        assertEquals(
+            "No notes should be scheduled for a clip ahead of the window",
+            0,
+            fakeScheduler.noteOnEvents.size,
+        )
     }
 
     @Test
@@ -416,27 +518,181 @@ class TransportControllerTest {
         // No pattern queued, no active pattern
         controller.scheduleNextBlock()
 
-        assertEquals("Active pattern should remain -1",
-            -1, controller.activePatternId)
-        assertEquals("No notes should be scheduled",
-            0, fakeScheduler.noteOnEvents.size)
+        assertEquals(
+            "Active pattern should remain -1",
+            -1,
+            controller.activePatternId,
+        )
+        assertEquals(
+            "No notes should be scheduled",
+            0,
+            fakeScheduler.noteOnEvents.size,
+        )
     }
 
     @Test
     fun checkLoopWrap_playheadNotAtLoopEnd_doesNothing() {
-        controller.loadArrangement(Arrangement(
-            loopEnabled = true,
-            loopStartTick = 0L,
-            loopEndTick = 960L
-        ))
+        controller.loadArrangement(
+            Arrangement(
+                loopEnabled = true,
+                loopStartTick = 0L,
+                loopEndTick = 960L,
+            ),
+        )
 
         fakeScheduler.controlledPlayheadSample = 100L // inside loop range
         controller.checkLoopWrap(100L, 200000L, 120f, TimeSignature())
 
-        assertEquals("Playhead should not be reset",
-            100L, fakeScheduler.controlledPlayheadSample)
-        assertEquals("Events should not be cleared",
-            0, fakeScheduler.clearScheduledEventsCount)
+        assertEquals(
+            "Playhead should not be reset",
+            100L,
+            fakeScheduler.controlledPlayheadSample,
+        )
+        assertEquals(
+            "Events should not be cleared",
+            0,
+            fakeScheduler.clearScheduledEventsCount,
+        )
+    }
+
+    // ================================================================
+    //  9.  Pad-triggered transport (slice B)
+    // ================================================================
+
+    @Test
+    fun schedulePatternClip_withPadIndex_callsSchedulePadTrigger() {
+        val pattern =
+            Pattern(
+                id = 0,
+                lengthSteps = 16,
+                lengthTicks = 960L,
+                notes =
+                    listOf(
+                        NoteEvent(note = 60, velocity = 0.8f, startTick = 0L, durationTicks = TICKS_PER_STEP.toLong(), padIndex = 3),
+                    ),
+            )
+        controller.loadPatterns(listOf(pattern))
+
+        val clip =
+            PatternClip(
+                id = "pc-pad",
+                trackIndex = 0,
+                startTick = 0L,
+                durationTicks = 960L,
+                patternId = 0,
+            )
+        val windowEnd = controller.tickToSample(9600, 120f)
+        controller.schedulePatternClip(clip, 0L, windowEnd, 120f)
+
+        assertEquals(
+            "Should schedule 1 pad trigger",
+            1,
+            fakeScheduler.padTriggers.size,
+        )
+        assertEquals(
+            "Pad index should be 3",
+            3,
+            fakeScheduler.padTriggers[0].padIndex,
+        )
+        assertEquals(
+            "Velocity should match",
+            0.8f,
+            fakeScheduler.padTriggers[0].velocity,
+            0.001f,
+        )
+        assertEquals(
+            "No noteOn events should be scheduled",
+            0,
+            fakeScheduler.noteOnEvents.size,
+        )
+    }
+
+    @Test
+    fun schedulePatternClip_legacyPadIndex_fallsBackToNoteOn() {
+        // NoteEvent with padIndex = -1 (legacy) should use noteOn path
+        val pattern =
+            Pattern(
+                id = 0,
+                lengthSteps = 16,
+                lengthTicks = 960L,
+                notes =
+                    listOf(
+                        NoteEvent(note = 60, velocity = 0.8f, startTick = 0L, durationTicks = TICKS_PER_STEP.toLong(), padIndex = -1),
+                    ),
+            )
+        controller.loadPatterns(listOf(pattern))
+
+        val clip =
+            PatternClip(
+                id = "pc-legacy",
+                trackIndex = 0,
+                startTick = 0L,
+                durationTicks = 960L,
+                patternId = 0,
+            )
+        val windowEnd = controller.tickToSample(9600, 120f)
+        controller.schedulePatternClip(clip, 0L, windowEnd, 120f)
+
+        assertEquals(
+            "Should schedule 1 noteOn",
+            1,
+            fakeScheduler.noteOnEvents.size,
+        )
+        assertEquals(
+            "Note should be 60",
+            60,
+            fakeScheduler.noteOnEvents[0].note,
+        )
+        assertEquals(
+            "No pad triggers should be scheduled",
+            0,
+            fakeScheduler.padTriggers.size,
+        )
+    }
+
+    @Test
+    fun schedulePatternClip_clipPadIndex_overridesNotePadIndex() {
+        // Note.padIndex = -1 (legacy), but clip.padIndex = 5
+        // The clip's padIndex should be used as the effective padIndex
+        val pattern =
+            Pattern(
+                id = 0,
+                lengthSteps = 16,
+                lengthTicks = 960L,
+                notes =
+                    listOf(
+                        NoteEvent(note = 60, velocity = 0.8f, startTick = 0L, durationTicks = TICKS_PER_STEP.toLong(), padIndex = -1),
+                    ),
+            )
+        controller.loadPatterns(listOf(pattern))
+
+        val clip =
+            PatternClip(
+                id = "pc-override",
+                trackIndex = 0,
+                startTick = 0L,
+                durationTicks = 960L,
+                patternId = 0,
+                padIndex = 5,
+            )
+        val windowEnd = controller.tickToSample(9600, 120f)
+        controller.schedulePatternClip(clip, 0L, windowEnd, 120f)
+
+        assertEquals(
+            "Should schedule 1 pad trigger",
+            1,
+            fakeScheduler.padTriggers.size,
+        )
+        assertEquals(
+            "Pad index should be 5 (from clip)",
+            5,
+            fakeScheduler.padTriggers[0].padIndex,
+        )
+        assertEquals(
+            "No noteOn events should be scheduled",
+            0,
+            fakeScheduler.noteOnEvents.size,
+        )
     }
 
     // ================================================================
@@ -452,22 +708,23 @@ class TransportControllerTest {
         lengthTicks: Long = 960L,
         noteStart: Int = 60,
         noteCount: Int = 1,
-        trackIndex: Int = 0
+        trackIndex: Int = 0,
     ): Pattern {
-        val notes = (0 until noteCount).map { i ->
-            NoteEvent(
-                note = noteStart + i,
-                velocity = 0.8f,
-                startTick = (i * TICKS_PER_STEP).toLong(),
-                durationTicks = TICKS_PER_STEP.toLong(),
-                trackIndex = trackIndex
-            )
-        }
+        val notes =
+            (0 until noteCount).map { i ->
+                NoteEvent(
+                    note = noteStart + i,
+                    velocity = 0.8f,
+                    startTick = (i * TICKS_PER_STEP).toLong(),
+                    durationTicks = TICKS_PER_STEP.toLong(),
+                    trackIndex = trackIndex,
+                )
+            }
         return Pattern(
             id = id,
             lengthSteps = (lengthTicks / TICKS_PER_STEP).toInt().coerceIn(1, 64),
             lengthTicks = lengthTicks,
-            notes = notes
+            notes = notes,
         )
     }
 }

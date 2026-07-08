@@ -4,10 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jujidaw.JujiDawApp
 import com.jujidaw.audio.SynthEngine
+import com.jujidaw.midi.MidiRouter
 import com.jujidaw.model.MidiTarget
 import com.jujidaw.model.TimeSignature
 import com.jujidaw.model.TransportPosition
-import com.jujidaw.midi.MidiRouter
 import com.jujidaw.project.AutomationPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +17,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** One of the 8 live performance FX pads. */
-enum class PerformFxType(val label: String) {
+enum class PerformFxType(
+    val label: String,
+) {
     STUTTER("Stutter"),
     GATE("Gate"),
     CUTTER("Cutter"),
@@ -25,13 +27,13 @@ enum class PerformFxType(val label: String) {
     DELAY_FREEZE("Dly Freeze"),
     FILTER_SWEEP("Flt Sweep"),
     BITCRUSH("Bitcrush"),
-    TAPE_STOP("Tape Stop")
+    TAPE_STOP("Tape Stop"),
 }
 
 /** State of a single insert FX slot on a mixer channel. */
 data class InsertSlot(
     val type: SynthEngine.EffectType = SynthEngine.EffectType.None,
-    val bypass: Boolean = false
+    val bypass: Boolean = false,
 )
 
 /** State of one mixer channel (track). */
@@ -44,13 +46,13 @@ data class ChannelState(
     val level: Float = 0f,
     val sendA: Float = 0f,
     val sendB: Float = 0f,
-    val inserts: List<InsertSlot> = List(4) { InsertSlot() }
+    val inserts: List<InsertSlot> = List(4) { InsertSlot() },
 )
 
 /** Master bus state. */
 data class MasterState(
     val faderDb: Float = 0f,
-    val level: Float = 0f
+    val level: Float = 0f,
 )
 
 /** Full UI state for the mixer screen. */
@@ -66,7 +68,7 @@ data class MixerUiState(
     val toastMessage: String? = null,
     val activePerformFx: Set<PerformFxType> = emptySet(),
     // MIDI Learn
-    val midiLearnTarget: MidiTarget? = null
+    val midiLearnTarget: MidiTarget? = null,
 )
 
 /**
@@ -86,7 +88,6 @@ data class MixerUiState(
  * - MIDI Learn: [startLearn], [stopLearn], [midiRouter]
  */
 class MixerViewModel : ViewModel() {
-
     private val _uiState = MutableStateFlow(MixerUiState())
     val uiState: StateFlow<MixerUiState> = _uiState.asStateFlow()
 
@@ -100,32 +101,38 @@ class MixerViewModel : ViewModel() {
     private fun startLevelPolling() {
         viewModelScope.launch {
             while (isActive) {
-                val newChannels = if (SynthEngine.isLoaded) {
-                    _uiState.value.channels.mapIndexed { index, ch ->
-                        val level = try {
-                            SynthEngine.getChannelLevel(index)
+                val newChannels =
+                    if (SynthEngine.isLoaded) {
+                        _uiState.value.channels.mapIndexed { index, ch ->
+                            val level =
+                                try {
+                                    SynthEngine.getChannelLevel(index)
+                                } catch (_: Exception) {
+                                    0f
+                                }
+                            ch.copy(level = level.coerceIn(0f, 1f))
+                        }
+                    } else {
+                        _uiState.value.channels
+                    }
+                // TODO: engine does not expose a dedicated master level getter;
+                // index 16 is a guess. Replace when nativeGetMasterLevel is added.
+                val masterLevel =
+                    if (SynthEngine.isLoaded) {
+                        try {
+                            SynthEngine.getChannelLevel(16)
                         } catch (_: Exception) {
                             0f
                         }
-                        ch.copy(level = level.coerceIn(0f, 1f))
-                    }
-                } else {
-                    _uiState.value.channels
-                }
-                // TODO: engine does not expose a dedicated master level getter;
-                // index 16 is a guess. Replace when nativeGetMasterLevel is added.
-                val masterLevel = if (SynthEngine.isLoaded) {
-                    try {
-                        SynthEngine.getChannelLevel(16)
-                    } catch (_: Exception) {
+                    } else {
                         0f
                     }
-                } else 0f
-                _uiState.value = _uiState.value.copy(
-                    channels = newChannels,
-                    master = _uiState.value.master.copy(level = masterLevel.coerceIn(0f, 1f))
-                )
-                delay(200)
+                _uiState.value =
+                    _uiState.value.copy(
+                        channels = newChannels,
+                        master = _uiState.value.master.copy(level = masterLevel.coerceIn(0f, 1f)),
+                    )
+                delay(300)
             }
         }
     }
@@ -136,14 +143,20 @@ class MixerViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(selectedChannel = trackIndex.coerceIn(0, 15))
     }
 
-    fun setChannelFader(trackIndex: Int, db: Float) {
+    fun setChannelFader(
+        trackIndex: Int,
+        db: Float,
+    ) {
         val clamped = db.coerceIn(-60f, 12f)
         recordAutomationIfArmed(39, (clamped + 60f) / 72f)
         SynthEngine.setChannelFader(trackIndex, clamped)
         updateChannel(trackIndex) { it.copy(faderDb = clamped) }
     }
 
-    fun setChannelPan(trackIndex: Int, pan: Float) {
+    fun setChannelPan(
+        trackIndex: Int,
+        pan: Float,
+    ) {
         val clamped = pan.coerceIn(-1f, 1f)
         recordAutomationIfArmed(40, (clamped + 1f) / 2f)
         SynthEngine.setChannelPan(trackIndex, clamped)
@@ -168,7 +181,11 @@ class MixerViewModel : ViewModel() {
         updateChannel(trackIndex) { it.copy(arm = newArm) }
     }
 
-    fun setSendLevel(trackIndex: Int, bus: Int, level: Float) {
+    fun setSendLevel(
+        trackIndex: Int,
+        bus: Int,
+        level: Float,
+    ) {
         val clamped = level.coerceIn(0f, 1f)
         SynthEngine.setSendLevel(trackIndex, bus, clamped)
         updateChannel(trackIndex) {
@@ -190,7 +207,11 @@ class MixerViewModel : ViewModel() {
 
     // ---- Insert FX ----
 
-    fun addInsertEffect(trackIndex: Int, slot: Int, type: SynthEngine.EffectType) {
+    fun addInsertEffect(
+        trackIndex: Int,
+        slot: Int,
+        type: SynthEngine.EffectType,
+    ) {
         if (type == SynthEngine.EffectType.None) return
         SynthEngine.addInsertEffect(trackIndex, slot, type)
         updateChannel(trackIndex) { ch ->
@@ -200,7 +221,10 @@ class MixerViewModel : ViewModel() {
         }
     }
 
-    fun removeInsertEffect(trackIndex: Int, slot: Int) {
+    fun removeInsertEffect(
+        trackIndex: Int,
+        slot: Int,
+    ) {
         SynthEngine.removeInsertEffect(trackIndex, slot)
         updateChannel(trackIndex) { ch ->
             val inserts = ch.inserts.toMutableList()
@@ -209,8 +233,14 @@ class MixerViewModel : ViewModel() {
         }
     }
 
-    fun toggleInsertBypass(trackIndex: Int, slot: Int) {
-        val current = _uiState.value.channels[trackIndex].inserts.getOrNull(slot) ?: return
+    fun toggleInsertBypass(
+        trackIndex: Int,
+        slot: Int,
+    ) {
+        val current =
+            _uiState.value.channels[trackIndex]
+                .inserts
+                .getOrNull(slot) ?: return
         val newBypass = !current.bypass
         SynthEngine.setInsertBypass(trackIndex, slot, newBypass)
         updateChannel(trackIndex) { ch ->
@@ -221,7 +251,11 @@ class MixerViewModel : ViewModel() {
     }
 
     /** Swap two insert slots in the UI. Engine reorder API is TODO. */
-    fun reorderInsert(trackIndex: Int, fromSlot: Int, toSlot: Int) {
+    fun reorderInsert(
+        trackIndex: Int,
+        fromSlot: Int,
+        toSlot: Int,
+    ) {
         if (fromSlot == toSlot) return
         updateChannel(trackIndex) { ch ->
             val inserts = ch.inserts.toMutableList()
@@ -238,11 +272,12 @@ class MixerViewModel : ViewModel() {
 
     fun togglePerformFx(type: PerformFxType) {
         val currentlyActive = type in _uiState.value.activePerformFx
-        val newSet = if (currentlyActive) {
-            _uiState.value.activePerformFx - type
-        } else {
-            _uiState.value.activePerformFx + type
-        }
+        val newSet =
+            if (currentlyActive) {
+                _uiState.value.activePerformFx - type
+            } else {
+                _uiState.value.activePerformFx + type
+            }
         _uiState.value = _uiState.value.copy(activePerformFx = newSet)
         showToast("Perform FX: ${type.label} ${if (currentlyActive) "OFF" else "ON"} (TODO: engine integration)")
     }
@@ -250,13 +285,15 @@ class MixerViewModel : ViewModel() {
     // ---- Automation ----
 
     fun selectAutomationParam(paramId: String?) {
-        _uiState.value = _uiState.value.copy(
-            selectedAutomationParam = paramId,
-            showAutomationSheet = paramId != null
-        )
+        _uiState.value =
+            _uiState.value.copy(
+                selectedAutomationParam = paramId,
+                showAutomationSheet = paramId != null,
+            )
     }
 
     /** Placeholder for automation point writing. */
+
     /** Call this when the user draws/edits automation points in the lane overlay. */
     fun updateAutomationPoints(points: List<AutomationPoint>) {
         _uiState.value = _uiState.value.copy(automationPoints = points)
@@ -264,24 +301,33 @@ class MixerViewModel : ViewModel() {
 
     fun toggleAutomationArm(paramId: Int) {
         val current = _uiState.value.armedAutomationParams
-        _uiState.value = _uiState.value.copy(
-            armedAutomationParams = if (paramId in current) current - paramId else current + paramId
-        )
+        _uiState.value =
+            _uiState.value.copy(
+                armedAutomationParams = if (paramId in current) current - paramId else current + paramId,
+            )
     }
 
-    fun recordAutomationIfArmed(paramId: Int, value: Float): Boolean {
+    fun recordAutomationIfArmed(
+        paramId: Int,
+        value: Float,
+    ): Boolean {
         if (paramId !in _uiState.value.armedAutomationParams) return false
         val transport = JujiDawApp.instance.transportController
         if (!transport.transportState.playing) return false
-        val tick = transport.transportState.position.toTicks(
-            transport.transportState.timeSignature
-        )
+        val tick =
+            transport.transportState.position.toTicks(
+                transport.transportState.timeSignature,
+            )
         val updated = _uiState.value.automationPoints + AutomationPoint(tick, value)
         _uiState.value = _uiState.value.copy(automationPoints = updated)
         return true
     }
 
-    fun addAutomationPoint(paramId: String, tick: Long, value: Float) {
+    fun addAutomationPoint(
+        paramId: String,
+        tick: Long,
+        value: Float,
+    ) {
         // TODO: TransportController does not yet expose setAutomationPoint.
         // When available, call it here and mirror into arrangement state.
         showToast("Automation: $paramId @ tick=$tick value=$value (TODO)")
@@ -332,7 +378,10 @@ class MixerViewModel : ViewModel() {
 
     // ---- Helpers ----
 
-    private fun updateChannel(trackIndex: Int, transform: (ChannelState) -> ChannelState) {
+    private fun updateChannel(
+        trackIndex: Int,
+        transform: (ChannelState) -> ChannelState,
+    ) {
         val channels = _uiState.value.channels.toMutableList()
         if (trackIndex in channels.indices) {
             channels[trackIndex] = transform(channels[trackIndex])

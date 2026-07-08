@@ -35,12 +35,15 @@ void AudioEngine::init(double sampleRate) {
     synthInstrument_->init(sampleRate);
     channels_[0].setInstrument(synthInstrument_.get());
 
-    // Channel 1 hosts the sampler; pair it with the synth so synth-pad mode
-    // on the sampler can forward triggers to channel 0.
+    // Channel 1 hosts the sampler; pair it with the AudioEngine so
+    // synth-pad mode can route to per-pad synths via the pool.
     sampler_ = std::make_unique<SamplerInstrument>();
     sampler_->init(sampleRate);
-    sampler_->setSynthTarget(synthInstrument_.get());
+    sampler_->setAudioEngine(this);
     channels_[1].setInstrument(sampler_.get());
+
+    // Zero-initialise the per-pad synth pool (lazy creation).
+    synthForPad_.fill(nullptr);
 
     // Start background time-stretch worker
     timeStretchWorker_.setSampler(sampler_.get());
@@ -98,6 +101,13 @@ int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
     // Apply per-block automation on the synth once per buffer.
     if (synthInstrument_) {
         synthInstrument_->processBlockAutomation();
+    }
+
+    // Apply per-block automation on active per-pad synths.
+    for (int p = 0; p < PAD_SYNTH_COUNT; p++) {
+        if (synthForPad_[p]) {
+        synthForPad_[p]->processBlockAutomation();
+        }
     }
 
     for (int i = 0; i < numFrames; i++) {
@@ -196,6 +206,13 @@ int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
     // Sync voice bookkeeping on the synth instrument.
     if (synthInstrument_) {
         synthInstrument_->syncVoiceActiveStates();
+    }
+
+    // Sync per-pad synth voice states.
+    for (int p = 0; p < PAD_SYNTH_COUNT; p++) {
+        if (synthForPad_[p]) {
+        synthForPad_[p]->syncVoiceActiveStates();
+        }
     }
 
     return numFrames;
@@ -423,4 +440,23 @@ void AudioEngine::stopOfflineRender() {
 
 void AudioEngine::triggerPerformFx(int type) {
     performFxTrigger_.store(type, std::memory_order_release);
+}
+
+// ========== Per-pad synth pool ==========
+
+SynthInstrument* AudioEngine::getPadSynth(int padIndex) {
+    if (padIndex < 0 || padIndex >= PAD_SYNTH_COUNT) return nullptr;
+    if (!synthForPad_[padIndex]) {
+        synthForPad_[padIndex] = new SynthInstrument();
+        synthForPad_[padIndex]->init(sampleRate_);
+        LOGI("Created per-pad synth for pad %d", padIndex);
+    }
+    return synthForPad_[padIndex];
+}
+
+void AudioEngine::applyPadSynthState(int padIndex, const SynthParams& params) {
+    auto* synth = getPadSynth(padIndex);
+    if (synth) {
+        synth->setParams(params);
+    }
 }

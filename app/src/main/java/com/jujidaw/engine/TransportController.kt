@@ -4,15 +4,15 @@ import com.jujidaw.model.Arrangement
 import com.jujidaw.model.AudioClip
 import com.jujidaw.model.Clip
 import com.jujidaw.model.NoteEvent
+import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
-import com.jujidaw.project.AutomationClip
-import com.jujidaw.model.PPQ
 import com.jujidaw.model.TICKS_PER_BEAT
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TimeSignature
 import com.jujidaw.model.TransportPosition
 import com.jujidaw.model.TransportState
+import com.jujidaw.project.AutomationClip
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,7 +40,7 @@ class TransportController(
     private val lookaheadMs: Long = 100,
     private val schedulingIntervalMs: Long = 50,
     private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.Default.limitedParallelism(1)),
-    private val scheduler: SynthEngineScheduler = NativeSynthEngineScheduler()
+    private val scheduler: SynthEngineScheduler = NativeSynthEngineScheduler(),
 ) {
     private var schedulerJob: Job? = null
 
@@ -141,12 +141,18 @@ class TransportController(
     fun setRecording(recording: Boolean) {
         transportState = transportState.copy(recording = recording)
         if (recording) {
-            val punchInSample = if (arrangement.punchEnabled) {
-                tickToSample(arrangement.punchInTick, transportState.tempoBpm)
-            } else 0L
-            val punchOutSample = if (arrangement.punchEnabled) {
-                tickToSample(arrangement.punchOutTick, transportState.tempoBpm)
-            } else Long.MAX_VALUE
+            val punchInSample =
+                if (arrangement.punchEnabled) {
+                    tickToSample(arrangement.punchInTick, transportState.tempoBpm)
+                } else {
+                    0L
+                }
+            val punchOutSample =
+                if (arrangement.punchEnabled) {
+                    tickToSample(arrangement.punchOutTick, transportState.tempoBpm)
+                } else {
+                    Long.MAX_VALUE
+                }
             scheduler.setPunchRange(arrangement.punchEnabled, punchInSample, punchOutSample)
         } else {
             scheduler.setPunchRange(false, 0L, 0L)
@@ -180,15 +186,16 @@ class TransportController(
 
     private fun startScheduler() {
         schedulerJob?.cancel()
-        schedulerJob = coroutineScope.launch {
-            while (isActive && transportState.playing) {
-                val currentSample = scheduler.getPlayheadSample()
-                val tick = sampleToTick(currentSample, transportState.tempoBpm)
-                currentStep = (tick / TICKS_PER_STEP).toInt()
-                scheduleNextBlock()
-                delay(schedulingIntervalMs)
+        schedulerJob =
+            coroutineScope.launch {
+                while (isActive && transportState.playing) {
+                    val currentSample = scheduler.getPlayheadSample()
+                    val tick = sampleToTick(currentSample, transportState.tempoBpm)
+                    currentStep = (tick / TICKS_PER_STEP).toInt()
+                    scheduleNextBlock()
+                    delay(schedulingIntervalMs)
+                }
             }
-        }
     }
 
     /**
@@ -220,7 +227,7 @@ class TransportController(
         currentSample: Long,
         windowEnd: Long,
         bpm: Float,
-        timeSignature: TimeSignature
+        timeSignature: TimeSignature,
     ) {
         if (activePatternId < 0) {
             // No active pattern yet; if one is queued, start immediately.
@@ -235,8 +242,8 @@ class TransportController(
 
         // Resolve bar-boundary pattern switch.
         if (queuedPatternId >= 0 && pendingSwitchSample < 0) {
-            val samplesPerBar = tickToSampleDelta(
-                (PPQ * timeSignature.numerator).toLong(), bpm)
+            val samplesPerBar =
+                tickToSampleDelta((PPQ * timeSignature.numerator).toLong(), bpm)
             val nextBarSample = ((currentSample / samplesPerBar) + 1) * samplesPerBar
             pendingSwitchSample = nextBarSample
         }
@@ -258,7 +265,7 @@ class TransportController(
         currentSample: Long,
         windowEnd: Long,
         bpm: Float,
-        timeSignature: TimeSignature
+        timeSignature: TimeSignature,
     ) {
         val startTick = sampleToTick(currentSample, bpm)
         val endTick = sampleToTick(windowEnd, bpm)
@@ -276,7 +283,7 @@ class TransportController(
         clip: PatternClip,
         currentSample: Long,
         windowEnd: Long,
-        bpm: Float
+        bpm: Float,
     ) {
         val pattern = patterns.find { it.id == clip.patternId } ?: return
         val clipStartSample = tickToSample(clip.startTick, bpm)
@@ -302,7 +309,8 @@ class TransportController(
                 patternStartTickOffset = repOffsetTicks,
                 trackIndex = clip.trackIndex,
                 transpose = clip.transpose,
-                maxEndTick = repOffsetTicks + pattern.lengthTicks
+                padIndex = clip.padIndex,
+                maxEndTick = repOffsetTicks + pattern.lengthTicks,
             )
         }
 
@@ -318,7 +326,8 @@ class TransportController(
                     patternStartTickOffset = repOffsetTicks,
                     trackIndex = clip.trackIndex,
                     transpose = clip.transpose,
-                    maxEndTick = repOffsetTicks + remainderTicks
+                    padIndex = clip.padIndex,
+                    maxEndTick = repOffsetTicks + remainderTicks,
                 )
             }
         }
@@ -332,7 +341,8 @@ class TransportController(
         patternStartTickOffset: Long = 0L,
         trackIndex: Int = pattern.trackIndex,
         transpose: Int = 0,
-        maxEndTick: Long = Long.MAX_VALUE
+        padIndex: Int = -1,
+        maxEndTick: Long = Long.MAX_VALUE,
     ) {
         val track = trackIndex.coerceIn(0, 15)
 
@@ -347,9 +357,15 @@ class TransportController(
 
             if (noteEndSample < currentSample || noteStartSample > windowEnd) continue
 
-            val finalNote = (note.note + transpose).coerceIn(0, 127)
-            scheduleNoteOn(track, finalNote, note.velocity)
-            scheduleNoteOff(track, finalNote)
+            // Resolve effective padIndex: note-level > clip-level > legacy noteOn
+            val effectivePadIndex = if (note.padIndex >= 0) note.padIndex else padIndex
+            if (effectivePadIndex >= 0) {
+                schedulePadTrigger(track, effectivePadIndex, note.velocity)
+            } else {
+                val finalNote = (note.note + transpose).coerceIn(0, 127)
+                scheduleNoteOn(track, finalNote, note.velocity)
+                scheduleNoteOff(track, finalNote)
+            }
         }
     }
 
@@ -357,7 +373,7 @@ class TransportController(
         clip: AudioClip,
         currentSample: Long,
         windowEnd: Long,
-        bpm: Float
+        bpm: Float,
     ) {
         if (clip.id in startedClips) return
         val clipStartSample = tickToSample(clip.startTick, bpm)
@@ -372,7 +388,7 @@ class TransportController(
         currentSample: Long,
         windowEnd: Long,
         bpm: Float,
-        timeSignature: TimeSignature
+        timeSignature: TimeSignature,
     ) {
         if (!arrangement.loopEnabled) return
         val loopStartSample = tickToSample(arrangement.loopStartTick, bpm)
@@ -385,9 +401,10 @@ class TransportController(
             stopAllHeldNotes()
             startedClips.clear()
             scheduler.setPlayheadSample(loopStartSample)
-            transportState = transportState.copy(
-                position = TransportPosition.fromTicks(arrangement.loopStartTick, timeSignature)
-            )
+            transportState =
+                transportState.copy(
+                    position = TransportPosition.fromTicks(arrangement.loopStartTick, timeSignature),
+                )
         } else if (windowEnd >= loopEndSample) {
             // Schedule a wrap on the next block.
             // We rely on the next scheduler tick to actually perform the seek.
@@ -404,7 +421,11 @@ class TransportController(
      * current lookahead window. Each point is converted to a [tickToSample]
      * sample offset and pushed to the C++ EventQueue.
      */
-    fun scheduleAutomationEvents(currentSample: Long, windowEnd: Long, bpm: Float) {
+    fun scheduleAutomationEvents(
+        currentSample: Long,
+        windowEnd: Long,
+        bpm: Float,
+    ) {
         for (clip in automationClips) {
             for (point in clip.points) {
                 val targetSample = tickToSample(point.position, bpm)
@@ -415,14 +436,29 @@ class TransportController(
         }
     }
 
-    internal fun scheduleNoteOn(track: Int, note: Int, velocity: Float) {
+    internal fun scheduleNoteOn(
+        track: Int,
+        note: Int,
+        velocity: Float,
+    ) {
         scheduler.scheduleNoteOn(track, note, velocity)
         heldNotes.getOrPut(track) { mutableSetOf() }.add(note)
     }
 
-    internal fun scheduleNoteOff(track: Int, note: Int) {
+    internal fun scheduleNoteOff(
+        track: Int,
+        note: Int,
+    ) {
         scheduler.scheduleNoteOff(track, note)
         heldNotes[track]?.remove(note)
+    }
+
+    internal fun schedulePadTrigger(
+        track: Int,
+        padIndex: Int,
+        velocity: Float,
+    ) {
+        scheduler.schedulePadTrigger(track, padIndex, velocity)
     }
 
     internal fun stopAllNotesOnTrack(track: Int) {
@@ -439,17 +475,20 @@ class TransportController(
 
     // ---- Time conversion helpers ----
 
-    internal fun tickToSample(tick: Long, bpm: Float = transportState.tempoBpm): Long {
-        return (tick * samplesPerBeat(bpm) / PPQ).roundToLong()
-    }
+    internal fun tickToSample(
+        tick: Long,
+        bpm: Float = transportState.tempoBpm,
+    ): Long = (tick * samplesPerBeat(bpm) / PPQ).roundToLong()
 
-    internal fun tickToSampleDelta(ticks: Long, bpm: Float): Long {
-        return (ticks * samplesPerBeat(bpm) / PPQ).toLong()
-    }
+    internal fun tickToSampleDelta(
+        ticks: Long,
+        bpm: Float,
+    ): Long = (ticks * samplesPerBeat(bpm) / PPQ).toLong()
 
-    internal fun sampleToTick(sample: Long, bpm: Float): Long {
-        return (sample * PPQ / samplesPerBeat(bpm)).roundToLong()
-    }
+    internal fun sampleToTick(
+        sample: Long,
+        bpm: Float,
+    ): Long = (sample * PPQ / samplesPerBeat(bpm)).roundToLong()
 
     private fun samplesPerBeat(bpm: Float): Double {
         require(bpm > 0f) { "BPM must be positive" }

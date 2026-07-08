@@ -986,7 +986,99 @@ Java_com_jujidaw_audio_SynthEngine_nativeReorderChannelInserts(JNIEnv* /*env*/, 
     SynthEngine::getInstance().getAudioEngine().reorderChannelInserts(trackIndex, fromSlot, toSlot);
 }
 
-} // extern "C"
+    // ========== Per-pad synth (multi-timbral) ==========
+    
+    JNIEXPORT jboolean JNICALL
+    Java_com_jujidaw_audio_SynthEngine_nativeSynthNoteOn(JNIEnv* /*env*/, jclass /*clazz",
+                                                           jint padIndex, jint note, jfloat velocity) {
+        auto* synth = SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
+        if (!synth) return JNI_FALSE;
+        synth->noteOn(static_cast<int>(note), static_cast<int>(velocity * 127.0f + 0.5f));
+        return JNI_TRUE;
+    }
+    
+    JNIEXPORT jboolean JNICALL
+    Java_com_jujidaw_audio_SynthEngine_nativeSetPadSynthParam(JNIEnv* /*env*/, jclass /*clazz",
+                                                                jint padIndex, jint paramIndex,
+                                                                jfloat value) {
+        auto* synth = SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
+        if (!synth) return JNI_FALSE;
+        switch (paramIndex) {
+            case 0:  synth->setOsc1Level(value); break;
+            case 1:  synth->setOsc2Level(value); break;
+            case 2:  synth->setOsc1Waveform(static_cast<int>(value)); break;
+            case 3:  synth->setOsc2Waveform(static_cast<int>(value)); break;
+            case 4:  synth->setOscDetune(value); break;
+            case 5:  synth->setSubOscLevel(value); break;
+            case 6:  synth->setNoiseLevel(value); break;
+            case 7:  synth->setOscMix(value); break;
+            case 8:  synth->setOscSync(value > 0.5f); break;
+            case 10: synth->setFilterCutoff(value); break;
+            case 11: synth->setFilterResonance(value); break;
+            case 12: synth->setFilterMode(static_cast<int>(value)); break;
+            case 13: synth->setFilterEnvAmount(value); break;
+            case 20: synth->setAmpAttack(value); break;
+            case 21: synth->setAmpDecay(value); break;
+            case 22: synth->setAmpSustain(value); break;
+            case 23: synth->setAmpRelease(value); break;
+            case 25: synth->setFilterAttack(value); break;
+            case 26: synth->setFilterDecay(value); break;
+            case 27: synth->setFilterSustain(value); break;
+            case 28: synth->setFilterRelease(value); break;
+            case 30: synth->setLfo1Rate(value); break;
+            case 31: synth->setLfo1Depth(value); break;
+            case 32: synth->setLfo1Waveform(static_cast<int>(value)); break;
+            case 35: synth->setLfo2Rate(value); break;
+            case 36: synth->setLfo2Depth(value); break;
+            case 37: synth->setLfo2Waveform(static_cast<int>(value)); break;
+            case 40: synth->setReverbMix(value); break;
+            case 41: synth->setReverbDecay(value); break;
+            case 42: synth->setDelayMix(value); break;
+            case 43: synth->setDelayTime(value); break;
+            case 44: synth->setDelayFeedback(value); break;
+            case 45: synth->setDistortionDrive(value); break;
+            case 46: synth->setDistortionMix(value); break;
+            case 47: synth->setEffectsBypass(value > 0.5f); break;
+            case 50: synth->setMasterVolume(value); break;
+            case 51: synth->setPitchBend(value); break;
+            case 52: synth->setModWheel(value); break;
+            case 55: synth->setChorusRate(value); break;
+            case 56: synth->setChorusDepth(value); break;
+            case 57: synth->setChorusMix(value); break;
+        }
+        return JNI_TRUE;
+    }
+    
+    JNIEXPORT jfloat JNICALL
+    Java_com_jujidaw_audio_SynthEngine_nativeGetPadSynthParam(JNIEnv* /*env*/, jclass /*clazz",
+                                                                jint padIndex, jint paramIndex) {
+        return SynthEngine::getInstance().getAudioEngine().getPadSynthParam(padIndex, paramIndex);
+    }
+    
+    JNIEXPORT void JNICALL
+    Java_com_jujidaw_audio_SynthEngine_nativeApplyPadSynthState(JNIEnv* env, jclass /*clazz",
+                                                                  jint padIndex, jfloatArray values) {
+        if (values == nullptr) return;
+        int count = env->GetArrayLength(values);
+        if (count != SynthInstrument::SYNTH_PARAM_COUNT) return;
+        jfloat* elems = env->GetFloatArrayElements(values, nullptr);
+        auto* synth = SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
+        if (synth) {
+            synth->setAllParamsFromArray(elems, count);
+        }
+        env->ReleaseFloatArrayElements(values, elems, JNI_ABORT);
+    }
+    
+    JNIEXPORT void JNICALL
+    Java_com_jujidaw_audio_SynthEngine_nativeSetPadSynthEnabled(JNIEnv* /*env*/, jclass /*clazz",
+                                                                  jint padIndex, jboolean enabled) {
+        // Eagerly create the synth instance so it's ready when triggered.
+        if (enabled) {
+            SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
+        }
+    }
+    
+    } // extern "C"
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
     g_jvm = vm;

@@ -25,13 +25,15 @@ import kotlinx.serialization.json.Json
 data class SynthUiState(
     val synthState: SynthState = SynthState(),
     val selectedTrack: Int = 0,
+    /** Index of the pad whose synth is being edited (-1 = global synth on channel 0). */
+    val selectedPadIndex: Int = -1,
     val midiLearnState: MidiLearnState = MidiLearnState(),
     val showPresetBrowser: Boolean = false,
     val showSaveDialog: Boolean = false,
     val savePresetName: String = "",
     val savePresetCategory: String = "Leads",
     val presetCategory: String = "All",
-    val toastMessage: String? = null
+    val toastMessage: String? = null,
 )
 
 /**
@@ -49,9 +51,8 @@ data class SynthUiState(
  * - [toggleMidiLearn], [selectParamForLearn], [clearMidiLearn] – MIDI learn flow
  */
 class SynthViewModel(
-    private val presetDao: PresetDao = JujiDawApp.instance.database.presetDao()
+    private val presetDao: PresetDao = JujiDawApp.instance.database.presetDao(),
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(SynthUiState())
     val uiState: StateFlow<SynthUiState> = _uiState.asStateFlow()
 
@@ -62,6 +63,9 @@ class SynthViewModel(
 
     /** Per-track SynthState map for multi-timbral routing. */
     var trackStates: MutableMap<Int, SynthState> = mutableMapOf(0 to defaultTrackSynthState())
+
+    /** Per-pad SynthState map: padIndex -> synth state. */
+    var padSynthStates: MutableMap<Int, SynthState> = mutableMapOf()
 
     /** External MIDI mapping store; injected from the UI layer because it needs a [Context]. */
     var midiMappingStore: MidiMappingStore? = null
@@ -81,16 +85,43 @@ class SynthViewModel(
     fun selectTrack(index: Int) {
         if (index !in 0..15) return
         val state = trackStates.getOrPut(index) { defaultTrackSynthState() }
-        _uiState.value = _uiState.value.copy(selectedTrack = index, synthState = state)
+        _uiState.value =
+            _uiState.value.copy(
+                selectedTrack = index,
+                selectedPadIndex = -1, // switch back to global synth
+                synthState = state,
+            )
         applySynthStateToEngine(state)
+    }
+
+    /** Select a pad's synth for editing (0..15). */
+    fun selectPad(padIndex: Int) {
+        if (padIndex !in 0..15) return
+        val state = padSynthStates.getOrPut(padIndex) { defaultTrackSynthState() }
+        _uiState.value =
+            _uiState.value.copy(
+                selectedPadIndex = padIndex,
+                synthState = state,
+            )
+        // Push the state to the per-pad synth via the full-state API.
+        SynthEngine.applyPadSynthState(padIndex, state.toParamsArray())
+        SynthEngine.setPadSynthEnabled(padIndex, true)
     }
 
     /** Replace the current synth state (e.g. after parameter changes from panels). */
     fun updateSynthState(newState: SynthState) {
-        val track = _uiState.value.selectedTrack
-        trackStates[track] = newState
+        val padIdx = _uiState.value.selectedPadIndex
         _uiState.value = _uiState.value.copy(synthState = newState)
-        applySynthStateToEngine(newState)
+        if (padIdx >= 0) {
+            // Route to per-pad synth
+            padSynthStates[padIdx] = newState
+            SynthEngine.applyPadSynthState(padIdx, newState.toParamsArray())
+        } else {
+            // Route to global synth (channel 0)
+            val track = _uiState.value.selectedTrack
+            trackStates[track] = newState
+            applySynthStateToEngine(newState)
+        }
     }
 
     /** Load a preset by name from the database and apply it to the engine. */
@@ -112,7 +143,10 @@ class SynthViewModel(
     }
 
     /** Save the current synth state as a new user preset. */
-    fun savePreset(name: String, category: String = "Leads") {
+    fun savePreset(
+        name: String,
+        category: String = "Leads",
+    ) {
         if (name.isBlank()) return
         val state = _uiState.value.synthState
         val jsonStr = presetJson.encodeToString(SynthState.serializer(), state)
@@ -123,8 +157,8 @@ class SynthViewModel(
                     category = category,
                     description = "User preset",
                     isFactory = false,
-                    parametersJson = jsonStr
-                )
+                    parametersJson = jsonStr,
+                ),
             )
         }
         _uiState.value = _uiState.value.copy(showSaveDialog = false, savePresetName = "")
@@ -134,53 +168,75 @@ class SynthViewModel(
     /** Toggle the MIDI learn workflow. */
     fun toggleMidiLearn() {
         val current = _uiState.value.midiLearnState
-        val nextMode = when (current.mode) {
-            MidiLearnMode.IDLE -> MidiLearnMode.LEARN_ACTIVE
-            else -> MidiLearnMode.IDLE
-        }
-        _uiState.value = _uiState.value.copy(
-            midiLearnState = MidiLearnState(mode = nextMode, selectedParamId = null)
-        )
+        val nextMode =
+            when (current.mode) {
+                MidiLearnMode.IDLE -> MidiLearnMode.LEARN_ACTIVE
+                else -> MidiLearnMode.IDLE
+            }
+        _uiState.value =
+            _uiState.value.copy(
+                midiLearnState = MidiLearnState(mode = nextMode, selectedParamId = null),
+            )
     }
 
     /** Mark a parameter as selected and await a MIDI CC message. */
     fun selectParamForLearn(paramId: Int) {
-        _uiState.value = _uiState.value.copy(
-            midiLearnState = MidiLearnState(
-                mode = MidiLearnMode.CONTROL_SELECTED,
-                selectedParamId = paramId
+        _uiState.value =
+            _uiState.value.copy(
+                midiLearnState =
+                    MidiLearnState(
+                        mode = MidiLearnMode.CONTROL_SELECTED,
+                        selectedParamId = paramId,
+                    ),
             )
-        )
     }
 
     /** Clear MIDI learn state. */
     fun clearMidiLearn() {
-        _uiState.value = _uiState.value.copy(
-            midiLearnState = MidiLearnState(mode = MidiLearnMode.IDLE, selectedParamId = null)
-        )
+        _uiState.value =
+            _uiState.value.copy(
+                midiLearnState = MidiLearnState(mode = MidiLearnMode.IDLE, selectedParamId = null),
+            )
     }
 
     /** Persist a MIDI mapping and apply the incoming value. */
-    fun confirmMidiLearn(ccNumber: Int, value: Float) {
+    fun confirmMidiLearn(
+        ccNumber: Int,
+        value: Float,
+    ) {
         val paramId = _uiState.value.midiLearnState.selectedParamId ?: return
         viewModelScope.launch {
             midiMappingStore?.addMapping(
-                com.jujidaw.data.MidiMapping(ccNumber = ccNumber, paramId = paramId)
+                com.jujidaw.data.MidiMapping(ccNumber = ccNumber, paramId = paramId),
             )
         }
-        SynthEngine.setParam(paramId, value)
-        _uiState.value = _uiState.value.copy(
-            midiLearnState = MidiLearnState(mode = MidiLearnMode.LEARN_ACTIVE, selectedParamId = null)
-        )
+        val padIdx = _uiState.value.selectedPadIndex
+        if (padIdx >= 0) {
+            SynthEngine.setPadSynthParam(padIdx, paramId, value)
+        } else {
+            SynthEngine.setParam(paramId, value)
+        }
+        _uiState.value =
+            _uiState.value.copy(
+                midiLearnState = MidiLearnState(mode = MidiLearnMode.LEARN_ACTIVE, selectedParamId = null),
+            )
     }
 
     /** Update a single modulation route and sync it to the engine. */
-    fun updateModulationRoute(index: Int, route: ModulationRoute) {
+    fun updateModulationRoute(
+        index: Int,
+        route: ModulationRoute,
+    ) {
         val current = _uiState.value.synthState
         val newRoutes = current.modulationRoutes.toMutableList().apply { set(index, route) }
         val newState = current.copy(modulationRoutes = newRoutes)
         _uiState.value = _uiState.value.copy(synthState = newState)
-        SynthEngine.setModulationRoute(index, route.source, route.destination, route.amount, route.active)
+        val padIdx = _uiState.value.selectedPadIndex
+        if (padIdx >= 0) {
+            SynthEngine.applyPadSynthState(padIdx, newState.toParamsArray())
+        } else {
+            SynthEngine.setModulationRoute(index, route.source, route.destination, route.amount, route.active)
+        }
     }
 
     // -- UI visibility helpers --

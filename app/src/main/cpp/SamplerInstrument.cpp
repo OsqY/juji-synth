@@ -1,4 +1,5 @@
 #include "SamplerInstrument.h"
+#include "AudioEngine.h"
 #include "SynthInstrument.h"
 #include <cmath>
 
@@ -24,6 +25,16 @@ float SamplerInstrument::process() {
             active++;
         }
     }
+    // Mix in per-pad synth output (synth-mode pads).
+    if (audioEngine_) {
+        for (int p = 0; p < AudioEngine::PAD_SYNTH_COUNT; p++) {
+            auto* padSynth = audioEngine_->getPadSynth(p);
+            if (padSynth && padSynth->isActive()) {
+sum += padSynth->process();
+active++;
+            }
+        }
+    }
     activeVoiceCount_.store(active, std::memory_order_relaxed);
     return sum * masterVolume_;
 }
@@ -34,13 +45,14 @@ void SamplerInstrument::noteOn(int midiNote, int velocity) {
 
     const auto& pad = pads_[padIndex];
 
-    // Synth-pad mode: forward to the paired SynthInstrument (channel 0).
+    // Synth-pad mode: forward to the per-pad synth via AudioEngine pool.
     if (pad.synthMode) {
-        if (synthTarget_) {
-            // Use pad root note + delta from bank offset to keep intonation
-            // predictable when the user programs a custom root.
-            int targetNote = pad.synthRootNote + (midiNote - (activeBank_ * 16 + (padIndex % 16)));
-            synthTarget_->noteOn(targetNote, velocity);
+        if (audioEngine_) {
+            auto* padSynth = audioEngine_->getPadSynth(padIndex % 16);
+            if (padSynth) {
+                int targetNote = pad.synthRootNote + (midiNote - (activeBank_ * 16 + (padIndex % 16)));
+                padSynth->noteOn(targetNote, velocity);
+            }
         }
         return;
     }

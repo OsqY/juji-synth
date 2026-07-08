@@ -18,16 +18,20 @@ import java.nio.ByteOrder
  * writes a standard RIFF/WAVE header.
  */
 object AudioConverter {
-
     /**
      * Decode [uri] to a 16-bit mono WAV file at [targetPath].
      * Returns true on success, false with logged reason on failure.
      */
-    fun convertToWav(context: Context, uri: Uri, targetPath: String): Boolean {
+    fun convertToWav(
+        context: Context,
+        uri: Uri,
+        targetPath: String,
+    ): Boolean {
         return try {
-            val extractor = MediaExtractor().apply {
-                setDataSource(context, uri, null)
-            }
+            val extractor =
+                MediaExtractor().apply {
+                    setDataSource(context, uri, null)
+                }
 
             // Find the first audio track
             var trackIndex = -1
@@ -96,8 +100,10 @@ object AudioConverter {
             val sampleRate = inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE, 44100)
             val channelCount = inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT, 1)
             writeWavFile(pcmData.toByteArray(), sampleRate, channelCount, targetPath)
-            android.util.Log.i("JujiDaw",
-                "AudioConverter: converted URI -> WAV ($sampleRate Hz, $channelCount ch, ${pcmData.size} bytes)")
+            android.util.Log.i(
+                "JujiDaw",
+                "AudioConverter: converted URI -> WAV ($sampleRate Hz, $channelCount ch, ${pcmData.size} bytes)",
+            )
 
             true
         } catch (e: Exception) {
@@ -106,38 +112,25 @@ object AudioConverter {
         }
     }
 
-    private fun writeWavFile(pcmData: ByteArray, sampleRate: Int, channels: Int, path: String) {
-        FileOutputStream(path).use { out ->
-            val dataSize = pcmData.size
-            val fileSize = 36 + dataSize
-            val byteRate = sampleRate * channels * 2  // 16-bit
-            val blockAlign = channels * 2
-
-            val header = ByteBuffer.allocate(44).apply {
-                order(ByteOrder.LITTLE_ENDIAN)
-                put("RIFF".toByteArray())
-                putInt(fileSize)
-                put("WAVE".toByteArray())
-                put("fmt ".toByteArray())
-                putInt(16)          // subchunk1 size (PCM)
-                putShort(1)         // audio format (PCM)
-                putShort(channels.toShort())
-                putInt(sampleRate)
-                putInt(byteRate)
-                putShort(blockAlign.toShort())
-                putShort(16)        // bits per sample
-                put("data".toByteArray())
-                putInt(dataSize)
-            }
-            out.write(header.array())
-            var i = 0
-            // Downmix to mono if needed by averaging channels
+    /**
+     * Write a 16-bit mono WAV. For stereo input, downmix to mono FIRST
+     * so the RIFF/WAVE header fields match the actual data on disk.
+     * Visible as [internal] so JVM unit tests can exercise it directly.
+     */
+    internal fun writeWavFile(
+        pcmData: ByteArray,
+        sampleRate: Int,
+        channels: Int,
+        path: String,
+    ) {
+        // ── Downmix to mono before writing the header ──
+        val monoData: ByteArray =
             if (channels == 1) {
-                out.write(pcmData)
+                pcmData
             } else {
-                val downmixed = ByteArray(dataSize / channels)
-                val frameSize = channels * 2
+                val frameSize = channels * 2 // 16-bit per channel
                 val frameCount = pcmData.size / frameSize
+                val downmixed = ByteArray(frameCount * 2)
                 for (f in 0 until frameCount) {
                     val base = f * frameSize
                     var sum = 0L
@@ -146,14 +139,42 @@ object AudioConverter {
                         val lo = pcmData[base + ch * 2].toInt() and 0xFF
                         sum += (hi shl 8) or lo
                     }
-                    val mono = (sum / channels).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                    val mono =
+                        (sum / channels)
+                            .toInt()
+                            .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                     downmixed[f * 2] = (mono and 0xFF).toByte()
                     downmixed[f * 2 + 1] = ((mono shr 8) and 0xFF).toByte()
                 }
-                out.write(downmixed)
+                downmixed
             }
+
+        // ── Write header (mono fields) then data ──
+        FileOutputStream(path).use { out ->
+            val dataSize = monoData.size
+            val fileSize = 36 + dataSize
+            val byteRate = sampleRate * 1 * 2 // 16-bit mono
+            val blockAlign = 1 * 2 // mono
+
+            val header =
+                ByteBuffer.allocate(44).apply {
+                    order(ByteOrder.LITTLE_ENDIAN)
+                    put("RIFF".toByteArray())
+                    putInt(fileSize)
+                    put("WAVE".toByteArray())
+                    put("fmt ".toByteArray())
+                    putInt(16) // subchunk1 size (PCM)
+                    putShort(1) // audio format (PCM)
+                    putShort(1) // always mono after downmix
+                    putInt(sampleRate)
+                    putInt(byteRate)
+                    putShort(blockAlign.toShort())
+                    putShort(16) // bits per sample
+                    put("data".toByteArray())
+                    putInt(dataSize)
+                }
+            out.write(header.array())
+            out.write(monoData)
         }
     }
-
-
 }

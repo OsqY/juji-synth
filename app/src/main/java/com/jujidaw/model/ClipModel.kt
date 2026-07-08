@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 enum class AutomationCurve {
     LINEAR,
     EXPONENTIAL,
-    STEP
+    STEP,
 }
 
 /** A single automation point on the arrangement timeline.
@@ -19,7 +19,7 @@ data class AutomationPoint(
     val paramId: String,
     val tick: Long,
     val value: Float,
-    val curve: AutomationCurve = AutomationCurve.LINEAR
+    val curve: AutomationCurve = AutomationCurve.LINEAR,
 ) {
     init {
         require(paramId.isNotBlank()) { "Automation paramId must not be blank" }
@@ -47,13 +47,15 @@ data class PatternClip(
     override val durationTicks: Long,
     override val mute: Boolean = false,
     val patternId: Int,
-    val transpose: Int = 0
+    val transpose: Int = 0,
+    val padIndex: Int = -1, // pad to trigger (-1 = use note's padIndex, then legacy noteOn)
 ) : Clip() {
     init {
         require(patternId in 0..15) { "Pattern id must be between 0 and 15" }
         require(trackIndex in 0..15) { "Track index must be between 0 and 15" }
         require(startTick >= 0) { "Clip start tick must be non-negative" }
         require(durationTicks > 0) { "Clip duration must be positive" }
+        require(padIndex in -1..15) { "Pad index must be between -1 and 15" }
     }
 }
 
@@ -66,11 +68,11 @@ data class AudioClip(
     override val startTick: Long,
     override val durationTicks: Long,
     override val mute: Boolean = false,
-    val audioFilePath: String,                 // relative to project dir
+    val audioFilePath: String, // relative to project dir
     val audioStartOffsetSamples: Long = 0,
     val gain: Float = 1.0f,
     val fadeInSamples: Int = 0,
-    val fadeOutSamples: Int = 0
+    val fadeOutSamples: Int = 0,
 ) : Clip() {
     init {
         require(trackIndex in 0..15) { "Track index must be between 0 and 15" }
@@ -91,7 +93,7 @@ data class Arrangement(
     val loopEndTick: Long = PPQ * 4L,
     val punchEnabled: Boolean = false,
     val punchInTick: Long = 0,
-    val punchOutTick: Long = 0
+    val punchOutTick: Long = 0,
 ) {
     init {
         if (loopEnabled) {
@@ -103,10 +105,12 @@ data class Arrangement(
     }
 
     /** Return clips whose playback window overlaps [startTick, endTick). */
-    fun clipsInRange(startTick: Long, endTick: Long): List<Clip> {
-        return clips.filter { clip ->
+    fun clipsInRange(
+        startTick: Long,
+        endTick: Long,
+    ): List<Clip> =
+        clips.filter { clip ->
             !clip.mute && clip.startTick < endTick &&
                 (clip.startTick + clip.durationTicks) > startTick
         }
-    }
 }

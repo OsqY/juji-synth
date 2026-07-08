@@ -10,6 +10,7 @@
 #include <cstdint>
 
 class SynthInstrument;
+class AudioEngine;
 
 constexpr int NUM_PADS = 32;     // 2 banks x 16 pads
 constexpr int SAMPLER_POLYPHONY = 16;
@@ -63,9 +64,9 @@ public:
     void setActiveBank(int bank); // 0 or 1
     int getActiveBank() const { return activeBank_; }
 
-    // Forward synth-pad triggers to a paired SynthInstrument (channel 0).
-    // Optional; nullptr means synth-pad mode is disabled.
-    void setSynthTarget(SynthInstrument* synth) { synthTarget_ = synth; }
+    // Forward synth-pad triggers to the per-pad synth pool via AudioEngine.
+    // nullptr means synth-pad mode falls back to no-op.
+    void setAudioEngine(AudioEngine* engine) { audioEngine_ = engine; }
 
     // Trigger a pad directly (used by the transport scheduler).
     void triggerPad(int padIndex, int velocity);
@@ -77,7 +78,7 @@ private:
     float masterVolume_ = 1.0f;
     int activeBank_ = 0;
     std::atomic<int> activeVoiceCount_{0};
-    SynthInstrument* synthTarget_ = nullptr;
+    AudioEngine* audioEngine_ = nullptr;  // for per-pad synth pool access
     uint64_t voiceAgeCounter_ = 0;
 
     int allocateVoice();

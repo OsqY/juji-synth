@@ -26,12 +26,14 @@ import kotlinx.coroutines.launch
  * All public methods are safe to call from any thread.  State-flow emissions
  * happen on the caller's thread; persistence kicks off on [Dispatchers.IO].
  */
-class MidiRouter(private val mappingStore: MidiMappingStore) {
-
+class MidiRouter(
+    private val mappingStore: MidiMappingStore,
+) {
     // ── scope ──────────────────────────────────────────────────────────────
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // ── Keyboard target ────────────────────────────────────────────────────
+
     /** Current note-routing target.  Set by [KeyboardViewModel] on change. */
     @Volatile
     var keyboardTarget: KeyboardTarget = KeyboardTarget.Synth
@@ -62,26 +64,27 @@ class MidiRouter(private val mappingStore: MidiMappingStore) {
     var onLearnCaptured: ((ccNumber: Int, target: MidiTarget, value: Float) -> Unit)? = null
 
     // ── Default CCs (when no explicit mapping exists) ──────────────────────
-    private val defaultCcMappings = mapOf(
-        1 to DefaultCc(modWheelDest, "Mod Wheel", false),
-        7 to DefaultCc(volumeDest, "Volume", false),
-        10 to DefaultCc(panDest, "Pan", false),
-        64 to DefaultCc(sustainDest, "Sustain Pedal", true),
-        74 to DefaultCc(filterCutoffDest, "Filter Cutoff", false)
-    )
+    private val defaultCcMappings =
+        mapOf(
+            1 to DefaultCc(modWheelDest, "Mod Wheel", false),
+            7 to DefaultCc(volumeDest, "Volume", false),
+            10 to DefaultCc(panDest, "Pan", false),
+            64 to DefaultCc(sustainDest, "Sustain Pedal", true),
+            74 to DefaultCc(filterCutoffDest, "Filter Cutoff", false),
+        )
 
     private data class DefaultCc(
         val paramId: Int,
         val label: String,
-        val isSustain: Boolean
+        val isSustain: Boolean,
     )
 
     companion object {
         // Synth param IDs for default CCs (must match ParamIds constants)
         const val modWheelDest = 52
         const val volumeDest = 50
-        const val panDest = -1       // Not yet implemented as a single param
-        const val sustainDest = -1   // Handled separately
+        const val panDest = -1 // Not yet implemented as a single param
+        const val sustainDest = -1 // Handled separately
         const val filterCutoffDest = 10
     }
 
@@ -102,20 +105,32 @@ class MidiRouter(private val mappingStore: MidiMappingStore) {
      * Route a MIDI Note On to the correct engine call based on
      * [keyboardTarget].
      */
-    fun processNoteOn(note: Int, velocity: Int) {
+    fun processNoteOn(
+        note: Int,
+        velocity: Int,
+    ) {
         val t = keyboardTarget
         when (t) {
-            is KeyboardTarget.Synth -> SynthEngine.noteOn(note, velocity)
+            is KeyboardTarget.Synth -> {
+                SynthEngine.noteOn(note, velocity)
+            }
+
             is KeyboardTarget.SamplerA -> {
                 SynthEngine.setSamplerBank(0)
                 SynthEngine.triggerPad(note % 16, velocity)
             }
+
             is KeyboardTarget.SamplerB -> {
                 SynthEngine.setSamplerBank(1)
                 SynthEngine.triggerPad(note % 16, velocity)
             }
+
             is KeyboardTarget.Track -> {
                 SynthEngine.scheduleNoteOn(t.index, note, velocity.toFloat())
+            }
+
+            is KeyboardTarget.SelectedPad -> {
+                SynthEngine.triggerPad(t.padIndex, velocity)
             }
         }
     }
@@ -124,12 +139,20 @@ class MidiRouter(private val mappingStore: MidiMappingStore) {
     fun processNoteOff(note: Int) {
         val t = keyboardTarget
         when (t) {
-            is KeyboardTarget.Synth -> SynthEngine.noteOff(note)
+            is KeyboardTarget.Synth -> {
+                SynthEngine.noteOff(note)
+            }
+
             is KeyboardTarget.SamplerA, is KeyboardTarget.SamplerB -> {
                 // Sampler pads are one-shot; no note-off required
             }
+
             is KeyboardTarget.Track -> {
                 SynthEngine.scheduleNoteOff(t.index, note)
+            }
+
+            is KeyboardTarget.SelectedPad -> {
+                // Pads are one-shot; no note-off required
             }
         }
     }
@@ -143,19 +166,23 @@ class MidiRouter(private val mappingStore: MidiMappingStore) {
      * 2. Look up an explicit mapping for [ccNumber].
      * 3. Fall back to built-in default CC behaviour.
      */
-    fun processCc(ccNumber: Int, value: Float) {
+    fun processCc(
+        ccNumber: Int,
+        value: Float,
+    ) {
         // ── Learn capture ──────────────────────────────────────────────
         if (_isLearning) {
             val target = _learnTarget ?: return
             _isLearning = false
             _learnTarget = null
 
-            val mapping = MidiMapping(
-                ccNumber = ccNumber,
-                target = target,
-                minValue = 0f,
-                maxValue = 1f
-            )
+            val mapping =
+                MidiMapping(
+                    ccNumber = ccNumber,
+                    target = target,
+                    minValue = 0f,
+                    maxValue = 1f,
+                )
             ioScope.launch {
                 mappingStore.addMapping(mapping)
             }
@@ -216,7 +243,10 @@ class MidiRouter(private val mappingStore: MidiMappingStore) {
     // ── Mapping helpers ────────────────────────────────────────────────────
 
     /** Apply a [MidiMapping] (including its range clamping) to the engine. */
-    fun applyMapping(mapping: MidiMapping, rawValue: Float) {
+    fun applyMapping(
+        mapping: MidiMapping,
+        rawValue: Float,
+    ) {
         val clamped = rawValue.coerceIn(0f, 1f)
         val scaled = mapping.minValue + clamped * (mapping.maxValue - mapping.minValue)
         applyValueToTarget(mapping.effectiveTarget(), scaled)
@@ -226,7 +256,10 @@ class MidiRouter(private val mappingStore: MidiMappingStore) {
      * Apply a normalised [value] (0…1 unless otherwise specified) directly
      * to the given [target] without any mapping table lookup.
      */
-    fun applyValueToTarget(target: MidiTarget, value: Float) {
+    fun applyValueToTarget(
+        target: MidiTarget,
+        value: Float,
+    ) {
         when (target) {
             is MidiTarget.SynthParam -> {
                 SynthEngine.setParam(target.paramId, value.coerceIn(0f, 1f))

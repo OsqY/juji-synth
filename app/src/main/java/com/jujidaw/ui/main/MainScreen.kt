@@ -9,12 +9,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -47,12 +47,12 @@ import androidx.compose.ui.unit.sp
 import com.jujidaw.JujiDawApp
 import com.jujidaw.R
 import com.jujidaw.model.TICKS_PER_STEP
-import com.jujidaw.ui.synth.SynthScreen
 import com.jujidaw.ui.keyboard.KeyboardScreen
 import com.jujidaw.ui.mixer.MixerScreen
 import com.jujidaw.ui.pads.PadsScreen
 import com.jujidaw.ui.project.ProjectScreen
 import com.jujidaw.ui.sequencer.SequencerScreen
+import com.jujidaw.ui.synth.SynthScreen
 import com.jujidaw.ui.theme.*
 import com.jujidaw.ui.timeline.TimelineScreen
 import kotlinx.coroutines.delay
@@ -60,7 +60,7 @@ import kotlinx.coroutines.isActive
 
 private enum class MainTab(
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
 ) {
     TIMELINE("Timeline", Icons.AutoMirrored.Filled.ViewList),
     MIXER("Mixer", Icons.Filled.Equalizer),
@@ -68,7 +68,7 @@ private enum class MainTab(
     PADS("Pads", Icons.Filled.Dashboard),
     KEYBOARD("Keys", Icons.Filled.MusicNote),
     SEQUENCER("Seq", Icons.Filled.ViewModule),
-    PROJECT("Project", Icons.Filled.Folder);
+    PROJECT("Project", Icons.Filled.Folder),
 }
 
 @Composable
@@ -87,83 +87,122 @@ fun MainScreen(modifier: Modifier = Modifier) {
                     NavigationBar(
                         containerColor = BgPanel,
                         contentColor = TextPrimary,
-                        tonalElevation = 0.dp
+                        tonalElevation = 0.dp,
                     ) {
                         tabs.forEachIndexed { index, tab ->
                             NavigationBarItem(
                                 icon = {
                                     Icon(
                                         imageVector = tab.icon,
-                                        contentDescription = tab.label
+                                        contentDescription = tab.label,
                                     )
                                 },
                                 label = {
                                     Text(
                                         text = tab.label,
                                         fontSize = 10.sp,
-                                        maxLines = 1
+                                        maxLines = 1,
                                     )
                                 },
                                 selected = selectedTab == index,
                                 onClick = { selectedTab = index },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Color.Black,
-                                    selectedTextColor = KnobAmber,
-                                    indicatorColor = KnobAmber,
-                                    unselectedIconColor = TextSecondary,
-                                    unselectedTextColor = TextMuted
-                                )
+                                colors =
+                                    NavigationBarItemDefaults.colors(
+                                        selectedIconColor = Color.Black,
+                                        selectedTextColor = KnobAmber,
+                                        indicatorColor = KnobAmber,
+                                        unselectedIconColor = TextSecondary,
+                                        unselectedTextColor = TextMuted,
+                                    ),
                             )
                         }
                     }
                 }
             }
-        }
+        },
     ) { innerPadding ->
         Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(BgGunmetal)
-        ) {    
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .background(BgGunmetal),
+        ) {
             if (isLandscape) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(80.dp)
-                        .background(BgPanel)
-                        .verticalScroll(rememberScrollState())
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxHeight()
+                            .background(BgPanel),
                 ) {
-                    PersistentTransportBar(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                    tabs.forEachIndexed { index, tab ->
-                        NavigationRailItem(
-                            icon = {
-                                Icon(
-                                    imageVector = tab.icon,
-                                    contentDescription = tab.label
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = tab.label,
-                                    fontSize = 9.sp,
-                                    maxLines = 1
-                                )
-                            },
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            colors = NavigationRailItemDefaults.colors(
-                                selectedIconColor = Color.Black,
-                                selectedTextColor = KnobAmber,
-                                indicatorColor = KnobAmber,
-                                unselectedIconColor = TextSecondary,
-                                unselectedTextColor = TextMuted
-                            )
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxHeight()
+                                .width(80.dp)
+                                .background(BgPanel),
+                    ) {
+                        // Transport bar — fixed at top, not scrolled
+                        PersistentTransportBar(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
                         )
+
+                        // Navigation rail — scrollable with visible indicator
+                        Box(modifier = Modifier.weight(1f)) {
+                            val scrollState = rememberScrollState()
+                            Column(
+                                modifier = Modifier.verticalScroll(scrollState),
+                            ) {
+                                tabs.forEachIndexed { index, tab ->
+                                    NavigationRailItem(
+                                        icon = {
+                                            Icon(
+                                                imageVector = tab.icon,
+                                                contentDescription = tab.label,
+                                            )
+                                        },
+                                        label = {
+                                            Text(
+                                                text = tab.label,
+                                                fontSize = 9.sp,
+                                                maxLines = 1,
+                                            )
+                                        },
+                                        selected = selectedTab == index,
+                                        onClick = { selectedTab = index },
+                                        colors =
+                                            NavigationRailItemDefaults.colors(
+                                                selectedIconColor = Color.Black,
+                                                selectedTextColor = KnobAmber,
+                                                indicatorColor = KnobAmber,
+                                                unselectedIconColor = TextSecondary,
+                                                unselectedTextColor = TextMuted,
+                                            ),
+                                    )
+                                }
+                            }
+
+                            // Visible scrollbar indicator on right edge
+                            if (scrollState.maxValue > 0) {
+                                // Simple proportional scrollbar: thumb height ~ visible content ratio
+                                val scrollFraction = scrollState.value.toFloat() / scrollState.maxValue.toFloat()
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.TopEnd)
+                                            .width(3.dp)
+                                            .height(24.dp)
+                                            .offset(y = (scrollFraction * 100).dp)
+                                            .background(
+                                                Color.White.copy(alpha = 0.4f),
+                                                RoundedCornerShape(1.5f),
+                                            ),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -186,9 +225,10 @@ fun MainScreen(modifier: Modifier = Modifier) {
 @Composable
 private fun PersistentTransportBar(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val transportController = remember {
-        (context.applicationContext as JujiDawApp).transportController
-    }
+    val transportController =
+        remember {
+            (context.applicationContext as JujiDawApp).transportController
+        }
 
     var transportState by remember {
         mutableStateOf(transportController.transportState)
@@ -202,12 +242,13 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
     }
 
     Row(
-        modifier = modifier
-            .height(44.dp)
-            .background(BgPanel)
-            .padding(horizontal = 8.dp),
+        modifier =
+            modifier
+                .height(44.dp)
+                .background(BgPanel)
+                .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Play / Stop
         TransportMiniButton(
@@ -220,7 +261,7 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
                 } else {
                     transportController.play()
                 }
-            }
+            },
         )
 
         // Record arm
@@ -230,7 +271,7 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
             activeColor = TransportRed,
             onClick = {
                 transportController.setRecording(!transportState.recording)
-            }
+            },
         )
 
         // Reset
@@ -241,7 +282,7 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
             onClick = {
                 transportController.stop()
                 transportController.seek(com.jujidaw.model.TransportPosition())
-            }
+            },
         )
 
         Spacer(modifier = Modifier.width(4.dp))
@@ -253,7 +294,7 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
             color = KnobAmber,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
         )
 
         Spacer(modifier = Modifier.weight(1f))
@@ -264,7 +305,7 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
             color = KnobGreen,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
         )
     }
 }
@@ -275,51 +316,56 @@ private fun TransportMiniButton(
     active: Boolean,
     activeColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .size(32.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (active) activeColor else BgGunmetal)
-            .border(
-                1.dp,
-                if (active) activeColor else PanelHighlight.copy(alpha = 0.4f),
-                RoundedCornerShape(6.dp)
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (active) activeColor else BgGunmetal)
+                .border(
+                    1.dp,
+                    if (active) activeColor else PanelHighlight.copy(alpha = 0.4f),
+                    RoundedCornerShape(6.dp),
+                ).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
             color = if (active) Color.White else TextPrimary,
             fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
     }
 }
 
 @Composable
-private fun PlaceholderScreen(title: String, message: String, modifier: Modifier = Modifier) {
+private fun PlaceholderScreen(
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(BgGunmetal)
-            .padding(16.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(BgGunmetal)
+                .padding(16.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = title,
                 color = TextPrimary,
                 fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = message,
                 color = TextMuted,
-                fontSize = 14.sp
+                fontSize = 14.sp,
             )
         }
     }

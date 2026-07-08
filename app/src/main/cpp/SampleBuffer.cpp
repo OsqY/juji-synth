@@ -169,16 +169,21 @@ bool SampleBuffer::loadFromWav(const char* path) {
                     samples_[i] = std::clamp(raw[i], -1.0f, 1.0f);
                 }
                 return true;
-            } else if (bitsPerSample == 16) {
-                std::vector<int16_t> raw(numSamples);
-                file.read(reinterpret_cast<char*>(raw.data()), numBytes);
-                size_t read = file.gcount();
-                size_t frames = read / (sizeof(int16_t) * channels_);
-                samples_.resize(frames * channels_);
-                for (size_t i = 0; i < frames * channels_; i++) {
-                    samples_[i] = raw[i] / 32768.0f;
-                }
-                return true;
+                } else if (bitsPerSample == 16) {
+                    std::vector<int16_t> raw(numSamples);
+                    file.read(reinterpret_cast<char*>(raw.data()), numBytes);
+                    size_t read = file.gcount();
+                    if (read != numBytes) {
+                        LOGE("WAV data chunk size mismatch: header says %d bytes, "
+                             "but only %zu bytes on disk — audio may be truncated. "
+                             "Source: %s", numBytes, read, path);
+                    }
+                    size_t frames = read / (sizeof(int16_t) * channels_);
+                    samples_.resize(frames * channels_);
+                    for (size_t i = 0; i < frames * channels_; i++) {
+                        samples_[i] = raw[i] / 32768.0f;
+                    }
+                    return true;
             } else if (bitsPerSample == 24) {
                 std::vector<uint8_t> raw(numBytes);
                 file.read(reinterpret_cast<char*>(raw.data()), numBytes);

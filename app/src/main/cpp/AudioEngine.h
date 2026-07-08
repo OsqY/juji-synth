@@ -53,6 +53,13 @@ public:
     // ---- Synth parameter updates (delegated to SynthInstrument on channel 0) ----
 
     void setParams(const SynthParams& params) { synthInstrument_->setParams(params); }
+
+    // ---- Per-pad synth pool (multi-timbral) ----
+    static constexpr int PAD_SYNTH_COUNT = 16;
+    /** Lazily create / retrieve the SynthInstrument for [padIndex] (0..15). */
+    SynthInstrument* getPadSynth(int padIndex);
+    /** Apply a full SynthParams snapshot to a per-pad synth. */
+    void applyPadSynthState(int padIndex, const SynthParams& params);
     void setAllParamsFromArray(const float* values, int count) { synthInstrument_->setAllParamsFromArray(values, count); }
     static constexpr int SYNTH_PARAM_COUNT = SynthInstrument::SYNTH_PARAM_COUNT;
 
@@ -181,6 +188,10 @@ private:
     MasterBus masterBus_;
     std::unique_ptr<SynthInstrument> synthInstrument_;
     std::unique_ptr<SamplerInstrument> sampler_;
+    // Per-pad synth pool: lazily created SynthInstrument instances,
+    // one per pad (0..15). Pads in SYNTH mode route noteOn to these
+    // instead of the shared channel-0 synth.
+    std::array<SynthInstrument*, PAD_SYNTH_COUNT> synthForPad_{};
     AudioRecorder recorder_;
     TimeStretchWorker timeStretchWorker_;
     jujidaw::Transport transport_;

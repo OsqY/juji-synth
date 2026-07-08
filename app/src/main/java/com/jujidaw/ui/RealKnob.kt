@@ -22,8 +22,8 @@ import androidx.compose.ui.unit.sp
 import com.jujidaw.ui.theme.*
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * Photorealistic hardware knob with metal rim, tick marks, value arc, LED ring, and vertical drag.
@@ -40,7 +40,7 @@ fun RealKnob(
     size: Dp = 48.dp,
     learnMode: Boolean = false,
     isSelected: Boolean = false,
-    onLearnSelect: (() -> Unit)? = null
+    onLearnSelect: (() -> Unit)? = null,
 ) {
     val sizePx = with(LocalDensity.current) { size.toPx() }
     val radius = sizePx / 2f
@@ -50,49 +50,49 @@ fun RealKnob(
     var showTooltip by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(value) }
     val density = LocalDensity.current
-    val touchSlopPx = with(density) { 8.dp.toPx() }
+    val touchSlopPx = with(density) { DraggableValueController.touchSlop.toPx() }
     var dragStartY by remember { mutableStateOf(0f) }
     var hasExceededSlop by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
-            modifier = Modifier
-                .size(size)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onLongPress = { showTooltip = true },
-                        onTap = {
-                            if (learnMode) onLearnSelect?.invoke()
-                        }
-                    )
-                }
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { startOffset ->
-                            dragStartY = startOffset.y
-                            hasExceededSlop = false
-                        },
-                        onDrag = { change, dragAmount ->
-                            if (!hasExceededSlop) {
-                                val dragDistance = kotlin.math.abs(change.position.y - dragStartY)
-                                if (dragDistance < touchSlopPx) {
-                                    return@detectDragGestures
+            modifier =
+                Modifier
+                    .size(size)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onLongPress = { showTooltip = true },
+                            onTap = {
+                                if (learnMode) onLearnSelect?.invoke()
+                            },
+                        )
+                    }.pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { startOffset ->
+                                dragStartY = startOffset.y
+                                hasExceededSlop = false
+                            },
+                            onDrag = { change, dragAmount ->
+                                if (!hasExceededSlop) {
+                                    val dragDistance = kotlin.math.abs(change.position.y - dragStartY)
+                                    if (dragDistance < touchSlopPx) {
+                                        return@detectDragGestures
+                                    }
+                                    hasExceededSlop = true
                                 }
-                                hasExceededSlop = true
-                            }
-                            change.consume()
-                            val delta = -dragAmount.y / 200f
-                            if (delta != 0f) {
-                                val newValue = (dragValue + delta).coerceIn(0f, 1f)
-                                dragValue = newValue
-                                onValueChange(newValue)
-                            }
-                        }
-                    )
-                }
+                                change.consume()
+                                val delta = -dragAmount.y / 200f
+                                if (delta != 0f) {
+                                    val newValue = (dragValue + delta).coerceIn(0f, 1f)
+                                    dragValue = newValue
+                                    onValueChange(newValue)
+                                }
+                            },
+                        )
+                    },
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val cx = sizePx / 2f
@@ -103,22 +103,24 @@ fun RealKnob(
                 drawCircle(
                     color = Color.Black.copy(alpha = 0.35f),
                     radius = knobRadius,
-                    center = Offset(cx + 2.5f, cy + 2.5f)
+                    center = Offset(cx + 2.5f, cy + 2.5f),
                 )
 
                 // 2. Knob body (radial gradient effect via concentric circles)
                 drawCircle(
-                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF4A4A52),
-                            Color(0xFF2D2D35),
-                            Color(0xFF1A1A22)
+                    brush =
+                        androidx.compose.ui.graphics.Brush.radialGradient(
+                            colors =
+                                listOf(
+                                    Color(0xFF4A4A52),
+                                    Color(0xFF2D2D35),
+                                    Color(0xFF1A1A22),
+                                ),
+                            center = Offset(cx - radius * 0.25f, cy - radius * 0.30f),
+                            radius = knobRadius,
                         ),
-                        center = Offset(cx - radius * 0.25f, cy - radius * 0.30f),
-                        radius = knobRadius
-                    ),
                     radius = knobRadius,
-                    center = Offset(cx, cy)
+                    center = Offset(cx, cy),
                 )
 
                 // 3. Metal rim
@@ -126,7 +128,7 @@ fun RealKnob(
                     color = KnobRim,
                     radius = knobRadius,
                     center = Offset(cx, cy),
-                    style = Stroke(width = 3f)
+                    style = Stroke(width = 3f),
                 )
 
                 // 4. Tick marks (30 ticks around perimeter)
@@ -146,7 +148,7 @@ fun RealKnob(
                         color = tickColor,
                         start = Offset(innerX, innerY),
                         end = Offset(outerX, outerY),
-                        strokeWidth = 1.5f
+                        strokeWidth = 1.5f,
                     )
                 }
 
@@ -159,7 +161,7 @@ fun RealKnob(
                         color = accentColor.copy(alpha = 0.2f),
                         radius = knobRadius - 1f,
                         center = Offset(cx, cy),
-                        style = Stroke(width = 5f)
+                        style = Stroke(width = 5f),
                     )
                 }
 
@@ -171,7 +173,7 @@ fun RealKnob(
                     color = KnobIndicator,
                     start = Offset(cx, cy),
                     end = Offset(pointerX, pointerY),
-                    strokeWidth = 2.5f
+                    strokeWidth = 2.5f,
                 )
 
                 // 7. LED ring (glows brighter with value)
@@ -181,7 +183,7 @@ fun RealKnob(
                         color = ledColor.copy(alpha = ledAlpha),
                         radius = knobRadius + 2f,
                         center = Offset(cx, cy),
-                        style = Stroke(width = 2f)
+                        style = Stroke(width = 2f),
                     )
                 }
 
@@ -191,7 +193,7 @@ fun RealKnob(
                         color = MidiLearnGlow,
                         radius = knobRadius + 3f,
                         center = Offset(cx, cy),
-                        style = Stroke(width = 2f)
+                        style = Stroke(width = 2f),
                     )
                 }
             }
@@ -199,22 +201,28 @@ fun RealKnob(
             // Tooltip overlay
             if (showTooltip) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTapGestures { showTooltip = false }
-                        },
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTapGestures { showTooltip = false }
+                            },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Box(
-                        modifier = Modifier
-                            .background(Color(0xE6000000), shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                        modifier =
+                            Modifier
+                                .background(
+                                    Color(0xE6000000),
+                                    shape =
+                                        androidx.compose.foundation.shape
+                                            .RoundedCornerShape(4.dp),
+                                ).padding(horizontal = 6.dp, vertical = 3.dp),
                     ) {
                         Text(
                             text = "$label: $valueDisplay",
                             color = TextPrimary,
-                            fontSize = 9.sp
+                            fontSize = 9.sp,
                         )
                     }
                 }
@@ -229,7 +237,7 @@ fun RealKnob(
                 fontSize = 8.sp,
                 fontWeight = FontWeight.Medium,
                 letterSpacing = 0.3.sp,
-                maxLines = 1
+                maxLines = 1,
             )
         }
 
@@ -240,7 +248,7 @@ fun RealKnob(
                 color = accentColor,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
+                fontFamily = FontFamily.Monospace,
             )
         }
     }
