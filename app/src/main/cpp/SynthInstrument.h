@@ -102,6 +102,7 @@ public:
     // ---- Bulk / parameter setters (UI thread; atomic swap on audio thread) ----
     void setParams(const SynthParams& params);
     void setAllParamsFromArray(const float* values, int count);
+    float getParamByIndex(int index) const;
     static constexpr int SYNTH_PARAM_COUNT = 39;
 
     // Oscillators

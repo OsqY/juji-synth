@@ -1,0 +1,1 @@
+All tests pass, no staged files. Here's the acceptance report:

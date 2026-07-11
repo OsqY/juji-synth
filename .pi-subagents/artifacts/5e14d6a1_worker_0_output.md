@@ -1,0 +1,1 @@
+Global transport bar untouched — 3 `TransportMiniButton` calls remain (Play, Record, Reset). All criteria satisfied. Here's the acceptance report:

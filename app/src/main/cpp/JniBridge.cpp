@@ -989,7 +989,7 @@ Java_com_jujidaw_audio_SynthEngine_nativeReorderChannelInserts(JNIEnv* /*env*/, 
     // ========== Per-pad synth (multi-timbral) ==========
     
     JNIEXPORT jboolean JNICALL
-    Java_com_jujidaw_audio_SynthEngine_nativeSynthNoteOn(JNIEnv* /*env*/, jclass /*clazz",
+    Java_com_jujidaw_audio_SynthEngine_nativeSynthNoteOn(JNIEnv* /*env*/, jclass /*clazz*/,
                                                            jint padIndex, jint note, jfloat velocity) {
         auto* synth = SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
         if (!synth) return JNI_FALSE;
@@ -998,7 +998,7 @@ Java_com_jujidaw_audio_SynthEngine_nativeReorderChannelInserts(JNIEnv* /*env*/, 
     }
     
     JNIEXPORT jboolean JNICALL
-    Java_com_jujidaw_audio_SynthEngine_nativeSetPadSynthParam(JNIEnv* /*env*/, jclass /*clazz",
+    Java_com_jujidaw_audio_SynthEngine_nativeSetPadSynthParam(JNIEnv* /*env*/, jclass /*clazz*/,
                                                                 jint padIndex, jint paramIndex,
                                                                 jfloat value) {
         auto* synth = SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
@@ -1050,13 +1050,15 @@ Java_com_jujidaw_audio_SynthEngine_nativeReorderChannelInserts(JNIEnv* /*env*/, 
     }
     
     JNIEXPORT jfloat JNICALL
-    Java_com_jujidaw_audio_SynthEngine_nativeGetPadSynthParam(JNIEnv* /*env*/, jclass /*clazz",
+    Java_com_jujidaw_audio_SynthEngine_nativeGetPadSynthParam(JNIEnv* /*env*/, jclass /*clazz*/,
                                                                 jint padIndex, jint paramIndex) {
-        return SynthEngine::getInstance().getAudioEngine().getPadSynthParam(padIndex, paramIndex);
+        auto* synth = SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
+        if (!synth) return 0.0f;
+        return synth->getParamByIndex(static_cast<int>(paramIndex));
     }
     
     JNIEXPORT void JNICALL
-    Java_com_jujidaw_audio_SynthEngine_nativeApplyPadSynthState(JNIEnv* env, jclass /*clazz",
+    Java_com_jujidaw_audio_SynthEngine_nativeApplyPadSynthState(JNIEnv* env, jclass /*clazz*/,
                                                                   jint padIndex, jfloatArray values) {
         if (values == nullptr) return;
         int count = env->GetArrayLength(values);
@@ -1070,7 +1072,7 @@ Java_com_jujidaw_audio_SynthEngine_nativeReorderChannelInserts(JNIEnv* /*env*/, 
     }
     
     JNIEXPORT void JNICALL
-    Java_com_jujidaw_audio_SynthEngine_nativeSetPadSynthEnabled(JNIEnv* /*env*/, jclass /*clazz",
+    Java_com_jujidaw_audio_SynthEngine_nativeSetPadSynthEnabled(JNIEnv* /*env*/, jclass /*clazz*/,
                                                                   jint padIndex, jboolean enabled) {
         // Eagerly create the synth instance so it's ready when triggered.
         if (enabled) {

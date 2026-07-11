@@ -1,0 +1,1 @@
+All tests pass. Let me produce the acceptance report.

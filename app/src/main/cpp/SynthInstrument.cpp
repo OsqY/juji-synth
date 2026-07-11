@@ -295,6 +295,53 @@ void SynthInstrument::setAllParamsFromArray(const float* values, int count) {
     paramsPending_.store(true, std::memory_order_release);
 }
 
+float SynthInstrument::getParamByIndex(int index) const {
+    if (index < 0 || index >= SYNTH_PARAM_COUNT) return 0.0f;
+    // Mirror the index mapping from setAllParamsFromArray
+    switch (index) {
+case 0:  return currentParams_.oscillators.osc1.level;
+case 1:  return currentParams_.oscillators.osc2.level;
+case 2:  return static_cast<float>(currentParams_.oscillators.osc1.waveform);
+case 3:  return static_cast<float>(currentParams_.oscillators.osc2.waveform);
+case 4:  return currentParams_.oscillators.osc1.detune;
+case 5:  return currentParams_.oscillators.subOscLevel;
+case 6:  return currentParams_.oscillators.noiseLevel;
+case 7:  return currentParams_.oscillators.oscMix;
+case 8:  return currentParams_.oscillators.syncEnabled ? 1.0f : 0.0f;
+case 9:  return currentParams_.filter.cutoff;
+case 10: return currentParams_.filter.resonance;
+case 11: return static_cast<float>(currentParams_.filter.mode);
+case 12: return currentParams_.filter.envelopeAmount;
+case 13: return currentParams_.envelopes.attack;
+case 14: return currentParams_.envelopes.decay;
+case 15: return currentParams_.envelopes.sustain;
+case 16: return currentParams_.envelopes.release;
+case 17: return currentParams_.envelopes.filterAttack;
+case 18: return currentParams_.envelopes.filterDecay;
+case 19: return currentParams_.envelopes.filterSustain;
+case 20: return currentParams_.envelopes.filterRelease;
+case 21: return currentParams_.lfos.lfo1.rate;
+case 22: return currentParams_.lfos.lfo1.depth;
+case 23: return static_cast<float>(currentParams_.lfos.lfo1.waveform);
+case 24: return currentParams_.lfos.lfo2.rate;
+case 25: return currentParams_.lfos.lfo2.depth;
+case 26: return static_cast<float>(currentParams_.lfos.lfo2.waveform);
+case 27: return currentParams_.effects.reverb.mix;
+case 28: return currentParams_.effects.reverb.decay;
+case 29: return currentParams_.effects.delay.mix;
+case 30: return currentParams_.effects.delay.time;
+case 31: return currentParams_.effects.delay.feedback;
+case 32: return currentParams_.effects.distortion.drive;
+case 33: return currentParams_.effects.distortion.mix;
+case 34: return currentParams_.effects.bypass ? 1.0f : 0.0f;
+case 35: return currentParams_.effects.chorus.rate;
+case 36: return currentParams_.effects.chorus.depth;
+case 37: return currentParams_.effects.chorus.mix;
+case 38: return currentParams_.master.volume;
+default: return 0.0f;
+    }
+}
+
 void SynthInstrument::applyAutomationParam(int paramIndex, float value) {
     switch (paramIndex) {
         case 0:  pendingParams_.oscillators.osc1.level = value; break;
