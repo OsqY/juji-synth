@@ -149,9 +149,12 @@ object AudioConverter {
                 downmixed
             }
 
+        // ── Peak normalize to -1 dBFS (prevents imported samples sounding too quiet) ──
+        val normalizedData = normalizeMonoInt16(monoData)
+
         // ── Write header (mono fields) then data ──
         FileOutputStream(path).use { out ->
-            val dataSize = monoData.size
+            val dataSize = normalizedData.size
             val fileSize = 36 + dataSize
             val byteRate = sampleRate * 1 * 2 // 16-bit mono
             val blockAlign = 1 * 2 // mono
@@ -174,7 +177,40 @@ object AudioConverter {
                     putInt(dataSize)
                 }
             out.write(header.array())
-            out.write(monoData)
+            out.write(normalizedData)
         }
+    }
+
+    /**
+     * Scan mono 16-bit PCM data for peak amplitude and normalize to -1 dBFS.
+     * Leaves silence (peak == 0) untouched.
+     */
+    private fun normalizeMonoInt16(monoData: ByteArray): ByteArray {
+        val sampleCount = monoData.size / 2
+        if (sampleCount == 0) return monoData
+
+        // Find peak absolute int16 value
+        var peakAbs = 0
+        for (i in 0 until sampleCount) {
+            val lo = monoData[i * 2].toInt() and 0xFF
+            val hi = monoData[i * 2 + 1].toInt()
+            val value = (hi shl 8) or lo
+            val absValue = if (value >= 0) value else -value
+            if (absValue > peakAbs) peakAbs = absValue
+        }
+
+        if (peakAbs == 0 || peakAbs >= 29127) return monoData // silence or already hot enough
+
+        val gain = 29127f / peakAbs.toFloat() // target -1 dBFS
+        val out = ByteArray(monoData.size)
+        for (i in 0 until sampleCount) {
+            val lo = monoData[i * 2].toInt() and 0xFF
+            val hi = monoData[i * 2 + 1].toInt()
+            val value = (hi shl 8) or lo
+            val normalized = (value.toFloat() * gain).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+            out[i * 2] = (normalized and 0xFF).toByte()
+            out[i * 2 + 1] = ((normalized shr 8) and 0xFF).toByte()
+        }
+        return out
     }
 }

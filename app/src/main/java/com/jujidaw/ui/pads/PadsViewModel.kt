@@ -42,27 +42,27 @@ object PadParamIds {
  * Cached per-pad parameters kept in the ViewModel because the engine has no getters.
  */
 data class PadParams(
-    val pitch: Float = 0f,               // semitones
-    val pan: Float = 0f,                 // -1..1
-    val volume: Float = 1f,              // 0..1
-    val attack: Float = 0f,              // 0..1
-    val release: Float = 0f,             // 0..1
-    val filterCutoff: Float = 1f,        // 0..1
-    val filterResonance: Float = 0f,     // 0..1
+    val pitch: Float = 0f, // semitones
+    val pan: Float = 0f, // -1..1
+    val volume: Float = 1f, // 0..1
+    val attack: Float = 0f, // 0..1
+    val release: Float = 0f, // 0..1
+    val filterCutoff: Float = 1f, // 0..1
+    val filterResonance: Float = 0f, // 0..1
     val reverse: Boolean = false,
     val loop: Boolean = false,
     val oneShot: Boolean = true,
     val useFilter: Boolean = false,
     val synthMode: Boolean = false,
-    val synthRootNote: Int = 60,         // C4
-    val sliceStart: Float = 0f,          // TODO: engine support
-    val sliceEnd: Float = 1f,            // TODO: engine support
-    val chokeGroup: Int = 0              // TODO: engine support
+    val synthRootNote: Int = 60, // C4
+    val sliceStart: Float = 0f, // TODO: engine support
+    val sliceEnd: Float = 1f, // TODO: engine support
+    val chokeGroup: Int = 0, // TODO: engine support
 )
 
 data class PadsUiState(
-    val currentBank: Int = 0,            // 0 = Bank A, 1 = Bank B
-    val selectedPad: Int = 0,            // 0..15 within current bank
+    val currentBank: Int = 0, // 0 = Bank A, 1 = Bank B
+    val selectedPad: Int = 0, // 0..15 within current bank
     val activePads: Set<Int> = emptySet(), // 0..15 within current bank (visually held)
     val padLoaded: List<Boolean> = List(32) { false },
     val padNames: List<String> = List(32) { "Pad ${it + 1}" },
@@ -72,11 +72,12 @@ data class PadsUiState(
     val timeStretchOriginalBpm: String = "120",
     val isTimeStretching: Boolean = false,
     val toastMessage: String? = null,
-    val padParams: List<PadParams> = List(32) { PadParams() }
+    val padParams: List<PadParams> = List(32) { PadParams() },
 )
 
-class PadsViewModel : ViewModel(), TimeStretchListener {
-
+class PadsViewModel :
+    ViewModel(),
+    TimeStretchListener {
     private val _uiState = MutableStateFlow(PadsUiState())
     val uiState: StateFlow<PadsUiState> = _uiState
 
@@ -89,7 +90,10 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
         super.onCleared()
     }
 
-    override fun onTimeStretchComplete(padIndex: Int, success: Boolean) {
+    override fun onTimeStretchComplete(
+        padIndex: Int,
+        success: Boolean,
+    ) {
         _uiState.update { it.copy(isTimeStretching = false) }
         if (success) {
             showToast("Time-stretch complete")
@@ -111,7 +115,10 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
     }
 
     /** Trigger a pad with the given velocity (1..127). */
-    fun triggerPad(padIndex: Int, velocity: Int) {
+    fun triggerPad(
+        padIndex: Int,
+        velocity: Int,
+    ) {
         SynthEngine.triggerPad(padIndex, velocity.coerceIn(1, 127))
         _uiState.update { it.copy(activePads = it.activePads + padIndex) }
     }
@@ -126,20 +133,27 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
      * Pad touch down with Y-position for velocity.
      * @param normalizedY 0.0 = top, 1.0 = bottom
      */
-    fun onPadDown(padIndex: Int, normalizedY: Float) {
+    fun onPadDown(
+        padIndex: Int,
+        normalizedY: Float,
+    ) {
         val velocity = ((1f - normalizedY.coerceIn(0f, 1f)) * 127).toInt().coerceIn(1, 127)
         triggerPad(padIndex, velocity)
     }
 
     /** Import an audio file from a content URI into the selected pad. */
-    fun importSample(context: Context, uri: Uri?) {
+    fun importSample(
+        context: Context,
+        uri: Uri?,
+    ) {
         if (uri == null) return
         viewModelScope.launch {
             try {
                 val globalIndex = _uiState.value.currentBank * 16 + _uiState.value.selectedPad
-                val samplesDir = (context.getExternalFilesDir(null) ?: context.filesDir)
-                    .resolve("samples")
-                    .apply { mkdirs() }
+                val samplesDir =
+                    (context.getExternalFilesDir(null) ?: context.filesDir)
+                        .resolve("samples")
+                        .apply { mkdirs() }
 
                 val wavFile = File(samplesDir, "pad_${globalIndex}_${System.currentTimeMillis()}.wav")
                 val converted = AudioConverter.convertToWav(context, uri, wavFile.absolutePath)
@@ -152,9 +166,10 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
                 if (ok) {
                     _uiState.update { state ->
                         val loaded = state.padLoaded.toMutableList().apply { set(globalIndex, true) }
-                        val names = state.padNames.toMutableList().apply {
-                            set(globalIndex, wavFile.nameWithoutExtension)
-                        }
+                        val names =
+                            state.padNames.toMutableList().apply {
+                                set(globalIndex, wavFile.nameWithoutExtension)
+                            }
                         state.copy(padLoaded = loaded, padNames = names)
                     }
                     showToast("Sample loaded")
@@ -181,9 +196,10 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
         val startPad = state.currentBank * 16
         SynthEngine.chopSample(globalIndex, startPad, 16)
         _uiState.update { s ->
-            val loaded = s.padLoaded.toMutableList().apply {
-                for (i in 0 until 16) set(startPad + i, true)
-            }
+            val loaded =
+                s.padLoaded.toMutableList().apply {
+                    for (i in 0 until 16) set(startPad + i, true)
+                }
             s.copy(padLoaded = loaded)
         }
         showToast("Sample chopped into 16 slices")
@@ -237,34 +253,70 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
     }
 
     /** Set a pad parameter via JNI and mirror it into local state. */
-    fun setPadParam(padIndex: Int, paramId: Int, value: Float) {
+    fun setPadParam(
+        padIndex: Int,
+        paramId: Int,
+        value: Float,
+    ) {
         val globalIndex = _uiState.value.currentBank * 16 + padIndex
         SynthEngine.setPadParam(globalIndex, paramId, value)
         _uiState.update { state ->
             val params = state.padParams.toMutableList()
             val old = params[globalIndex]
-            params[globalIndex] = when (paramId) {
-                PadParamIds.PITCH -> old.copy(pitch = value)
-                PadParamIds.PAN -> old.copy(pan = value)
-                PadParamIds.VOLUME -> old.copy(volume = value)
-                PadParamIds.ATTACK -> old.copy(attack = value)
-                PadParamIds.RELEASE -> old.copy(release = value)
-                PadParamIds.FILTER_CUTOFF -> old.copy(filterCutoff = value)
-                PadParamIds.FILTER_RESONANCE -> old.copy(filterResonance = value)
-                PadParamIds.REVERSE -> old.copy(reverse = value > 0.5f)
-                PadParamIds.LOOP -> old.copy(loop = value > 0.5f)
-                PadParamIds.ONE_SHOT -> old.copy(oneShot = value > 0.5f)
-                PadParamIds.USE_FILTER -> old.copy(useFilter = value > 0.5f)
-                PadParamIds.SYNTH_MODE -> old.copy(synthMode = value > 0.5f)
-                PadParamIds.SYNTH_ROOT_NOTE -> old.copy(synthRootNote = value.toInt())
-                else -> old
-            }
+            params[globalIndex] =
+                when (paramId) {
+                    PadParamIds.PITCH -> old.copy(pitch = value)
+                    PadParamIds.PAN -> old.copy(pan = value)
+                    PadParamIds.VOLUME -> old.copy(volume = value)
+                    PadParamIds.ATTACK -> old.copy(attack = value)
+                    PadParamIds.RELEASE -> old.copy(release = value)
+                    PadParamIds.FILTER_CUTOFF -> old.copy(filterCutoff = value)
+                    PadParamIds.FILTER_RESONANCE -> old.copy(filterResonance = value)
+                    PadParamIds.REVERSE -> old.copy(reverse = value > 0.5f)
+                    PadParamIds.LOOP -> old.copy(loop = value > 0.5f)
+                    PadParamIds.ONE_SHOT -> old.copy(oneShot = value > 0.5f)
+                    PadParamIds.USE_FILTER -> old.copy(useFilter = value > 0.5f)
+                    PadParamIds.SYNTH_MODE -> old.copy(synthMode = value > 0.5f)
+                    PadParamIds.SYNTH_ROOT_NOTE -> old.copy(synthRootNote = value.toInt())
+                    else -> old
+                }
             state.copy(padParams = params)
+        }
+
+        // Enable/disable per-pad synth engine on mode toggle.
+        if (paramId == PadParamIds.SYNTH_MODE) {
+            val padIdx = globalIndex % 16
+            if (value > 0.5f) {
+                SynthEngine.setPadSynthEnabled(padIdx, true)
+                // Apply default synth params so the pad makes audible sound.
+                SynthEngine.applyPadSynthState(padIdx, SynthEngine.defaultSynthParams())
+            } else {
+                SynthEngine.setPadSynthEnabled(padIdx, false)
+            }
         }
     }
 
+    /**
+     * Load a factory preset onto a pad's per-pad synth.
+     * Applies a default synth state (same as the toggle) — the preset name
+     * is recorded for display; full parameter presets can be added per-name later.
+     */
+    fun loadPadPreset(
+        padIndex: Int,
+        presetName: String,
+    ) {
+        val globalIndex = _uiState.value.currentBank * 16 + padIndex
+        val padIdx = globalIndex % 16
+        SynthEngine.setPadSynthEnabled(padIdx, true)
+        SynthEngine.applyPadSynthState(padIdx, SynthEngine.defaultSynthParams())
+        showToast("Loaded: $presetName")
+    }
+
     /** Set slice start (0..1). TODO: wire to engine when setPadSlice is available. */
-    fun setSliceStart(padIndex: Int, value: Float) {
+    fun setSliceStart(
+        padIndex: Int,
+        value: Float,
+    ) {
         val globalIndex = _uiState.value.currentBank * 16 + padIndex
         _uiState.update { state ->
             val params = state.padParams.toMutableList()
@@ -274,7 +326,10 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
     }
 
     /** Set slice end (0..1). TODO: wire to engine when setPadSlice is available. */
-    fun setSliceEnd(padIndex: Int, value: Float) {
+    fun setSliceEnd(
+        padIndex: Int,
+        value: Float,
+    ) {
         val globalIndex = _uiState.value.currentBank * 16 + padIndex
         _uiState.update { state ->
             val params = state.padParams.toMutableList()
@@ -285,7 +340,10 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
     }
 
     /** Set choke group. TODO: wire to engine when choke group support is added. */
-    fun setChokeGroup(padIndex: Int, group: Int) {
+    fun setChokeGroup(
+        padIndex: Int,
+        group: Int,
+    ) {
         val globalIndex = _uiState.value.currentBank * 16 + padIndex
         _uiState.update { state ->
             val params = state.padParams.toMutableList()
@@ -303,6 +361,23 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
     }
 
     companion object {
+        /** Factory preset names available for pad synth loading. */
+        val FACTORY_PRESETS: List<String> =
+            listOf(
+                "Saw Lead",
+                "Bright Lead",
+                "Square Lead",
+                "Deep Sub",
+                "Saw Bass",
+                "Pulse Bass",
+                "Soft Pad",
+                "Warm Pad",
+                "Dark Pad",
+                "Resonant Pluck",
+                "Acid Lead",
+                "Analog Brass",
+            )
+
         /**
          * Reads duration in milliseconds from a standard PCM WAV file header.
          * Returns null if the file is not a valid WAV or cannot be read.
@@ -335,16 +410,22 @@ class PadsViewModel : ViewModel(), TimeStretchListener {
             }
         }
 
-        private fun readLEInt(buf: ByteArray, offset: Int): Int {
-            return (buf[offset].toInt() and 0xFF) or
-                    ((buf[offset + 1].toInt() and 0xFF) shl 8) or
-                    ((buf[offset + 2].toInt() and 0xFF) shl 16) or
-                    ((buf[offset + 3].toInt() and 0xFF) shl 24)
-        }
+        private fun readLEInt(
+            buf: ByteArray,
+            offset: Int,
+        ): Int =
+            (buf[offset].toInt() and 0xFF) or
+                ((buf[offset + 1].toInt() and 0xFF) shl 8) or
+                ((buf[offset + 2].toInt() and 0xFF) shl 16) or
+                ((buf[offset + 3].toInt() and 0xFF) shl 24)
 
-        private fun readLEShort(buf: ByteArray, offset: Int): Short {
-            return ((buf[offset].toInt() and 0xFF) or
-                    ((buf[offset + 1].toInt() and 0xFF) shl 8)).toShort()
-        }
+        private fun readLEShort(
+            buf: ByteArray,
+            offset: Int,
+        ): Short =
+            (
+                (buf[offset].toInt() and 0xFF) or
+                    ((buf[offset + 1].toInt() and 0xFF) shl 8)
+            ).toShort()
     }
 }

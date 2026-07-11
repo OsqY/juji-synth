@@ -157,6 +157,43 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        // Pad selector strip: place a pad on the selected track at the playhead
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                "PADS",
+                color = TextSecondary,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(end = 4.dp),
+            )
+            for (i in 0 until 16) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(BgGunmetal)
+                            .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                            .clickable {
+                                val playheadTick = transport.position.toTicks()
+                                viewModel.addPadClip(selectedTrack, playheadTick, i)
+                            },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "${i + 1}",
+                        color = TextPrimary,
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+
         Spacer(Modifier.height(2.dp))
 
         // Main area: track headers + timeline

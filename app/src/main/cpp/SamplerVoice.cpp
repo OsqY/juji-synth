@@ -74,12 +74,8 @@ float SamplerVoice::process() {
         sample = filter.process(sample);
     }
 
-    // Pan law
-    float left = 1.0f, right = 1.0f;
-    float angle = (pan + 1.0f) * 0.25f * 3.14159265f;
-    left = std::cos(angle);
-    right = std::sin(angle);
-    float mono = sample * 0.5f * (left + right);
+    // Channel pan handles stereo positioning; keep mono gain at 0 dB.
+    float mono = sample;
 
     float velGain = velocity / 127.0f;
     float out = mono * volume * velGain * env;

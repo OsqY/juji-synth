@@ -98,12 +98,9 @@ void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample
                 break;
             }
             case ScheduledEventType::PAD_TRIGGER: {
-                auto* instr = engine.getChannel(track).getInstrument();
-                auto* sampler = dynamic_cast<SamplerInstrument*>(instr);
-                if (sampler) {
-                    int vel = static_cast<int>(event.data.padTrigger.velocity * 127.0f + 0.5f);
-                    sampler->triggerPad(event.data.padTrigger.padIndex, vel);
-                }
+                auto& sampler = engine.getSampler();
+                int vel = static_cast<int>(event.data.padTrigger.velocity * 127.0f + 0.5f);
+                sampler.triggerPad(event.data.padTrigger.padIndex, vel);
                 break;
             }
             case ScheduledEventType::AUTOMATION: {

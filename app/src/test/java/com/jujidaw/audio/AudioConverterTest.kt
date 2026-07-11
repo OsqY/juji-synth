@@ -142,12 +142,23 @@ class AudioConverterTest {
             input.read(data, 0, data.size)
         }
 
-        // Frame 0: avg(0x4000, 0x4000) = 0x4000
-        assertEquals(0x00.toByte(), data[0])
-        assertEquals(0x40.toByte(), data[1])
-        // Frame 1: avg(-0x4000, -0x4000) = -0x4000
-        assertEquals(0x00.toByte(), data[2])
-        assertEquals(0xC0.toByte(), data[3])
+        // After downmix + peak normalization to -1 dBFS (target peak = 29127):
+        // Frame 0: avg(0x4000,0x4000)=0x4000 → normalized to near 29127
+        // Frame 1: avg(-0x4000,-0x4000)=-0x4000 → normalized to near -29127
+        val frame0 =
+            ByteBuffer
+                .wrap(data, 0, 2)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .short
+                .toInt()
+        val frame1 =
+            ByteBuffer
+                .wrap(data, 2, 2)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .short
+                .toInt()
+        assertTrue("Frame 0 should be normalized near -1 dBFS ($frame0)", frame0 >= 29000 && frame0 <= 30000)
+        assertTrue("Frame 1 should be normalized near -1 dBFS ($frame1)", frame1 <= -29000 && frame1 >= -30000)
 
         outFile.delete()
     }
