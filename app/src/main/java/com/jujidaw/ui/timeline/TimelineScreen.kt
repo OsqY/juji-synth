@@ -9,6 +9,8 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -334,6 +336,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                                 .padding(2.dp),
                                         onTap = { viewModel.toggleMuteClip(clip.id) },
                                         onLongPress = { draggedClipId = clip.id },
+                                        onDelete = { viewModel.deleteClip(clip.id) },
                                         onTrim = { newDuration ->
                                             viewModel.trimClip(clip.id, newDuration)
                                         },
@@ -801,7 +804,9 @@ private fun ClipItem(
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onTrim: (newDurationTicks: Long) -> Unit,
+    onDelete: () -> Unit = {},
 ) {
+    var showMenu by remember { mutableStateOf(false) }
     val bg =
         when {
             clip.mute -> TextMuted.copy(alpha = 0.5f)
@@ -809,86 +814,109 @@ private fun ClipItem(
             clip is AudioClip -> KnobCyan.copy(alpha = 0.75f)
             else -> TextMuted
         }
-    Box(
-        modifier =
-            modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(bg)
-                .border(
-                    1.dp,
-                    if (clip.mute) TextMuted else Color.White.copy(alpha = 0.4f),
-                    RoundedCornerShape(4.dp),
-                ).pointerInput(clip.id) {
-                    detectTapGestures(
-                        onTap = { onTap() },
-                        onLongPress = { onLongPress() },
-                    )
-                },
-    ) {
-        Text(
-            text =
-                when (clip) {
-                    is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
-                    is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
-                },
-            color = Color.Black,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(4.dp).align(Alignment.TopStart),
-        )
+    Box {
+        Box(
+            modifier =
+                modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(bg)
+                    .border(
+                        1.dp,
+                        if (clip.mute) TextMuted else Color.White.copy(alpha = 0.4f),
+                        RoundedCornerShape(4.dp),
+                    ).pointerInput(clip.id) {
+                        detectTapGestures(
+                            onTap = { onTap() },
+                            onLongPress = { showMenu = true },
+                        )
+                    },
+        ) {
+            Text(
+                text =
+                    when (clip) {
+                        is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
+                        is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
+                    },
+                color = Color.Black,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(4.dp).align(Alignment.TopStart),
+            )
 
-        if (clip is AudioClip) {
-            val hash = remember(clip.id) { clip.id.hashCode() }
-            Canvas(modifier = Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = 4.dp)) {
-                val bars = (size.width / 6).toInt().coerceAtLeast(4)
-                val w = size.width / bars
-                for (i in 0 until bars) {
-                    val h = kotlin.math.abs((hash + i * 71) % 100) / 100f * size.height * 0.7f
-                    drawRect(
-                        color = Color.Black.copy(alpha = 0.25f),
-                        topLeft = Offset(i * w + 1f, (size.height - h) / 2),
-                        size =
-                            androidx.compose.ui.geometry
-                                .Size(w - 2f, h),
+            if (clip is AudioClip) {
+                val hash = remember(clip.id) { clip.id.hashCode() }
+                Canvas(modifier = Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = 4.dp)) {
+                    val bars = (size.width / 6).toInt().coerceAtLeast(4)
+                    val w = size.width / bars
+                    for (i in 0 until bars) {
+                        val h = kotlin.math.abs((hash + i * 71) % 100) / 100f * size.height * 0.7f
+                        drawRect(
+                            color = Color.Black.copy(alpha = 0.25f),
+                            topLeft = Offset(i * w + 1f, (size.height - h) / 2),
+                            size =
+                                androidx.compose.ui.geometry
+                                    .Size(w - 2f, h),
+                        )
+                    }
+                }
+            }
+
+            if (!clip.mute) {
+                var trimDelta by remember { mutableStateOf(0f) }
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(14.dp)
+                            .fillMaxHeight()
+                            .pointerInput(clip.id) {
+                                detectHorizontalDragGestures(
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        change.consume()
+                                        trimDelta += dragAmount
+                                    },
+                                    onDragEnd = {
+                                        val deltaTicks = (trimDelta / tickWidthPx).toLong()
+                                        val newDuration =
+                                            (clip.durationTicks + deltaTicks)
+                                                .coerceAtLeast(TICKS_PER_STEP.toLong())
+                                        onTrim(newDuration)
+                                        trimDelta = 0f
+                                    },
+                                )
+                            },
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .width(2.dp)
+                                .fillMaxHeight(0.6f)
+                                .align(Alignment.Center)
+                                .background(Color.White.copy(alpha = 0.5f)),
                     )
                 }
             }
         }
 
-        if (!clip.mute) {
-            var trimDelta by remember { mutableStateOf(0f) }
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .width(14.dp)
-                        .fillMaxHeight()
-                        .pointerInput(clip.id) {
-                            detectHorizontalDragGestures(
-                                onHorizontalDrag = { change, dragAmount ->
-                                    change.consume()
-                                    trimDelta += dragAmount
-                                },
-                                onDragEnd = {
-                                    val deltaTicks = (trimDelta / tickWidthPx).toLong()
-                                    val newDuration =
-                                        (clip.durationTicks + deltaTicks)
-                                            .coerceAtLeast(TICKS_PER_STEP.toLong())
-                                    onTrim(newDuration)
-                                    trimDelta = 0f
-                                },
-                            )
-                        },
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .width(2.dp)
-                            .fillMaxHeight(0.6f)
-                            .align(Alignment.Center)
-                            .background(Color.White.copy(alpha = 0.5f)),
-                )
-            }
+        // Context menu: long-press → delete or move
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("🗑 Delete") },
+                onClick = {
+                    showMenu = false
+                    onDelete()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("⇱ Move") },
+                onClick = {
+                    showMenu = false
+                    onLongPress()
+                },
+            )
         }
     }
 }
