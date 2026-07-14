@@ -6,6 +6,7 @@ import com.jujidaw.JujiDawApp
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.engine.TransportController
 import com.jujidaw.model.*
+import com.jujidaw.project.ProjectAutosave
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -355,6 +356,7 @@ class TimelineViewModel(
             )
         _patterns.value = _patterns.value + p
         transportController.loadPatterns(_patterns.value)
+        scheduleAutosave()
         return p
     }
 
@@ -416,6 +418,18 @@ class TimelineViewModel(
     private fun updateArrangement(newArr: Arrangement) {
         _arrangement.value = newArr
         transportController.loadArrangement(newArr)
+        scheduleAutosave()
+    }
+
+    /**
+     * Debounced auto-save so timeline edits survive a crash or forced kill
+     * (the [com.jujidaw.MainActivity] onStop save only fires on background).
+     */
+    private fun scheduleAutosave() {
+        ProjectAutosave.scheduleAutoSave(
+            JujiDawApp.instance,
+            transportController,
+        )
     }
 
     // ---- Automation ----

@@ -7,7 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -117,81 +119,106 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
 
         Spacer(Modifier.height(2.dp))
 
-        // Pattern selector row
+        // Pattern selector (1-16). Buttons scroll if they don't fit the width.
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(32.dp)
+                    .height(34.dp)
                     .background(BgPanel)
                     .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                "PATTERN",
+                "Pattern: 1-16",
                 color = TextSecondary,
-                fontSize = 8.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(end = 4.dp),
             )
-            for (i in 0 until 16) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (selectedPatternId == i) KnobAmber else BgGunmetal)
-                            .border(
-                                1.dp,
-                                if (selectedPatternId == i) KnobAmber else PanelHighlight.copy(alpha = 0.3f),
-                                RoundedCornerShape(4.dp),
-                            ).clickable { viewModel.selectPattern(i) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "${i + 1}",
-                        color = if (selectedPatternId == i) Color.Black else TextPrimary,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+            Row(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                for (i in 0 until 16) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(if (selectedPatternId == i) KnobAmber else BgGunmetal)
+                                .border(
+                                    1.dp,
+                                    if (selectedPatternId == i) KnobAmber else PanelHighlight.copy(alpha = 0.3f),
+                                    RoundedCornerShape(4.dp),
+                                ).clickable { viewModel.selectPattern(i) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "${i + 1}",
+                            color = if (selectedPatternId == i) Color.Black else TextPrimary,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }
 
-        // Pad selector strip: place a pad on the selected track at the playhead
+        // Pad strip — own row: drop a pad-trigger clip on the selected track at the playhead.
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .background(BgPanel)
+                    .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                "PADS",
-                color = TextSecondary,
-                fontSize = 8.sp,
+                "Drop Pad to Timeline",
+                color = KnobCyan,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(end = 4.dp),
             )
-            for (i in 0 until 16) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(BgGunmetal)
-                            .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                            .clickable {
-                                val playheadTick = transport.position.toTicks()
-                                viewModel.addPadClip(selectedTrack, playheadTick, i)
-                            },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "${i + 1}",
-                        color = TextPrimary,
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+            Row(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                for (i in 0 until 16) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(BgGunmetal)
+                                .border(1.dp, KnobCyan.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                .clickable {
+                                    val playheadTick = transport.position.toTicks()
+                                    viewModel.addPadClip(selectedTrack, playheadTick, i)
+                                },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "${i + 1}",
+                            color = TextPrimary,
+                            fontSize = 7.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }
@@ -500,122 +527,84 @@ private fun TransportStrip(
     onSnapChange: (TimelineViewModel.Snap) -> Unit,
     onZoomChange: (Float) -> Unit,
 ) {
-    Row(
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(56.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(BgPanel)
                 .padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        TransportButton(
-            label = "↻",
-            active = transport.loopEnabled,
-            activeColor = TransportAmber,
-            onClick = onToggleLoop,
-            modifier = Modifier.size(36.dp),
-        )
-        TransportButton(
-            label = "PUNCH",
-            active = transport.punchEnabled,
-            activeColor = KnobCyan,
-            onClick = onTogglePunch,
-            modifier = Modifier.size(40.dp),
-        )
-
-        Spacer(Modifier.width(4.dp))
-
-        val step = transport.position.tick / TICKS_PER_STEP
-        LcdDisplay(
-            value = "${transport.position.bar + 1}|${transport.position.beat + 1}|${step + 1}",
-            label = "TIME",
-            color = KnobAmber,
-            fontSize = 12.sp,
-            modifier = Modifier.width(84.dp),
-        )
-        LcdDisplay(
-            value = "%.1f".format(transport.tempoBpm),
-            label = "BPM",
-            color = KnobGreen,
-            fontSize = 12.sp,
-            modifier = Modifier.width(64.dp),
-        )
-
-        Spacer(Modifier.width(4.dp))
-
-        Box(
-            modifier =
-                Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(BgGunmetal)
-                    .clickable { onNudge(-TICKS_PER_STEP.toLong()) },
-            contentAlignment = Alignment.Center,
-        ) { Text("◀", color = TextPrimary, fontSize = 10.sp) }
-        Box(
-            modifier =
-                Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(BgGunmetal)
-                    .clickable { onNudge(TICKS_PER_STEP.toLong()) },
-            contentAlignment = Alignment.Center,
-        ) { Text("▶", color = TextPrimary, fontSize = 10.sp) }
-
-        Spacer(Modifier.width(4.dp))
-
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                LabeledTinyButton("◀ Loop", onLoopStart)
-                LabeledTinyButton("Loop ▶", onLoopEnd)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                LabeledTinyButton("◀ P.In", onPunchIn)
-                LabeledTinyButton("P.Out ▶", onPunchOut)
-            }
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        Box(
-            modifier =
-                Modifier
-                    .height(28.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(BgGunmetal)
-                    .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                    .clickable {
-                        val values = TimelineViewModel.Snap.values()
-                        val next = values[(snap.ordinal + 1) % values.size]
-                        onSnapChange(next)
-                    }.padding(horizontal = 8.dp),
-            contentAlignment = Alignment.Center,
+        // Row 1 — Loop & Punch groups. Horizontally scrollable so the clear
+        // text labels never clip on narrow screens.
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            Text(snap.label, color = TextPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            TransportButton(
+                label = if (transport.loopEnabled) "Loop: On" else "Loop: Off",
+                active = transport.loopEnabled,
+                activeColor = TransportAmber,
+                onClick = onToggleLoop,
+                modifier = Modifier.size(width = 58.dp, height = 30.dp),
+            )
+            LabeledTinyButton("Loop Start", onLoopStart, width = 58.dp)
+            LabeledTinyButton("Loop End", onLoopEnd, width = 54.dp)
+
+            Spacer(Modifier.width(8.dp))
+
+            TransportButton(
+                label = if (transport.punchEnabled) "Punch: On" else "Punch: Off",
+                active = transport.punchEnabled,
+                activeColor = KnobCyan,
+                onClick = onTogglePunch,
+                modifier = Modifier.size(width = 62.dp, height = 30.dp),
+            )
+            LabeledTinyButton("● Punch In", onPunchIn, width = 64.dp)
+            LabeledTinyButton("● Punch Out", onPunchOut, width = 68.dp)
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // Row 2 — Playhead nudge + grid controls. Position/BPM are shown in
+        // the always-visible persistent transport bar, so they are not duplicated here.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // ◀ = backward (-ticks), ▶ = forward (+ticks). These call onNudge only;
+            // they never switch the active tab/screen.
+            NudgeArrow("◀") { onNudge(-TICKS_PER_STEP.toLong()) }
+            NudgeArrow("▶") { onNudge(TICKS_PER_STEP.toLong()) }
+
+            Spacer(Modifier.weight(1f))
+
             Box(
                 modifier =
                     Modifier
-                        .size(24.dp)
+                        .height(26.dp)
                         .clip(RoundedCornerShape(4.dp))
                         .background(BgGunmetal)
-                        .clickable { onZoomChange(zoom + 0.2f) },
+                        .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                        .clickable {
+                            val values = TimelineViewModel.Snap.values()
+                            val next = values[(snap.ordinal + 1) % values.size]
+                            onSnapChange(next)
+                        }.padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text("+", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-            Box(
-                modifier =
-                    Modifier
-                        .size(24.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(BgGunmetal)
-                        .clickable { onZoomChange(zoom - 0.2f) },
-                contentAlignment = Alignment.Center,
-            ) { Text("−", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            ) {
+                Text("Snap: ${snap.label}", color = TextPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text("Zoom", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                ZoomStepButton("−") { onZoomChange(zoom - 0.2f) }
+                ZoomStepButton("+") { onZoomChange(zoom + 0.2f) }
+            }
         }
     }
 }
@@ -653,18 +642,73 @@ private fun TransportButton(
 private fun LabeledTinyButton(
     label: String,
     onClick: () -> Unit,
+    width: androidx.compose.ui.unit.Dp = 44.dp,
 ) {
     Box(
         modifier =
             Modifier
-                .size(width = 44.dp, height = 20.dp)
+                .size(width = width, height = 22.dp)
                 .clip(RoundedCornerShape(3.dp))
                 .background(BgGunmetal)
                 .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(3.dp))
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = TextSecondary, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            color = TextSecondary,
+            fontSize = 7.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun NudgeArrow(
+    glyph: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(BgGunmetal)
+                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            glyph,
+            color = TextPrimary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun ZoomStepButton(
+    glyph: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(BgGunmetal)
+                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            glyph,
+            color = TextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -827,7 +871,7 @@ private fun ClipItem(
                     ).pointerInput(clip.id) {
                         detectTapGestures(
                             onTap = { onTap() },
-                            onLongPress = { showMenu = true },
+                            onLongPress = { onLongPress() },
                         )
                     },
         ) {
@@ -896,9 +940,28 @@ private fun ClipItem(
                     )
                 }
             }
+
+            // Always-visible three-dot menu button (top-right corner).
+            // Tapping it opens a Delete-only context menu; long-press anywhere
+            // else on the clip starts drag-to-move, short tap toggles mute.
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .size(14.dp)
+                        .clickable { showMenu = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "\u22EE",
+                    color = Color.Black,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
 
-        // Context menu: long-press → delete or move
+        // Context menu: three-dot button → delete
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
@@ -908,13 +971,6 @@ private fun ClipItem(
                 onClick = {
                     showMenu = false
                     onDelete()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("⇱ Move") },
-                onClick = {
-                    showMenu = false
-                    onLongPress()
                 },
             )
         }

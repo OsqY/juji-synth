@@ -366,6 +366,53 @@ object SynthEngine {
         enabled: Boolean,
     ) = nativeSetPadSynthEnabled(padIndex, enabled)
 
+    /**
+     * Return a default synth params array (39 floats) that produces an audible saw wave.
+     * Used when enabling synth mode on a pad so the user hears something immediately.
+     */
+    fun defaultSynthParams(): FloatArray =
+        floatArrayOf(
+            1.0f, // 0: osc1.level
+            0.0f, // 1: osc2.level
+            1.0f, // 2: osc1.waveform (Saw)
+            0.0f, // 3: osc2.waveform
+            0.0f, // 4: detune
+            0.0f, // 5: subOscLevel
+            0.0f, // 6: noiseLevel
+            0.0f, // 7: oscMix (osc1 only)
+            0.0f, // 8: syncEnabled
+            0.8f, // 9: filter.cutoff (open)
+            0.0f, // 10: filter.resonance
+            0.0f, // 11: filter.mode (lowpass)
+            0.0f, // 12: filter.envelopeAmount
+            0.01f, // 13: amp attack
+            0.3f, // 14: amp decay
+            0.7f, // 15: amp sustain
+            0.2f, // 16: amp release
+            0.01f, // 17: filter attack
+            0.3f, // 18: filter decay
+            0.7f, // 19: filter sustain
+            0.2f, // 20: filter release
+            1.0f, // 21: lfo1.rate
+            0.0f, // 22: lfo1.depth
+            0.0f, // 23: lfo1.waveform
+            1.0f, // 24: lfo2.rate
+            0.0f, // 25: lfo2.depth
+            0.0f, // 26: lfo2.waveform
+            0.0f, // 27: reverb.mix
+            0.5f, // 28: reverb.decay
+            0.0f, // 29: delay.mix
+            0.5f, // 30: delay.time
+            0.0f, // 31: delay.feedback
+            0.0f, // 32: distortion.drive
+            0.0f, // 33: distortion.mix
+            0.0f, // 34: effects.bypass (false = effects on)
+            0.3f, // 35: chorus.rate
+            0.0f, // 36: chorus.depth
+            0.0f, // 37: chorus.mix
+            0.8f, // 38: master.volume
+        )
+
     // Transport and scheduled events
     fun scheduleNoteOn(
         trackIndex: Int,

@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class AutomationPoint(
     val position: Long = 0L,
-    val value: Float = 0.0f
+    val value: Float = 0.0f,
 )
 
 /**
@@ -24,7 +24,7 @@ data class AutomationPoint(
 data class AutomationClip(
     val trackIndex: Int = 0,
     val paramIndex: Int = 0,
-    val points: List<AutomationPoint> = emptyList()
+    val points: List<AutomationPoint> = emptyList(),
 )
 
 /**
@@ -39,7 +39,46 @@ data class InsertFxSlot(
     val slotIndex: Int = 0,
     val effectType: Int = 0,
     val bypass: Boolean = false,
-    val params: Map<Int, Float> = emptyMap()
+    val params: Map<Int, Float> = emptyMap(),
+)
+
+/**
+ * Serializable mirror of the cached pad parameters kept in
+ * [com.jujidaw.ui.pads.PadParams]. Lives in the project layer so project
+ * persistence never depends on the UI package.
+ */
+@Serializable
+data class PadParamValues(
+    val pitch: Float = 0f,
+    val pan: Float = 0f,
+    val volume: Float = 1f,
+    val attack: Float = 0f,
+    val release: Float = 0f,
+    val filterCutoff: Float = 1f,
+    val filterResonance: Float = 0f,
+    val reverse: Boolean = false,
+    val loop: Boolean = false,
+    val oneShot: Boolean = true,
+    val useFilter: Boolean = false,
+    val synthMode: Boolean = false,
+    val synthRootNote: Int = 60,
+    val sliceStart: Float = 0f,
+    val sliceEnd: Float = 1f,
+    val chokeGroup: Int = 0,
+)
+
+/**
+ * Persisted per-pad state: the sample file path backing the pad, the display
+ * name, and the cached parameter snapshot.
+ *
+ * `samplePath` is stored absolute so a reload finds the file again; empty
+ * means an unloaded pad.
+ */
+@Serializable
+data class PadSettings(
+    val samplePath: String = "",
+    val name: String = "",
+    val params: PadParamValues = PadParamValues(),
 )
 
 /** Per-track mixer channel state. */
@@ -52,14 +91,14 @@ data class TrackState(
     val arm: Boolean = false,
     val sendALevel: Float = 0.0f,
     val sendBLevel: Float = 0.0f,
-    val insertFx: List<InsertFxSlot> = emptyList()
+    val insertFx: List<InsertFxSlot> = emptyList(),
 )
 
 /** Send/return bus mixer state (bus A or B). */
 @Serializable
 data class BusState(
     val faderDb: Float = 0.0f,
-    val insertFx: List<InsertFxSlot> = emptyList()
+    val insertFx: List<InsertFxSlot> = emptyList(),
 )
 
 /**
@@ -73,7 +112,7 @@ data class MixerState(
     val tracks: List<TrackState> = List(16) { TrackState() },
     val busA: BusState = BusState(),
     val busB: BusState = BusState(),
-    val masterFaderDb: Float = 0.0f
+    val masterFaderDb: Float = 0.0f,
 )
 
 /**
@@ -103,5 +142,7 @@ data class Project(
     val midiMappings: List<MidiMapping> = emptyList(),
     val samplePaths: List<String> = emptyList(),
     val automation: List<AutomationClip> = emptyList(),
-    val trackSynthStates: Map<Int, SynthState> = emptyMap()
+    val trackSynthStates: Map<Int, SynthState> = emptyMap(),
+    /** Per-pad state (32 entries, bank A then bank B). Added for pad autosave. */
+    val pads: List<PadSettings> = emptyList(),
 )

@@ -10,17 +10,39 @@ package com.jujidaw.engine
  * [controlledPlayheadSample] to set the value returned by [getPlayheadSample].
  */
 class FakeSynthEngineScheduler : SynthEngineScheduler {
-
     // ---- recorded call data ----
 
-    data class NoteOnEvent(val trackIndex: Int, val note: Int, val velocity: Float)
-    data class NoteOffEvent(val trackIndex: Int, val note: Int)
-    data class PadTriggerEvent(val trackIndex: Int, val padIndex: Int, val velocity: Float)
-    data class AutomationEvent(val trackIndex: Int, val paramIndex: Int, val value: Float, val targetSample: Long)
+    data class NoteOnEvent(
+        val trackIndex: Int,
+        val note: Int,
+        val velocity: Float,
+        val targetSample: Long,
+    )
+
+    data class NoteOffEvent(
+        val trackIndex: Int,
+        val note: Int,
+        val targetSample: Long,
+    )
+
+    data class PadTriggerEvent(
+        val trackIndex: Int,
+        val padIndex: Int,
+        val velocity: Float,
+        val targetSample: Long,
+    )
+
+    data class AutomationEvent(
+        val trackIndex: Int,
+        val paramIndex: Int,
+        val value: Float,
+        val targetSample: Long,
+    )
+
     data class AudioClipStartEvent(
         val clipId: String,
         val trackIndex: Int,
-        val startOffsetInBuffer: Int
+        val startOffsetInBuffer: Int,
     )
 
     val noteOnEvents = mutableListOf<NoteOnEvent>()
@@ -61,22 +83,41 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
 
     // ---- interface implementation ----
 
-    override fun scheduleNoteOn(trackIndex: Int, note: Int, velocity: Float): Boolean {
-        noteOnEvents.add(NoteOnEvent(trackIndex, note, velocity))
+    override fun scheduleNoteOn(
+        trackIndex: Int,
+        note: Int,
+        velocity: Float,
+        targetSample: Long,
+    ): Boolean {
+        noteOnEvents.add(NoteOnEvent(trackIndex, note, velocity, targetSample))
         return true
     }
 
-    override fun scheduleNoteOff(trackIndex: Int, note: Int): Boolean {
-        noteOffEvents.add(NoteOffEvent(trackIndex, note))
+    override fun scheduleNoteOff(
+        trackIndex: Int,
+        note: Int,
+        targetSample: Long,
+    ): Boolean {
+        noteOffEvents.add(NoteOffEvent(trackIndex, note, targetSample))
         return true
     }
 
-    override fun schedulePadTrigger(trackIndex: Int, padIndex: Int, velocity: Float): Boolean {
-        padTriggers.add(PadTriggerEvent(trackIndex, padIndex, velocity))
+    override fun schedulePadTrigger(
+        trackIndex: Int,
+        padIndex: Int,
+        velocity: Float,
+        targetSample: Long,
+    ): Boolean {
+        padTriggers.add(PadTriggerEvent(trackIndex, padIndex, velocity, targetSample))
         return true
     }
 
-    override fun scheduleAutomation(trackIndex: Int, paramIndex: Int, value: Float, targetSample: Long): Boolean {
+    override fun scheduleAutomation(
+        trackIndex: Int,
+        paramIndex: Int,
+        value: Float,
+        targetSample: Long,
+    ): Boolean {
         scheduledAutomation.add(AutomationEvent(trackIndex, paramIndex, value, targetSample))
         return true
     }
@@ -85,7 +126,11 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         clearScheduledEventsCount++
     }
 
-    override fun setTransport(playing: Boolean, recording: Boolean, tempoBpm: Float) {
+    override fun setTransport(
+        playing: Boolean,
+        recording: Boolean,
+        tempoBpm: Float,
+    ) {
         lastTransportPlaying = playing
         lastTransportRecording = recording
         lastTransportTempoBpm = tempoBpm
@@ -98,13 +143,21 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         controlledPlayheadSample = sample
     }
 
-    override fun setLoop(enabled: Boolean, startSample: Long, endSample: Long) {
+    override fun setLoop(
+        enabled: Boolean,
+        startSample: Long,
+        endSample: Long,
+    ) {
         lastLoopEnabled = enabled
         lastLoopStartSample = startSample
         lastLoopEndSample = endSample
     }
 
-    override fun setPunchRange(enabled: Boolean, inSample: Long, outSample: Long) {
+    override fun setPunchRange(
+        enabled: Boolean,
+        inSample: Long,
+        outSample: Long,
+    ) {
         lastPunchEnabled = enabled
         lastPunchInSample = inSample
         lastPunchOutSample = outSample
@@ -115,7 +168,11 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         controlledSequencerEnabled = enabled
     }
 
-    override fun startAudioClip(clipId: String, trackIndex: Int, startOffsetInBuffer: Int): Boolean {
+    override fun startAudioClip(
+        clipId: String,
+        trackIndex: Int,
+        startOffsetInBuffer: Int,
+    ): Boolean {
         audioClipStarts.add(AudioClipStartEvent(clipId, trackIndex, startOffsetInBuffer))
         return true
     }

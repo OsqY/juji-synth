@@ -12,6 +12,7 @@ import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TimeSignature
 import com.jujidaw.model.TransportPosition
 import com.jujidaw.project.AutomationPoint
+import com.jujidaw.project.ProjectAutosave
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -338,6 +339,18 @@ class SequencerViewModel(
                 if (index == _uiState.value.selectedPatternId) pattern else sp.toStepPattern()
             }
         transportController.loadPatterns(allPatterns)
+        scheduleAutosave()
+    }
+
+    /**
+     * Debounced auto-save so pattern edits survive a crash or forced kill
+     * (the [com.jujidaw.MainActivity] onStop save only fires on background).
+     */
+    private fun scheduleAutosave() {
+        ProjectAutosave.scheduleAutoSave(
+            JujiDawApp.instance,
+            transportController,
+        )
     }
 
     override fun onCleared() {

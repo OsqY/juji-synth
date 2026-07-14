@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewModule
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -23,8 +25,11 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +62,9 @@ import com.jujidaw.ui.theme.*
 import com.jujidaw.ui.timeline.TimelineScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+
+private const val MIN_BPM = 30f
+private const val MAX_BPM = 300f
 
 private enum class MainTab(
     val label: String,
@@ -233,6 +241,7 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
     var transportState by remember {
         mutableStateOf(transportController.transportState)
     }
+    var showBpmDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (isActive) {
@@ -241,40 +250,45 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
         }
     }
 
+    if (showBpmDialog) {
+        BpmEditDialog(
+            currentBpm = transportState.tempoBpm,
+            onDismiss = { showBpmDialog = false },
+            onConfirm = { bpm ->
+                transportController.setTempo(bpm)
+                showBpmDialog = false
+            },
+        )
+    }
+
     Row(
         modifier =
             modifier
-                .height(44.dp)
+                .height(48.dp)
                 .background(BgPanel)
                 .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Play / Stop
+        // Transport group: [Play][Stop][Record][Reset]
         TransportMiniButton(
-            label = if (transportState.playing) "\u25A0" else "\u25B6",
+            label = "\u25B6",
             active = transportState.playing,
             activeColor = TransportGreen,
-            onClick = {
-                if (transportState.playing) {
-                    transportController.stop()
-                } else {
-                    transportController.play()
-                }
-            },
+            onClick = { if (!transportState.playing) transportController.play() },
+            modifier = Modifier.size(36.dp),
         )
-
-        // Record arm
         TransportMiniButton(
-            label = "\u25CF",
-            active = transportState.recording,
+            label = "\u25A0",
+            active = false,
             activeColor = TransportRed,
-            onClick = {
-                transportController.setRecording(!transportState.recording)
-            },
+            onClick = { transportController.stop() },
+            modifier = Modifier.size(36.dp),
         )
-
-        // Reset
+        RecordButton(
+            recording = transportState.recording,
+            onClick = { transportController.setRecording(!transportState.recording) },
+        )
         TransportMiniButton(
             label = "\u21BA",
             active = false,
@@ -283,11 +297,12 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
                 transportController.stop()
                 transportController.seek(com.jujidaw.model.TransportPosition())
             },
+            modifier = Modifier.size(32.dp),
         )
 
-        Spacer(modifier = Modifier.width(4.dp))
+        GroupDivider()
 
-        // Time LCD
+        // Position: bar|beat|step
         val step = transportState.position.tick / TICKS_PER_STEP
         Text(
             text = "${transportState.position.bar + 1}|${transportState.position.beat + 1}|${step + 1}",
@@ -297,17 +312,66 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
         )
 
-        Spacer(modifier = Modifier.weight(1f))
+        GroupDivider()
 
-        // BPM
-        Text(
-            text = "%.1f".format(transportState.tempoBpm) + " BPM",
-            color = KnobGreen,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+        // BPM group — tap chip to edit (dialog, 30..300); +/- nudge by 1 BPM.
+        BpmChip(
+            bpm = transportState.tempoBpm,
+            onTap = { showBpmDialog = true },
+            onNudge = { delta ->
+                transportController.setTempo(
+                    (transportState.tempoBpm + delta).coerceIn(MIN_BPM, MAX_BPM),
+                )
+            },
         )
     }
+}
+
+/**
+ * Tempo edit dialog: numeric field + slider, clamped to [MIN_BPM]..[MAX_BPM].
+ */
+@Composable
+private fun BpmEditDialog(
+    currentBpm: Float,
+    onDismiss: () -> Unit,
+    onConfirm: (Float) -> Unit,
+) {
+    var text by remember { mutableStateOf("%.1f".format(currentBpm)) }
+    val parsed = text.toFloatOrNull()
+    val clamped = parsed?.coerceIn(MIN_BPM, MAX_BPM) ?: currentBpm
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tempo (BPM)") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { value ->
+                        text = value.filter { it.isDigit() || it == '.' }
+                    },
+                    singleLine = true,
+                    label = { Text("$MIN_BPM..$MAX_BPM") },
+                    isError = parsed == null || parsed < MIN_BPM || parsed > MAX_BPM,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Slider(
+                    value = clamped,
+                    onValueChange = { text = "%.1f".format(it) },
+                    valueRange = MIN_BPM..MAX_BPM,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(clamped) },
+                enabled = parsed != null && parsed >= MIN_BPM && parsed <= MAX_BPM,
+            ) { Text("Set") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
@@ -321,7 +385,6 @@ private fun TransportMiniButton(
     Box(
         modifier =
             modifier
-                .size(32.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(if (active) activeColor else BgGunmetal)
                 .border(
@@ -336,6 +399,94 @@ private fun TransportMiniButton(
             color = if (active) Color.White else TextPrimary,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun RecordButton(
+    recording: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (recording) TransportRed.copy(alpha = 0.25f) else BgGunmetal)
+                .border(
+                    1.dp,
+                    if (recording) TransportRed else TransportRed.copy(alpha = 0.6f),
+                    RoundedCornerShape(8.dp),
+                ).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Unambiguous red filled circle — the Record arm control.
+        Box(
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(TransportRed),
+        )
+    }
+}
+
+@Composable
+private fun GroupDivider() {
+    Box(
+        modifier =
+            Modifier
+                .width(1.dp)
+                .height(24.dp)
+                .background(PanelHighlight.copy(alpha = 0.4f)),
+    )
+}
+
+@Composable
+private fun BpmChip(
+    bpm: Float,
+    onTap: () -> Unit,
+    onNudge: (Float) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(BgGunmetal)
+                .border(1.dp, KnobGreen.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                .clickable(onClick = onTap)
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = "BPM:",
+            color = TextSecondary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = "%d".format(bpm.toInt()),
+            color = KnobGreen,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+        )
+        TransportMiniButton(
+            label = "\u2212",
+            active = false,
+            activeColor = KnobGreen,
+            onClick = { onNudge(-1f) },
+            modifier = Modifier.size(26.dp),
+        )
+        TransportMiniButton(
+            label = "+",
+            active = false,
+            activeColor = KnobGreen,
+            onClick = { onNudge(1f) },
+            modifier = Modifier.size(26.dp),
         )
     }
 }

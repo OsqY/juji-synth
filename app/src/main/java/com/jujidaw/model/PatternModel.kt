@@ -44,7 +44,10 @@ data class NoteEvent(
  */
 @Serializable
 data class Pattern(
-    val id: Int, // 0..15
+    // 0..15 = user patterns; 1000..1015 = cached pad-trigger patterns
+    // (see TimelineViewModel.PAD_PATTERN_ID_BASE). Resolved by id via
+    // List.find, never used as a fixed-size array index.
+    val id: Int,
     val name: String = "Pattern ${id + 1}",
     val trackIndex: Int = 0, // default mixer channel
     val lengthSteps: Int = 16, // 1..64, step-grid length
@@ -53,7 +56,7 @@ data class Pattern(
     val steps: List<Step?> = emptyList(), // step-grid mirror (optional)
 ) {
     init {
-        require(id in 0..15) { "Pattern id must be between 0 and 15" }
+        require(id >= 0) { "Pattern id must be non-negative" }
         require(trackIndex in 0..15) { "Track index must be between 0 and 15" }
         require(lengthSteps in 1..64) { "Pattern length must be between 1 and 64 steps" }
         require(lengthTicks > 0) { "Pattern length in ticks must be positive" }

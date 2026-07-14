@@ -1,0 +1,277 @@
+# Pads and Timeline — User Workflow
+
+## Pads Section
+
+The Pads screen is the central sound source in Juji-Synth. It presents a **4×4 grid** (16 pads)
+with **two banks (A and B)**, giving **32 pad slots** total. Each pad holds either an imported
+audio sample or an independent synthesizer voice.
+
+### What Each Control Does
+
+Select a pad by tapping it on the grid. The pad's current sample name appears above the grid.
+Below the grid, two rows of action buttons and a parameter section let you shape the sound.
+
+**Action buttons (above the knobs):**
+
+| Button | What it does |
+| -------- | ------------- |
+| **Import Audio** | Opens the Android system file picker (`audio/*`). The selected file is converted to WAV via `AudioConverter`, copied into `…/samples/pad_<n>_<ts>.wav`, and loaded into the C++ sampler with `SynthEngine.loadSampleToPad`. |
+| **Chop** | Slices the selected pad's loaded sample into 16 equal parts and spreads the slices across all 16 pads in the current bank. Useful for chopping breaks or loops. |
+| **Stretch** | Opens the time-stretch dialog. Enter the original BPM and a target BPM; the engine applies async time-stretching with pitch preserved (0 semitones shift). |
+| **Edit** | Opens the per-pad edit bottom sheet with all continuous parameters and mode toggles. |
+
+**Continuous parameters (knobs in the Edit sheet):**
+
+| Knob | Range | Description |
+| ------ | ------- | ------------- |
+| **Tune** | −24 … +24 semitones | Pitch shift relative to the original sample. |
+| **Volume** | 0 … 100% | Per-pad gain. |
+| **Pan** | −100 … +100 | Stereo position (negative = left, positive = right). |
+| **Attack** | 0 … 1 | Amplitude envelope attack time. |
+| **Release** | 0 … 1 | Amplitude envelope release time. |
+| **Filter** (Cutoff) | 0 … 100% | Low-pass filter cutoff frequency. Only active when the **Filter** toggle is on. |
+| **Resonance** | 0 … 100% | Filter resonance/Q. Only active when the **Filter** toggle is on. |
+
+**Mode toggles (in the Edit sheet):**
+
+| Toggle | What it does |
+| -------- | ------------- |
+| **Reverse** | Plays the sample backward. |
+| **One-Shot** | Plays the full sample on every trigger (ignores note-off / key release). |
+| **Filter** | Enables the per-pad low-pass filter. |
+| **Loop** | Loops the sample playback. |
+| **Synth** | Switches the pad from sample playback to an independent per-pad synthesizer. When enabled, a **Root Note** selector appears so the pad responds chromatically to MIDI/keyboard input. |
+
+**Velocity:** Touch Y-position on the pad button maps to MIDI velocity 1–127 (top of the pad = full velocity, bottom = soft).
+
+### How to Import a Sample
+
+1. Navigate to the **Pads** tab.
+2. Tap the target pad on the 4×4 grid (e.g. Pad 1) to select it.
+3. Tap the **Import Audio** button.
+4. The Android file picker opens — browse to an audio file (MP3, WAV, OGG, etc.).
+5. The app converts the file to WAV format, copies it into the project's samples directory, and loads it into the pad's sampler slot.
+6. The pad button changes color to indicate it now contains a loaded sample.
+7. Tap the pad to preview the sound. Touch higher on the pad for louder velocity.
+
+> **Note:** Imported samples are published to `PadSessionStore` for project autosave.
+> Sample paths are persisted so they can be restored when you reopen the project.
+
+### How to Assign a Synth to a Pad
+
+1. Select the target pad on the grid.
+2. Tap **Edit** to open the per-pad edit sheet.
+3. Toggle the **Synth** switch on.
+4. The pad switches from sample playback to a per-pad synthesizer voice.
+5. A **Root Note** selector appears — set the base note for chromatic playback.
+6. To configure the synth's oscillators, filter, envelopes, LFOs, and effects in detail, switch to the **Synth** tab, select the same pad from the pad selector, and edit presets there.
+
+> **Note:** The Synth toggle on PadsScreen sets the mode flag. Full synth parameter
+> editing (oscillators, ADSR, LFO, effects, presets) is done through the dedicated
+> **Synth** screen, which has its own pad target selector.
+
+### Pad Banks (A/B)
+
+- **Bank A** contains pads 1–16 (global indices 0–15).
+- **Bank B** contains pads 17–32 (global indices 16–31).
+- Tap the **A/B** toggle button above the grid to switch between banks.
+- Each bank has its own independent set of 16 pads. Loading a sample or assigning a synth on Bank A does not affect Bank B.
+- The engine's `setSamplerBank()` call is made when you switch, syncing the active bank to the C++ layer.
+
+---
+
+## Timeline Section
+
+The Timeline (Arrangement) screen is where you arrange clips into a song. It displays
+**16 track lanes** with pattern and audio clips, a transport toolbar, horizontal zoom and scroll,
+snap-to-grid editing, and an automation lane.
+
+### Layout Overview
+
+```
+┌──────────────────────────────────────────────────┐
+│  Pad Strip (P1 … P16)       ← tap to drop clips  │
+├──────────────────────────────────────────────────┤
+│  Pattern Selector (1–16)    ← choose active pattern│
+├──────────────────────────────────────────────────┤
+│  Transport Strip                                  │
+│  Row 1: Loop On/Off | Loop Start | Loop End       │
+│         Punch On/Off | Punch In | Punch Out       │
+│  Row 2: ◀ Nudge ▶ | Snap selector | Zoom +/−    │
+├──────────────────────────────────────────────────┤
+│  T1  ████████░░░░░░████████░░░░░░░░░░            │  ← Track 1
+│  T2  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░            │  ← Track 2
+│  T3  ░░░░████████████░░░░░░░░░░░░░░░░            │  ← Track 3
+│  …   (16 tracks total)                            │
+├──────────────────────────────────────────────────┤
+│  Automation Lane                                  │
+│  (Filter Cutoff, Amp Level, LFO Rate, Master Vol) │
+└──────────────────────────────────────────────────┘
+```
+
+- Each track lane (**T1–T16**) is a horizontal row where clips sit.
+- **Pattern clips** appear in amber; **audio clips** appear in cyan.
+- Muted clips are dimmed.
+- The playhead (vertical line) shows the current playback position.
+- Horizontal scrolling follows the playhead when **Follow** is enabled.
+
+> **Important:** When you enter the Timeline, the internal step sequencer is
+> automatically disabled (`setSequencerEnabled(false)`) so arrangement playback
+> and the step launcher don't fire simultaneously. It re-enables when you leave.
+
+### Transport Bar Controls (Play, Record, BPM, Loop, Punch)
+
+The **global transport bar** is always visible at the bottom of the screen (portrait) or side
+rail (landscape), regardless of which tab you're on.
+
+| Control | Description |
+| --------- | ------------- |
+| **▶ / ■** | **Play / Stop.** Toggles playback via `TransportController.play()`/`stop()`. Stop clears scheduled events, releases held notes, resets the step counter, and re-enables the internal step sequencer. |
+| **●** | **Record arm.** Toggles recording. When punch is enabled, recording is confined to the punch in/out range. |
+| **↺** | **Reset.** Stops playback and seeks the playhead back to bar 1, beat 1, step 1. |
+| **Time LCD** | Displays `Bar+1 | Beat+1 | Step+1` in monospace amber. Refreshes every 50 ms. |
+| **BPM** | Tap the BPM display to open a numeric entry + slider dialog. Valid range: **30–300 BPM**. Calls `setTempo()` on the engine. |
+
+The **Timeline toolbar** (above the track lanes) adds these controls:
+
+| Control | Description |
+| --------- | ------------- |
+| **Loop: On/Off** | Toggles the loop region. When enabled, playback wraps between Loop Start and Loop End. |
+| **Loop Start** | Sets the loop start point to the current playhead position. |
+| **Loop End** | Sets the loop end point to the current playhead position. |
+| **Punch: On/Off** | Toggles punch recording. When enabled and recording is armed, audio is recorded only within the punch in/out range. |
+| **● Punch In** | Sets the punch-in point to the current playhead position. |
+| **● Punch Out** | Sets the punch-out point to the current playhead position. |
+| **◀ / ▶** | Nudges the playhead backward or forward by one step (snap-dependent tick amount). |
+| **Snap** | Selects the grid snap resolution: **Bar**, **1/4**, **1/8**, or **1/16**. All clip placement and movement snaps to this grid. |
+| **Zoom +/−** | Adjusts horizontal zoom (range: 0.2× to 5×). |
+
+### How to Place a Pad on the Timeline
+
+1. Navigate to the **Timeline** tab.
+2. Select a **track lane** (T1–T16) by tapping the track header on the left.
+3. Optionally select a **pattern** (1–16) from the pattern selector strip.
+4. Tap one of the **pad buttons (P1–P16)** in the pad strip at the top of the timeline.
+5. A **pad-trigger clip** is created on the selected track at the current playhead position.
+   - The clip is a `PatternClip` with `padIndex` set, referencing a cached pad-trigger pattern (IDs 1000–1015).
+   - Default clip duration is 4 beats (1 bar at the current time signature).
+   - The clip snaps to the active grid resolution.
+6. You can also tap an **empty area** on a track lane to place a pattern clip at that tick position.
+
+> **Note:** Pad-trigger clips (placed via the P1–P16 strip) carry a `padIndex` and route
+> through the sampler. Generic pattern clips (placed by tapping empty lane space) use the
+> selected pattern and route through the note scheduler.
+
+### How to Move, Delete, Trim Clips
+
+| Action | Gesture |
+| -------- | --------- |
+| **Toggle mute** | **Tap** on a clip. Muted clips are dimmed and silent during playback. |
+| **Move** | **Long-press** on a clip, then drag. The clip snaps to the grid (tick + track) as you move it. Release to drop. |
+| **Trim** | Drag the **right-edge handle** (small white bar on the clip's right side) horizontally. Minimum duration is one step (`TICKS_PER_STEP`). |
+| **Delete** | Tap the **three-dot menu** (⋮) in the top-right corner of the clip, then select **🗑 Delete** from the dropdown menu. |
+
+Clip colors:
+
+- **Amber** = pattern clip (references a sequencer pattern)
+- **Cyan** = audio clip (references a sample file)
+- **Dimmed** = muted clip
+
+### Loop and Punch Recording
+
+**Loop playback:**
+
+1. Move the playhead to where you want the loop to start.
+2. Tap **Loop Start** in the timeline toolbar.
+3. Move the playhead to where you want the loop to end.
+4. Tap **Loop End**.
+5. Tap **Loop: On** to enable looping.
+6. Press **▶ Play** — playback wraps between the start and end points.
+7. The loop region is synced to the C++ engine via `SynthEngine.setLoop(enabled, startSample, endSample)`.
+8. On loop wrap, the playhead re-seeks and stale scheduled events are cleared.
+
+**Punch recording:**
+
+1. Arm recording with the **●** button in the global transport bar.
+2. Set the punch-in point: move the playhead, then tap **● Punch In**.
+3. Set the punch-out point: move the playhead, then tap **● Punch Out**.
+4. Tap **Punch: On** to enable punch mode.
+5. Press **▶ Play** — recording is active only between the punch-in and punch-out points. Outside that range, playback plays back existing clips without recording.
+6. The punch range is pushed to the engine as a sample range via `setPunchRange()`.
+
+### Pattern Selector
+
+The pattern selector strip sits between the pad strip and the track lanes. It shows buttons
+for **patterns 1–16**.
+
+- Tap a pattern number to select it as the **active pattern**.
+- When you place a new pattern clip (by tapping the pad strip or an empty lane), it references this active pattern.
+- Pattern data is managed by the Sequencer screen — each pattern holds a 16×16 step grid (or piano roll notes).
+- The timeline also maintains **cached pad-trigger patterns** (IDs 1000–1015) for clips placed via the P1–P16 pad strip.
+
+---
+
+## Typical User Workflow
+
+Here is a step-by-step example of building a simple beat:
+
+### 1. Import a Kick Drum to Pad 1
+
+- Open the **Pads** tab.
+- Tap **Pad 1** in the 4×4 grid to select it.
+- Tap **Import Audio**.
+- Browse to a kick drum sample (WAV, MP3, etc.) and select it.
+- The sample is converted to WAV, loaded into the pad, and the pad button changes color.
+- Tap the pad to preview — touch higher for louder hits.
+
+### 2. Go to Sequencer, Enable Steps on Row 1
+
+- Switch to the **Sequencer** tab.
+- You see a 16×16 grid. Row **P1** corresponds to Pad 1.
+- Tap cells in row P1 to toggle steps on/off (e.g. steps 1, 5, 9, 13 for a four-on-the-floor pattern).
+- Each active step will trigger Pad 1's kick sample when the sequencer plays through it.
+- Use the **pattern selector** (1–16) to choose which pattern you're editing.
+
+### 3. Go to Timeline, Tap Pad 1 Button to Drop a Clip
+
+- Switch to the **Timeline** tab.
+- Select a track lane (e.g. **T1**) by tapping its header.
+- Tap **P1** in the pad strip at the top.
+- A pad-trigger clip appears on T1 at the playhead position, defaulting to 1 bar (4 beats).
+- This clip will play Pad 1's kick when the timeline reaches it.
+
+### 4. Adjust BPM by Tapping the BPM Display
+
+- In the global transport bar (visible at the bottom), tap the **BPM** number.
+- A dialog opens with a numeric input and slider (range 30–300).
+- Enter your desired tempo (e.g. 120) and confirm.
+- The engine updates its tempo in real time.
+
+### 5. Press Play
+
+- Tap **▶** in the global transport bar.
+- The playhead advances. The clip on T1 triggers Pad 1's kick at the right moments.
+- The time LCD shows the current Bar | Beat | Step.
+
+### 6. Adjust Loop Region if Needed
+
+- Move the playhead to the start of the section you want to loop.
+- Tap **Loop Start** in the timeline toolbar.
+- Move the playhead to the end of the section.
+- Tap **Loop End**.
+- Tap **Loop: On**.
+- Playback now repeats the selected region. Adjust the start/end points by repositioning the playhead and tapping the buttons again.
+
+---
+
+## Quick Reference
+
+| Screen | Purpose |
+| -------- | --------- |
+| **Pads** | Load samples, assign synths, shape per-pad sound (tune, volume, pan, filter, envelope) |
+| **Sequencer** | Program step patterns (16 rows × 16/64 steps, 16 patterns) |
+| **Timeline** | Arrange clips into a song (16 tracks, pattern + audio clips, automation) |
+| **Mixer** | Channel levels, pan, mute/solo, send effects |
+| **Synth** | Full subtractive synth editor (oscillators, filter, ADSR, LFO, FX, presets) |
+| **Keyboard** | Live performance input (chromatic grid or piano, note repeat, arpeggiator) |
+| **Project** | Save/load projects, export audio |

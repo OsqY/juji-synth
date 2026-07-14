@@ -695,6 +695,153 @@ class TransportControllerTest {
         )
     }
 
+    @Test
+    fun schedulePatternClip_clipAtNonZeroStartTick_firesPadTriggerWhenPlayheadReachesIt() {
+        // Regression: a pad clip placed anywhere past tick 0 used to resolve
+        // its notes to samples near 0 (ignoring clip.startTick), so the
+        // lookahead window check dropped the trigger and no sound played.
+        val pattern =
+            Pattern(
+                id = 0,
+                lengthSteps = 16,
+                lengthTicks = 960L,
+                notes =
+                    listOf(
+                        NoteEvent(
+                            note = 60,
+                            velocity = 0.8f,
+                            startTick = 0L,
+                            durationTicks = TICKS_PER_STEP.toLong(),
+                            padIndex = 3,
+                        ),
+                    ),
+            )
+        controller.loadPatterns(listOf(pattern))
+
+        val clipStartTick = 9600L // clip placed far down the timeline
+        val clip =
+            PatternClip(
+                id = "pc-offset",
+                trackIndex = 0,
+                startTick = clipStartTick,
+                durationTicks = 960L,
+                patternId = 0,
+                padIndex = 3,
+            )
+        val clipStartSample = controller.tickToSample(clipStartTick, 120f)
+        val lookahead = clipStartSample / 2L // window straddles the clip start
+        val windowEnd = clipStartSample + lookahead
+
+        // Playhead is just before the clip start, within the lookahead window.
+        controller.schedulePatternClip(clip, clipStartSample - 1, windowEnd, 120f)
+
+        assertEquals(
+            "Pad trigger should fire when playhead reaches a clip past tick 0",
+            1,
+            fakeScheduler.padTriggers.size,
+        )
+        assertEquals(
+            "Pad index should be 3",
+            3,
+            fakeScheduler.padTriggers[0].padIndex,
+        )
+        assertEquals(
+            "Pad trigger must carry the sample-accurate start sample so the C++ " +
+                "EventQueue fires it when the playhead reaches it (not immediately)",
+            clipStartSample,
+            fakeScheduler.padTriggers[0].targetSample,
+        )
+    }
+
+    // ================================================================
+    //  9.  Sequencer multi-trigger / de-duplication regression
+    // ================================================================
+
+    @Test
+    fun schedulePatternNotes_repeatedTicks_doesNotRetriggerPadOrNote() {
+        // Regression: with a ~100ms lookahead and ~50ms tick, a note whose
+        // start sample sits inside the window was re-pushed on every overlapping
+        // scheduler tick, so a single step fired twice (or three times when the
+        // launcher and an arrangement clip both referenced the same pattern).
+        val pattern =
+            Pattern(
+                id = 0,
+                lengthSteps = 16,
+                lengthTicks = 960L,
+                notes =
+                    listOf(
+                        NoteEvent(
+                            note = 60,
+                            velocity = 0.8f,
+                            startTick = 0L,
+                            durationTicks = TICKS_PER_STEP.toLong(),
+                            padIndex = 2,
+                        ),
+                        NoteEvent(
+                            note = 64,
+                            velocity = 0.8f,
+                            startTick = 0L,
+                            durationTicks = TICKS_PER_STEP.toLong(),
+                            padIndex = -1,
+                        ),
+                    ),
+            )
+        controller.loadPatterns(listOf(pattern))
+
+        val startSample = controller.tickToSample(0L, 120f)
+        val windowEnd = startSample + 24000L // 500ms lookahead at 48kHz
+
+        // First tick schedules one pad trigger and one note-on.
+        controller.schedulePatternNotes(pattern, startSample, windowEnd, 120f)
+        assertEquals("First tick schedules 1 pad trigger", 1, fakeScheduler.padTriggers.size)
+        assertEquals("First tick schedules 1 note-on", 1, fakeScheduler.noteOnEvents.size)
+        assertEquals("First tick schedules 1 note-off", 1, fakeScheduler.noteOffEvents.size)
+
+        // Second tick, same overlapping window — must NOT re-trigger anything.
+        controller.schedulePatternNotes(pattern, startSample, windowEnd, 120f)
+        assertEquals("Second tick must not re-trigger the pad", 1, fakeScheduler.padTriggers.size)
+        assertEquals("Second tick must not re-trigger note-on", 1, fakeScheduler.noteOnEvents.size)
+        assertEquals("Second tick must not re-trigger note-off", 1, fakeScheduler.noteOffEvents.size)
+
+        // After a stop() (which clears the de-dup set alongside the engine
+        // queue), the same note may legitimately fire again.
+        controller.stop()
+        controller.schedulePatternNotes(pattern, startSample, windowEnd, 120f)
+        assertEquals("After clear, pad fires again", 2, fakeScheduler.padTriggers.size)
+        assertEquals("After clear, note-on fires again", 2, fakeScheduler.noteOnEvents.size)
+    }
+
+    @Test
+    fun scheduleNextBlock_sequencerMode_skipsArrangementClips() {
+        // In sequencer mode the launcher owns playback; an arrangement clip
+        // referencing the same pattern must NOT double-fire the same notes in
+        // the same tick (was the other half of the triple-trigger).
+        val pattern = simplePattern(id = 0, lengthTicks = 960L, noteStart = 60, noteCount = 1)
+        controller.loadPatterns(listOf(pattern))
+
+        val clip =
+            PatternClip(
+                id = "pc-dup",
+                trackIndex = 0,
+                startTick = 0L,
+                durationTicks = 960L,
+                patternId = 0,
+            )
+        controller.loadArrangement(Arrangement(clips = listOf(clip)))
+        controller.isSequencerMode = true
+        controller.queuePattern(0)
+
+        controller.scheduleNextBlock()
+
+        // Only the launcher's single note-on should fire; the arrangement clip
+        // referencing the same pattern is suppressed in sequencer mode.
+        assertEquals(
+            "Sequencer mode must not double-fire arrangement clips",
+            1,
+            fakeScheduler.noteOnEvents.size,
+        )
+    }
+
     // ================================================================
     //  Helpers
     // ================================================================

@@ -7,11 +7,16 @@ import androidx.lifecycle.viewModelScope
 import com.jujidaw.audio.AudioConverter
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.audio.TimeStretchListener
+import com.jujidaw.project.PadParamValues
+import com.jujidaw.project.PadSessionStore
+import com.jujidaw.project.PadSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+
+private const val NUM_PADS = 32
 
 /**
  * Pad parameter IDs (must match JniBridge.cpp nativeSetPadParam switch).
@@ -83,7 +88,99 @@ class PadsViewModel :
 
     init {
         SynthEngine.setTimeStretchListener(this)
+        // Reconcile with any pad state restored by ProjectAutosave.autoLoad.
+        // autoLoad loads samples into the engine and publishes paths/params to
+        // PadSessionStore; this collector syncs UI and loads samples for pads
+        // the store knows about that are not yet active here (handles both
+        // orders: VM created before or after autoLoad runs).
+        viewModelScope.launch {
+            PadSessionStore.state.collect { pads ->
+                reconcilePadStore(pads)
+            }
+        }
     }
+
+    private fun reconcilePadStore(pads: List<PadSettings>) {
+        val cur = _uiState.value
+        var changed = false
+        val loaded = cur.padLoaded.toMutableList()
+        val names = cur.padNames.toMutableList()
+        val params = cur.padParams.toMutableList()
+        for (i in 0 until NUM_PADS) {
+            val s = pads.getOrNull(i) ?: PadSettings()
+            if (s.samplePath.isNotEmpty()) {
+                if (!loaded[i]) {
+                    SynthEngine.loadSampleToPad(s.samplePath, i)
+                    loaded[i] = true
+                    names[i] = s.name.ifEmpty { "Pad ${i + 1}" }
+                    changed = true
+                } else if (names[i] != s.name && s.name.isNotEmpty()) {
+                    names[i] = s.name
+                    changed = true
+                }
+            } else if (loaded[i] && s.name.isEmpty()) {
+                // Persisted as unloaded but UI thinks loaded: keep UI (user may
+                // have imported during this session without a store write yet).
+            }
+            val newParams = fromValues(s.params)
+            if (params[i] != newParams) {
+                params[i] = newParams
+                changed = true
+            }
+        }
+        if (changed) {
+            _uiState.update { it.copy(padLoaded = loaded, padNames = names, padParams = params) }
+        }
+    }
+
+    /** Publish the current UI pad state (path + params) for one pad to the store. */
+    private fun publishPad(globalIndex: Int) {
+        val cur = _uiState.value
+        val existing = PadSessionStore.snapshot().getOrNull(globalIndex) ?: PadSettings()
+        val params = cur.padParams.getOrNull(globalIndex) ?: PadParams()
+        val name = cur.padNames.getOrNull(globalIndex) ?: "Pad ${globalIndex + 1}"
+        PadSessionStore.setPad(globalIndex, PadSettings(existing.samplePath, name, toValues(params)))
+    }
+
+    private fun toValues(p: PadParams): PadParamValues =
+        PadParamValues(
+            pitch = p.pitch,
+            pan = p.pan,
+            volume = p.volume,
+            attack = p.attack,
+            release = p.release,
+            filterCutoff = p.filterCutoff,
+            filterResonance = p.filterResonance,
+            reverse = p.reverse,
+            loop = p.loop,
+            oneShot = p.oneShot,
+            useFilter = p.useFilter,
+            synthMode = p.synthMode,
+            synthRootNote = p.synthRootNote,
+            sliceStart = p.sliceStart,
+            sliceEnd = p.sliceEnd,
+            chokeGroup = p.chokeGroup,
+        )
+
+    private fun fromValues(v: PadParamValues): PadParams =
+        PadParams(
+            pitch = v.pitch,
+            pan = v.pan,
+            volume = v.volume,
+            attack = v.attack,
+            release = v.release,
+            filterCutoff = v.filterCutoff,
+            filterResonance = v.filterResonance,
+            reverse = v.reverse,
+            loop = v.loop,
+            oneShot = v.oneShot,
+            useFilter = v.useFilter,
+            synthMode = v.synthMode,
+            synthRootNote = v.synthRootNote,
+            sliceStart = v.sliceStart,
+            sliceEnd = v.sliceEnd,
+            chokeGroup = v.chokeGroup,
+        )
 
     override fun onCleared() {
         SynthEngine.setTimeStretchListener(null)
@@ -164,14 +261,23 @@ class PadsViewModel :
 
                 val ok = SynthEngine.loadSampleToPad(wavFile.absolutePath, globalIndex)
                 if (ok) {
+                    val dispName = wavFile.nameWithoutExtension
                     _uiState.update { state ->
                         val loaded = state.padLoaded.toMutableList().apply { set(globalIndex, true) }
                         val names =
                             state.padNames.toMutableList().apply {
-                                set(globalIndex, wavFile.nameWithoutExtension)
+                                set(globalIndex, dispName)
                             }
-                        state.copy(padLoaded = loaded, padNames = names)
+                        val params = state.padParams
+                        state.copy(padLoaded = loaded, padNames = names, padParams = params)
                     }
+                    // Persist the absolute sample path + params so the pad
+                    // survives an app restart via ProjectAutosave.
+                    val params0 = _uiState.value.padParams.getOrElse(globalIndex) { PadParams() }
+                    PadSessionStore.setPad(
+                        globalIndex,
+                        PadSettings(wavFile.absolutePath, dispName, toValues(params0)),
+                    )
                     showToast("Sample loaded")
                 } else {
                     showToast("Import failed: file could not be loaded")
@@ -294,6 +400,7 @@ class PadsViewModel :
                 SynthEngine.setPadSynthEnabled(padIdx, false)
             }
         }
+        publishPad(globalIndex)
     }
 
     /**
@@ -323,6 +430,7 @@ class PadsViewModel :
             params[globalIndex] = params[globalIndex].copy(sliceStart = value.coerceIn(0f, 1f))
             state.copy(padParams = params)
         }
+        publishPad(globalIndex)
     }
 
     /** Set slice end (0..1). TODO: wire to engine when setPadSlice is available. */
@@ -337,6 +445,7 @@ class PadsViewModel :
             params[globalIndex] = old.copy(sliceEnd = value.coerceIn(old.sliceStart, 1f))
             state.copy(padParams = params)
         }
+        publishPad(globalIndex)
     }
 
     /** Set choke group. TODO: wire to engine when choke group support is added. */
@@ -350,6 +459,7 @@ class PadsViewModel :
             params[globalIndex] = params[globalIndex].copy(chokeGroup = group.coerceAtLeast(0))
             state.copy(padParams = params)
         }
+        publishPad(globalIndex)
     }
 
     fun consumeToast() {
