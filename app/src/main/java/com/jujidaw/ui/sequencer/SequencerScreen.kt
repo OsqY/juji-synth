@@ -16,10 +16,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -61,9 +61,9 @@ fun SequencerScreen(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(BgGunmetal)
+                .background(Bg0)
                 .statusBarsPadding()
-                .padding(4.dp),
+                .padding(Spacing.sm),
     ) {
         // ── TOP BAR ──
         SequencerTopBar(
@@ -78,7 +78,7 @@ fun SequencerScreen(
             showAutomation = uiState.showAutomation,
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         // ── MAIN EDITOR ──
         Box(modifier = Modifier.weight(1f)) {
@@ -117,7 +117,7 @@ fun SequencerScreen(
             )
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         // ── BOTTOM STEP RAIL ──
         StepRail(
@@ -162,12 +162,12 @@ private fun SequencerTopBar(
     onToggleAutomation: () -> Unit,
     showAutomation: Boolean,
 ) {
-    SynthPanel(title = "SEQUENCER", accentColor = KnobAmber) {
+    SynthPanel(title = "SEQUENCER", accentColor = Primary) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Row 1: pattern selector + actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Pattern selector (1–16)
@@ -178,14 +178,14 @@ private fun SequencerTopBar(
                 )
 
                 // Copy / Paste / Clear
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     SmallActionButton(label = "C", onClick = onCopy)
                     SmallActionButton(label = "P", onClick = onPaste, enabled = uiState.copyBufferPattern != null)
                     SmallActionButton(label = "X", onClick = onClear)
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.sm))
 
             // Row 2: view-mode toggle + BPM
             Row(
@@ -194,23 +194,22 @@ private fun SequencerTopBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // View mode toggle
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Text(
                         text = "A",
-                        color = if (showAutomation) KnobAmber else TextPrimary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
+                        color = if (showAutomation) Primary else OnSurfaceVariant,
+                        style = LabelSmall,
                         modifier =
                             Modifier
+                                .clip(RoundedCornerShape(RadiusSm))
                                 .background(
                                     if (showAutomation) {
-                                        KnobAmber.copy(alpha = 0.4f)
+                                        Primary.copy(alpha = 0.25f)
                                     } else {
-                                        BgPanel.copy(alpha = 0.3f)
+                                        SurfaceContainer
                                     },
-                                    RoundedCornerShape(4.dp),
                                 ).clickable { onToggleAutomation() }
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                     )
                     ViewModeButton(
                         label = "STEP",
@@ -228,13 +227,11 @@ private fun SequencerTopBar(
                 LcdDisplay(
                     value = "%.0f".format(uiState.bpm),
                     label = "BPM",
-                    color = LcdText,
-                    fontSize = 12.sp,
                     modifier = Modifier.width(80.dp),
                 )
 
                 // BPM nudge buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     BpmNudgeButton(text = "-") { onBpmChange(uiState.bpm - 1f) }
                     BpmNudgeButton(text = "+") { onBpmChange(uiState.bpm + 1f) }
                 }
@@ -253,30 +250,38 @@ private fun PatternSelector(
         modifier =
             modifier
                 .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for (id in 0..15) {
             val isSelected = id == selectedId
             Box(
+                // Touch target (≥44dp); visual is the inner 32dp chip.
                 modifier =
                     Modifier
-                        .size(width = 32.dp, height = 32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSelected) KnobAmber else BgPanel)
-                        .border(
-                            1.dp,
-                            if (isSelected) KnobAmber else PanelHighlight.copy(alpha = 0.4f),
-                            RoundedCornerShape(6.dp),
-                        ).clickable { onSelect(id) },
+                        .size(TouchTargetMin)
+                        .clickable { onSelect(id) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "${id + 1}",
-                    color = if (isSelected) Color.Black else TextPrimary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                )
+                Box(
+                    modifier =
+                        Modifier
+                            .size(width = 32.dp, height = 32.dp)
+                            .clip(RoundedCornerShape(RadiusSm))
+                            .background(if (isSelected) Primary.copy(alpha = 0.12f) else SurfaceContainer)
+                            .border(
+                                1.dp,
+                                if (isSelected) Primary else OutlineVariant,
+                                RoundedCornerShape(RadiusSm),
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "${id + 1}",
+                        color = if (isSelected) Primary else OnSurface,
+                        style = LabelSmall,
+                    )
+                }
             }
         }
     }
@@ -289,16 +294,28 @@ private fun SmallActionButton(
     enabled: Boolean = true,
 ) {
     Box(
+        // Touch target (≥44dp); visual is the inner 32dp ghost button.
         modifier =
             Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (enabled) BgPanel else BgPanel.copy(alpha = 0.5f))
-                .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                .size(TouchTargetMin)
                 .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (enabled) TextPrimary else TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Box(
+            modifier =
+                Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(RadiusSm))
+                    .background(if (enabled) Color.Transparent else DisabledFill)
+                    .border(
+                        1.dp,
+                        if (enabled) OutlineVariant else OutlineVariant.copy(alpha = 0.5f),
+                        RoundedCornerShape(RadiusSm),
+                    ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(label, color = if (enabled) OnSurface else DisabledText, style = LabelSmall)
+        }
     }
 }
 
@@ -311,23 +328,23 @@ private fun ViewModeButton(
     Box(
         modifier =
             Modifier
-                .height(28.dp)
+                .height(TouchTargetMin)
                 .widthIn(min = 52.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (selected) KnobAmber.copy(alpha = 0.25f) else BgPanel)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (selected) Primary.copy(alpha = 0.25f) else SurfaceContainer)
                 .border(
                     1.dp,
-                    if (selected) KnobAmber else PanelHighlight.copy(alpha = 0.3f),
-                    RoundedCornerShape(6.dp),
+                    if (selected) Primary else OutlineVariant,
+                    RoundedCornerShape(RadiusSm),
                 ).clickable(onClick = onClick)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = Spacing.md),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            color = if (selected) KnobAmber else TextSecondary,
-            fontSize = 9.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) Primary else OnSurfaceVariant,
+            style = LabelSmall,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
         )
     }
 }
@@ -340,14 +357,14 @@ private fun BpmNudgeButton(
     Box(
         modifier =
             Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(BgPanel)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                .size(TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainer)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(text, color = OnSurface, style = LabelSmall, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -370,8 +387,8 @@ private fun StepSequencerGrid(
     Column(
         modifier = modifier.verticalScroll(vScroll),
     ) {
-        // Shared horizontally-scrollable container for header + grid
-        Box(modifier = Modifier.horizontalScroll(hScroll)) {
+        // Shared horizontally-scrollable container for header + grid (plan: 40dp cells on Bg1)
+        Box(modifier = Modifier.horizontalScroll(hScroll).background(Bg1)) {
             Column {
                 // Header row with step numbers
                 Row(modifier = Modifier.padding(start = 44.dp)) {
@@ -380,18 +397,18 @@ private fun StepSequencerGrid(
                         Box(
                             modifier =
                                 Modifier
-                                    .size(40.dp)
+                                    .size(StepCellSize)
                                     .background(
-                                        if (isCurrent) KnobAmber.copy(alpha = 0.15f) else Color.Transparent,
-                                        RoundedCornerShape(4.dp),
+                                        if (isCurrent) Primary.copy(alpha = 0.15f) else Color.Transparent,
+                                        RoundedCornerShape(RadiusSm),
                                     ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 "$step",
-                                color = if (isCurrent) KnobAmber else TextMuted,
-                                fontSize = 9.sp,
-                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isCurrent) Primary else OnSurfaceVariant,
+                                style = CaptionSmall,
+                                fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
                             )
                         }
                     }
@@ -407,14 +424,13 @@ private fun StepSequencerGrid(
                                     Modifier
                                         .width(44.dp)
                                         .height(36.dp)
-                                        .padding(end = 4.dp),
+                                        .padding(end = Spacing.sm),
                                 contentAlignment = Alignment.CenterEnd,
                             ) {
                                 Text(
                                     "P${track + 1}",
                                     color = TextSecondary,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    style = LabelSmall,
                                 )
                             }
 
@@ -429,6 +445,8 @@ private fun StepSequencerGrid(
                                 val isCurrent = isPlaying && step == (currentStep % 16)
 
                                 StepCellBox(
+                                    trackIndex = track,
+                                    stepIndex = step,
                                     isActive = isActive,
                                     isCurrent = isCurrent,
                                     velocity = cell?.velocity ?: 0,
@@ -446,52 +464,59 @@ private fun StepSequencerGrid(
 
 @Composable
 private fun StepCellBox(
+    trackIndex: Int,
+    stepIndex: Int,
     isActive: Boolean,
     isCurrent: Boolean,
     velocity: Int,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
 ) {
-    val baseColor =
-        when {
-            isActive -> KnobAmber
-            else -> SeqStepInactive
-        }
-    val alpha =
-        when {
-            isActive -> 0.5f + (velocity / 127f) * 0.5f
-            else -> 1f
-        }
+    // Active step fill = the track/clip hue (ClipColors representative anchor).
+    val hue = clipHue(trackIndex)
+    val velFraction = velocity.coerceIn(0, 127) / 127f
+    val beatGroupEdge = stepIndex % 4 == 3
 
     Box(
         modifier =
             Modifier
-                .padding(1.dp)
-                .size(40.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(baseColor.copy(alpha = alpha))
-                .border(
-                    width = if (isCurrent) 2.dp else 1.dp,
+                .size(StepCellSize)
+                .clip(RoundedCornerShape(RadiusSm))
+                .drawBehind {
+                    // Current-step column: Primary-tinted vertical band at 15% alpha.
+                    if (isCurrent) {
+                        drawRect(color = Primary.copy(alpha = 0.15f))
+                    }
+                    if (isActive) {
+                        // Dim full-cell tint of the track/clip hue.
+                        drawRect(color = hue.copy(alpha = 0.3f))
+                        // Velocity bar (clip hue at value-alpha), anchored to the bottom.
+                        val barHeight = size.height * velFraction
+                        drawRect(
+                            color = hue,
+                            topLeft = Offset(0f, size.height - barHeight),
+                            size = Size(size.width, barHeight),
+                        )
+                    } else {
+                        // Inactive recessed fill.
+                        drawRect(color = SurfaceContainerLow)
+                    }
+                }.border(
+                    width = if (isCurrent) 1.5.dp else 1.dp,
                     color =
                         when {
-                            isCurrent && isActive -> Color.White
-                            isCurrent -> KnobAmber
-                            else -> PanelHighlight.copy(alpha = 0.3f)
+                            isCurrent -> Primary
+                            beatGroupEdge -> Outline
+                            else -> OutlineVariant
                         },
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(RadiusSm),
                 ).combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongPress,
                 ),
         contentAlignment = Alignment.Center,
     ) {
-        if (isActive) {
-            Text(
-                text = "\u25CF",
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = 10.sp,
-            )
-        }
+        // Velocity is represented by the bar above; no glyph in cells.
     }
 }
 
@@ -541,17 +566,17 @@ private fun SequencerPianoRoll(
                                 .height(18.dp)
                                 .background(
                                     if (isCurrent) {
-                                        KnobAmber.copy(alpha = 0.25f)
+                                        Primary.copy(alpha = 0.15f)
                                     } else {
-                                        BgPanel.copy(alpha = 0.3f)
+                                        SurfaceContainer.copy(alpha = 0.3f)
                                     },
                                 ),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             "$col",
-                            color = if (isCurrent) KnobAmber else TextMuted,
-                            fontSize = 7.sp,
+                            color = if (isCurrent) Primary else OnSurfaceVariant,
+                            style = CaptionSmall,
                         )
                     }
                 }
@@ -577,18 +602,18 @@ private fun SequencerPianoRoll(
                                     .width(44.dp)
                                     .background(
                                         if (isC) {
-                                            BgPanel.copy(alpha = 0.3f)
+                                            SurfaceContainer.copy(alpha = 0.3f)
                                         } else {
-                                            BgGunmetal
+                                            Bg0
                                         },
                                     ),
                             contentAlignment = Alignment.CenterEnd,
                         ) {
                             Text(
                                 if (isC) "$name$octave" else "",
-                                color = TextSecondary,
-                                fontSize = 8.sp,
-                                modifier = Modifier.padding(end = 4.dp),
+                                color = OnSurfaceVariant,
+                                style = CaptionSmall,
+                                modifier = Modifier.padding(end = Spacing.sm),
                             )
                         }
                     }
@@ -729,7 +754,7 @@ private fun SequencerPianoRoll(
                             val x = col * cellW
                             val isBeat = col % 4 == 0
                             drawLine(
-                                color = PanelHighlight.copy(alpha = if (isBeat) 0.2f else 0.08f),
+                                color = OutlineVariant.copy(alpha = if (isBeat) 0.4f else 0.15f),
                                 start = Offset(x, 0f),
                                 end = Offset(x, totalH),
                                 strokeWidth = if (isBeat) 1.5f else 0.5f,
@@ -741,7 +766,7 @@ private fun SequencerPianoRoll(
                             val note = endNote - row
                             val isC = note % 12 == 0
                             drawLine(
-                                color = PanelHighlight.copy(alpha = if (isC) 0.15f else 0.05f),
+                                color = OutlineVariant.copy(alpha = if (isC) 0.3f else 0.1f),
                                 start = Offset(0f, y),
                                 end = Offset(totalW, y),
                                 strokeWidth = if (isC) 1f else 0.5f,
@@ -759,9 +784,9 @@ private fun SequencerPianoRoll(
                             drawRect(
                                 color =
                                     when {
-                                        noteData.muted -> TextMuted.copy(alpha = 0.4f)
-                                        isSelected -> KnobCyan.copy(alpha = 1f)
-                                        else -> KnobCyan.copy(alpha = 0.7f)
+                                        noteData.muted -> Secondary.copy(alpha = 0.35f)
+                                        isSelected -> Secondary.copy(alpha = 1f)
+                                        else -> Secondary.copy(alpha = 0.7f)
                                     },
                                 topLeft = Offset(x, y + 1f),
                                 size = Size(w, cellH - 2f),
@@ -769,14 +794,14 @@ private fun SequencerPianoRoll(
                             // Velocity overlay
                             val velAlpha = noteData.velocity / 255f
                             drawRect(
-                                color = Color.White.copy(alpha = velAlpha * 0.3f),
+                                color = OnSurface.copy(alpha = velAlpha * 0.25f),
                                 topLeft = Offset(x, y + 1f),
                                 size = Size(w, cellH - 2f),
                             )
                             // Resize handle
                             if (w > cellW * 1.5f) {
                                 drawLine(
-                                    color = Color.White.copy(alpha = 0.3f),
+                                    color = OnSurface.copy(alpha = 0.4f),
                                     start = Offset(x + w - 2f, y + 3f),
                                     end = Offset(x + w - 2f, y + cellH - 3f),
                                     strokeWidth = 1.5f,
@@ -789,7 +814,7 @@ private fun SequencerPianoRoll(
                             val stepInPattern = currentStep % numSteps
                             val playheadX = stepInPattern * cellW
                             drawLine(
-                                color = KnobGreen,
+                                color = Primary,
                                 start = Offset(playheadX, 0f),
                                 end = Offset(playheadX, totalH),
                                 strokeWidth = 2f,
@@ -808,8 +833,8 @@ private fun SequencerPianoRoll(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(56.dp)
-                        .background(BgPanel.copy(alpha = 0.95f), RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .background(SurfaceContainerHigh.copy(alpha = 0.95f), RoundedCornerShape(topStart = RadiusLg, topEnd = RadiusLg))
+                        .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -817,9 +842,8 @@ private fun SequencerPianoRoll(
                 ) {
                     Text(
                         "Vel: ${velEditNote!!.velocity}",
-                        color = TextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        color = OnSurface,
+                        style = MonoMedium,
                         modifier = Modifier.width(56.dp),
                     )
                     Slider(
@@ -832,19 +856,18 @@ private fun SequencerPianoRoll(
                             velEditNote = newNote
                         },
                         valueRange = 0f..127f,
-                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = Spacing.sm),
                         colors =
                             SliderDefaults.colors(
-                                thumbColor = KnobCyan,
-                                activeTrackColor = KnobCyan,
-                                inactiveTrackColor = BgGunmetal,
+                                thumbColor = Secondary,
+                                activeTrackColor = Secondary,
+                                inactiveTrackColor = SurfaceContainerLow,
                             ),
                     )
                     Text(
                         "Done",
-                        color = KnobCyan,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
+                        color = Secondary,
+                        style = LabelSmall,
                         modifier = Modifier.clickable { velEditNote = null },
                     )
                 }
@@ -885,24 +908,23 @@ private fun StepRail(
                 modifier =
                     Modifier
                         .size(width = 18.dp, height = 18.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(RadiusSm))
                         .background(
                             when {
-                                isCurrent -> KnobGreen
-                                else -> BgPanel
+                                isCurrent -> Primary
+                                else -> SurfaceContainer
                             },
                         ).border(
                             1.dp,
-                            if (isCurrent) KnobGreen else PanelHighlight.copy(alpha = 0.3f),
-                            RoundedCornerShape(4.dp),
+                            if (isCurrent) Primary else OutlineVariant,
+                            RoundedCornerShape(RadiusSm),
                         ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     "${step + 1}",
-                    color = if (isCurrent) Color.Black else TextMuted,
-                    fontSize = 7.sp,
-                    fontWeight = FontWeight.Bold,
+                    color = if (isCurrent) OnPrimary else OnSurfaceVariant,
+                    style = CaptionSmall,
                 )
             }
         }
@@ -933,27 +955,26 @@ private fun VelocityPopup(
             modifier =
                 Modifier
                     .width(280.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(BgPanel)
-                    .border(1.dp, PanelHighlight, RoundedCornerShape(12.dp))
-                    .padding(16.dp),
+                    .clip(RoundedCornerShape(RadiusLg))
+                    .background(SurfaceContainerHigh)
+                    .border(1.dp, Outline, RoundedCornerShape(RadiusLg))
+                    .padding(Spacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 "Step Velocity",
-                color = KnobAmber,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
+                color = Primary,
+                style = TitleLarge,
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.lg))
             Text(
                 "$velocity",
-                color = TextPrimary,
+                color = OnSurface,
+                fontFamily = LcdFontFamily,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             Slider(
                 value = velocity.toFloat(),
                 onValueChange = {
@@ -963,24 +984,24 @@ private fun VelocityPopup(
                 valueRange = 0f..127f,
                 colors =
                     SliderDefaults.colors(
-                        thumbColor = KnobAmber,
-                        activeTrackColor = KnobAmber,
-                        inactiveTrackColor = BgGunmetal,
+                        thumbColor = Primary,
+                        activeTrackColor = Primary,
+                        inactiveTrackColor = SurfaceContainerLow,
                     ),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.lg))
             Box(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .height(40.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(KnobAmber.copy(alpha = 0.2f))
-                        .border(1.dp, KnobAmber, RoundedCornerShape(8.dp))
+                        .height(TouchTargetMin)
+                        .clip(RoundedCornerShape(RadiusLg))
+                        .background(Primary.copy(alpha = 0.2f))
+                        .border(1.dp, Primary, RoundedCornerShape(RadiusLg))
                         .clickable(onClick = onDismiss),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Done", color = KnobAmber, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Done", color = Primary, style = LabelSmall)
             }
         }
     }

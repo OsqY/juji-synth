@@ -10,6 +10,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,16 +23,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujidaw.JujiDawApp
@@ -47,8 +52,12 @@ import com.jujidaw.ui.theme.*
  * - Bottom perform FX grid (8 pads).
  * - Bottom sheets for insert FX management and automation placeholder.
  *
- * Phone-first: strips are fixed-width and scroll horizontally; faders are tall
- * enough for finger control.
+ * Visual style: Ableton-inspired dark, compact DAW. Flat 4dp `Outline` fader track with
+ * a 24dp `SurfaceContainerHighest` cap (`OnSurface` 1dp border). Level meter is a
+ * `SurfaceContainerLow` bar with `StateActive` + `StateRecording` (clip) segments.
+ * M/S/R badges are text badges colored by state (`StateSolo`/`StateRecording`/neutral mute).
+ * Pan + send knobs use the `Secondary` (audio signal-flow) accent. Sheets sit on
+ * `SurfaceContainerHigh`. No audio/MIDI/scheduling logic is touched.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,8 +96,8 @@ fun MixerScreen(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(BgGunmetal)
-                .padding(4.dp),
+                .background(Bg1)
+                .padding(Spacing.sm),
     ) {
         MixerToolbar(
             masterState = state.master,
@@ -100,7 +109,7 @@ fun MixerScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         // Horizontally-scrollable strips
         Box(
@@ -111,7 +120,7 @@ fun MixerScreen(
         ) {
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 state.channels.forEachIndexed { index, ch ->
                     ChannelStrip(
@@ -162,7 +171,7 @@ fun MixerScreen(
             }
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         PerformFxGrid(
             activeFx = state.activePerformFx,
@@ -171,13 +180,13 @@ fun MixerScreen(
         )
     }
 
-    // Insert FX bottom sheet
+    // Insert FX bottom sheet — raised popover surface
     if (state.showInsertSheet) {
         ModalBottomSheet(
             onDismissRequest = viewModel::dismissInsertSheet,
-            containerColor = BgPanel,
+            containerColor = SurfaceContainerHigh,
             tonalElevation = 0.dp,
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            shape = RoundedCornerShape(topStart = RadiusLg, topEnd = RadiusLg),
         ) {
             InsertFxSheet(
                 trackIndex = state.selectedChannel,
@@ -190,13 +199,13 @@ fun MixerScreen(
         }
     }
 
-    // Automation placeholder sheet
+    // Automation placeholder sheet — raised popover surface
     if (state.showAutomationSheet) {
         ModalBottomSheet(
             onDismissRequest = viewModel::dismissAutomationSheet,
-            containerColor = BgPanel,
+            containerColor = SurfaceContainerHigh,
             tonalElevation = 0.dp,
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            shape = RoundedCornerShape(topStart = RadiusLg, topEnd = RadiusLg),
         ) {
             AutomationMixerContent(
                 selectedParam = state.selectedAutomationParam,
@@ -226,71 +235,68 @@ private fun MixerToolbar(
     Row(
         modifier =
             modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(BgPanel)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .clip(RoundedCornerShape(RadiusLg))
+                .background(SurfaceContainer)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             text = "MIXER",
-            color = KnobAmber,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
+            color = Primary,
+            style = DisplaySmall,
         )
 
         // Mini master fader + value
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(
                 text = "MST",
                 color = TextSecondary,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
+                style = LabelSmall,
             )
             VerticalFader(
                 value = masterState.faderDb,
                 onValueChange = onMasterFaderChange,
                 modifier =
                     Modifier
-                        .width(36.dp)
+                        .width(44.dp) // hit width bumped 36 -> 44 (cap stays centered)
                         .height(80.dp),
             )
             Text(
                 text = "%.1f".format(masterState.faderDb),
                 color = TextPrimary,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
+                style = CaptionSmall,
                 modifier = Modifier.width(32.dp),
             )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             // MIDI learn indicator
             val learnActive = midiLearnTarget != null
             Box(
                 modifier =
                     Modifier
                         .height(28.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (learnActive) KnobAmber.copy(alpha = 0.3f) else BgGunmetal)
+                        .clip(RoundedCornerShape(RadiusMd))
+                        .background(if (learnActive) MidiLearn.copy(alpha = 0.3f) else SurfaceContainerLow)
                         .border(
-                            1.5.dp,
-                            if (learnActive) KnobAmber else PanelHighlight.copy(alpha = 0.4f),
-                            RoundedCornerShape(6.dp),
+                            1.dp,
+                            if (learnActive) MidiLearn else OutlineVariant,
+                            RoundedCornerShape(RadiusMd),
                         ).clickable {
                             // A long-press on a specific control starts learn;
                             // the toolbar button toggles display of learnable hints.
-                        }.padding(horizontal = 8.dp),
+                        }.padding(horizontal = Spacing.md),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = if (learnActive) "LEARN ${midiLearnTarget?.displayLabel.orEmpty()}" else "MIDI",
-                    color = if (learnActive) KnobAmber else TextPrimary,
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
+                    color = if (learnActive) MidiLearn else OnSurface,
+                    style = CaptionSmall,
                     maxLines = 1,
                 )
             }
@@ -308,18 +314,17 @@ private fun ToolbarActionButton(
         modifier =
             Modifier
                 .height(28.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(BgGunmetal)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(RadiusMd))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusMd))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 10.dp),
+                .padding(horizontal = Spacing.lg),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            color = TextPrimary,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
+            color = OnSurface,
+            style = LabelSmall,
         )
     }
 }
@@ -355,25 +360,25 @@ private fun ChannelStrip(
         modifier =
             modifier
                 .width(76.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isSelected) BgPanel else BgGunmetal)
+                .clip(RoundedCornerShape(RadiusLg))
+                .background(if (isSelected) SurfaceContainerHighest else SurfaceContainer)
                 .border(
-                    width = if (isSelected) 2.dp else 1.dp,
-                    color = if (isSelected) KnobAmber else PanelHighlight.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(8.dp),
+                    width = 1.dp,
+                    color = if (isSelected) Primary else OutlineVariant,
+                    shape = RoundedCornerShape(RadiusLg),
                 ).clickable(onClick = onSelect)
-                .padding(horizontal = 4.dp, vertical = 6.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // Track label
         Text(
             text = "T${trackIndex + 1}",
-            color = if (isSelected) KnobAmber else TextPrimary,
-            fontSize = 10.sp,
+            color = if (isSelected) Primary else OnSurface,
+            style = LabelSmall,
             fontWeight = FontWeight.Bold,
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         // Meter + Fader
         Row(
@@ -387,7 +392,7 @@ private fun ChannelStrip(
                         .width(10.dp)
                         .fillMaxHeight(),
             )
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(Spacing.xs))
             VerticalFader(
                 value = channel.faderDb,
                 onValueChange = onFaderChange,
@@ -399,47 +404,49 @@ private fun ChannelStrip(
             )
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         // Fader value readout
         Text(
             text = "%.1f".format(channel.faderDb),
             color = TextSecondary,
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Bold,
+            style = CaptionSmall,
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
-        // Mute / Solo / Arm
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            SmallToggle("M", channel.mute, onMuteToggle, KnobAmber, onMidiLearn = onMidiLearnMute)
-            SmallToggle("S", channel.solo, onSoloToggle, KnobGreen, onMidiLearn = onMidiLearnSolo)
-            SmallToggle("R", channel.arm, onArmToggle, KnobRed, onMidiLearn = onMidiLearnArm)
+        // Mute / Solo / Arm — text badges colored by state
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            // Mute: neutral muted treatment (mute never invents a new color)
+            SmallToggle("M", channel.mute, onMuteToggle, OnSurfaceVariant, onMidiLearn = onMidiLearnMute)
+            // Solo: warm amber state
+            SmallToggle("S", channel.solo, onSoloToggle, StateSolo, onMidiLearn = onMidiLearnSolo)
+            // Record arm: red state
+            SmallToggle("R", channel.arm, onArmToggle, StateRecording, onMidiLearn = onMidiLearnArm)
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
-        // Pan knob
+        // Pan knob — audio signal-flow accent
         SynthKnob(
             value = (channel.pan + 1f) / 2f,
             onValueChange = { onPanChange(it * 2f - 1f) },
             label = "Pan",
             valueDisplay = "%.0f".format(channel.pan * 100),
-            accentColor = KnobCyan,
-            size = 48.dp,
+            accentColor = Secondary,
+            size = KnobDefaultSize,
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
-        // Send A / B knobs
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Send A / B knobs — audio signal-flow accent
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             SynthKnob(
                 value = channel.sendA.coerceIn(0f, 1f),
                 onValueChange = onSendAChange,
                 label = "A",
                 valueDisplay = "%.0f".format(channel.sendA * 100),
-                accentColor = KnobOrange,
+                accentColor = Secondary,
                 size = 40.dp,
             )
             SynthKnob(
@@ -447,36 +454,38 @@ private fun ChannelStrip(
                 onValueChange = onSendBChange,
                 label = "B",
                 valueDisplay = "%.0f".format(channel.sendB * 100),
-                accentColor = KnobOrange,
+                accentColor = Secondary,
                 size = 40.dp,
             )
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         // Insert FX mini indicators
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             channel.inserts.forEachIndexed { slotIdx, slot ->
                 val color =
                     when {
-                        slot.type == SynthEngine.EffectType.None -> BgGunmetal
-                        slot.bypass -> TextMuted
-                        else -> KnobCyan
+                        slot.type == SynthEngine.EffectType.None -> SurfaceContainerLow
+                        slot.bypass -> TextDisabled
+                        else -> Secondary
+                    }
+                val borderColor =
+                    when {
+                        slot.type == SynthEngine.EffectType.None -> OutlineVariant
+                        slot.bypass -> TextDisabled
+                        else -> Secondary
                     }
                 Box(
                     modifier =
                         Modifier
                             .size(14.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                            .clip(RoundedCornerShape(RadiusXs))
                             .background(color)
                             .border(
                                 1.dp,
-                                if (slot.type != SynthEngine.EffectType.None) {
-                                    if (slot.bypass) TextMuted else KnobCyan
-                                } else {
-                                    PanelHighlight.copy(alpha = 0.3f)
-                                },
-                                RoundedCornerShape(3.dp),
+                                borderColor,
+                                RoundedCornerShape(RadiusXs),
                             ).clickable {
                                 onSelect()
                                 onShowInsertSheet()
@@ -489,8 +498,8 @@ private fun ChannelStrip(
                                 slot.type.name
                                     .first()
                                     .toString(),
-                            color = Color.Black,
-                            fontSize = 7.sp,
+                            color = if (slot.bypass) OnSurface else OnSecondary,
+                            style = CaptionSmall,
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -515,20 +524,20 @@ private fun MasterStrip(
         modifier =
             modifier
                 .width(88.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(BgPanel)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .clip(RoundedCornerShape(RadiusLg))
+                .background(SurfaceContainer)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
+                .padding(horizontal = Spacing.md, vertical = Spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             text = "MST",
-            color = KnobAmber,
-            fontSize = 12.sp,
+            color = OnSurface,
+            style = LabelSmall,
             fontWeight = FontWeight.Bold,
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         Row(
             modifier = Modifier.height(160.dp),
@@ -541,7 +550,7 @@ private fun MasterStrip(
                         .width(12.dp)
                         .fillMaxHeight(),
             )
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(Spacing.sm))
             VerticalFader(
                 value = master.faderDb,
                 onValueChange = onFaderChange,
@@ -553,19 +562,18 @@ private fun MasterStrip(
             )
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.sm))
 
         Text(
             text = "%.1f".format(master.faderDb),
             color = TextPrimary,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
+            style = CaptionSmall,
         )
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// VERTICAL FADER
+// VERTICAL FADER — flat line track + 24dp cap
 // ═══════════════════════════════════════════════════════════════════
 
 @Composable
@@ -636,59 +644,50 @@ private fun VerticalFader(
                     }
                 },
     ) {
-        val thumbHeight = 28.dp
+        val thumbHeight = 24.dp
         val fraction = ((value - min) / range).coerceIn(0f, 1f)
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             val cx = size.width / 2f
-            val trackW = 6.dp.toPx()
+            val trackW = FaderTrackWidth.toPx() // 4dp flat Outline track
             val thumbH = thumbHeight.toPx()
             val halfThumb = thumbH / 2f
             val topY = halfThumb
             val bottomY = size.height - halfThumb
 
-            // Track background
+            // Flat track — single Outline line, value shown by cap position
             drawLine(
-                color = PanelHighlight.copy(alpha = 0.3f),
+                color = Outline,
                 start = Offset(cx, topY),
                 end = Offset(cx, bottomY),
                 strokeWidth = trackW,
                 cap = StrokeCap.Round,
             )
 
-            // Active track
             val thumbY = bottomY - (bottomY - topY) * fraction
-            drawLine(
-                color = KnobAmber,
-                start = Offset(cx, thumbY),
-                end = Offset(cx, bottomY),
-                strokeWidth = trackW,
-                cap = StrokeCap.Round,
-            )
-
-            // Thumb body
-            val thumbW = 32.dp.toPx()
+            val thumbW = FaderCapWidth.toPx() // 24dp cap
             val thumbLeft = cx - thumbW / 2f
             val thumbTop = thumbY - halfThumb
+
+            // Cap fill — SurfaceContainerHighest
             drawRoundRect(
-                color = BgPanel,
+                color = SurfaceContainerHighest,
                 topLeft = Offset(thumbLeft, thumbTop),
                 size = Size(thumbW, thumbH),
-                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+                cornerRadius = CornerRadius(RadiusSm.toPx(), RadiusSm.toPx()),
             )
+            // Cap border — OnSurface 1dp
             drawRoundRect(
-                color = KnobAmber,
+                color = OnSurface,
                 topLeft = Offset(thumbLeft, thumbTop),
                 size = Size(thumbW, thumbH),
-                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
-                style =
-                    androidx.compose.ui.graphics.drawscope
-                        .Stroke(width = 2.dp.toPx()),
+                cornerRadius = CornerRadius(RadiusSm.toPx(), RadiusSm.toPx()),
+                style = Stroke(width = 1.dp.toPx()),
             )
 
-            // Thumb center line
+            // Cap grip line
             drawLine(
-                color = TextSecondary,
+                color = OnSurfaceVariant,
                 start = Offset(cx - 6.dp.toPx(), thumbY),
                 end = Offset(cx + 6.dp.toPx(), thumbY),
                 strokeWidth = 1.5f,
@@ -698,7 +697,7 @@ private fun VerticalFader(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// LEVEL METER
+// LEVEL METER — SurfaceContainerLow bar + StateActive/StateRecording segments
 // ═══════════════════════════════════════════════════════════════════
 
 @Composable
@@ -706,44 +705,54 @@ private fun LevelMeter(
     level: Float,
     modifier: Modifier = Modifier,
 ) {
-    Canvas(modifier = modifier.clip(RoundedCornerShape(4.dp))) {
+    Canvas(modifier = modifier.clip(RoundedCornerShape(RadiusSm))) {
         val w = size.width
         val h = size.height
 
-        // Background
-        drawRect(color = BgGunmetal)
+        // Background bar
+        drawRect(color = SurfaceContainerLow)
 
-        // Bar
-        val barH = h * level.coerceIn(0f, 1f)
-        val gradient =
-            Brush.verticalGradient(
-                colors = listOf(KnobGreen, KnobAmber, KnobRed),
-                startY = h,
-                endY = 0f,
+        val levelCoerced = level.coerceIn(0f, 1f)
+        // Top ~12% is the clip zone
+        val clipThreshold = 0.88f
+
+        // Normal level segment — StateActive
+        val activeH = h * levelCoerced.coerceAtMost(clipThreshold)
+        if (activeH > 0f) {
+            drawRect(
+                color = StateActive,
+                topLeft = Offset(0f, h - activeH),
+                size = Size(w, activeH),
             )
-        drawRect(
-            brush = gradient,
-            topLeft = Offset(0f, h - barH),
-            size = Size(w, barH),
-        )
+        }
 
-        // LED segment dividers
+        // Clip segment — StateRecording (only when level reaches the clip zone)
+        if (levelCoerced > clipThreshold) {
+            val clipH = h * (levelCoerced - clipThreshold)
+            drawRect(
+                color = StateRecording,
+                topLeft = Offset(0f, h * (1f - levelCoerced)),
+                size = Size(w, clipH),
+            )
+        }
+
+        // LED segment dividers (subtle)
         val segCount = 10
         val segH = h / segCount
         for (i in 1 until segCount) {
             val y = i * segH
             drawLine(
-                color = BgPanel,
+                color = OutlineVariant,
                 start = Offset(0f, y),
                 end = Offset(w, y),
-                strokeWidth = 1.5f,
+                strokeWidth = 1f,
             )
         }
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SMALL TOGGLE (M / S / R)
+// SMALL TOGGLE (M / S / R) — text badges colored by state
 // ═══════════════════════════════════════════════════════════════════
 
 @Composable
@@ -755,23 +764,23 @@ private fun SmallToggle(
     modifier: Modifier = Modifier,
     onMidiLearn: (() -> Unit)? = null,
 ) {
+    val bg = if (checked) activeColor.copy(alpha = 0.25f) else Color.Transparent
+    val bd = if (checked) activeColor else OutlineVariant
+    val fg = if (checked) activeColor else OnSurface
     Box(
         modifier =
             modifier
                 .size(width = 32.dp, height = 28.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (checked) activeColor else BgPanel)
-                .border(
-                    1.dp,
-                    if (checked) activeColor else PanelHighlight.copy(alpha = 0.4f),
-                    RoundedCornerShape(6.dp),
-                ).clickable(onClick = onCheckedChange),
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(bg)
+                .border(1.dp, bd, RoundedCornerShape(RadiusSm))
+                .clickable(onClick = onCheckedChange),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            color = if (checked) Color.Black else TextSecondary,
-            fontSize = 10.sp,
+            color = fg,
+            style = LabelSmall,
             fontWeight = FontWeight.Bold,
         )
     }
@@ -790,10 +799,11 @@ private fun PerformFxGrid(
     Column(
         modifier =
             modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(BgPanel)
-                .padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+                .clip(RoundedCornerShape(RadiusLg))
+                .background(SurfaceContainer)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
+                .padding(Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         val rows = PerformFxType.entries.chunked(4)
         rows.forEach { row ->
@@ -825,21 +835,21 @@ private fun PerformFxButton(
     Box(
         modifier =
             modifier
-                .padding(horizontal = 2.dp)
+                .padding(horizontal = Spacing.xs)
                 .height(36.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (active) KnobAmber.copy(alpha = 0.25f) else BgGunmetal)
+                .clip(RoundedCornerShape(RadiusMd))
+                .background(if (active) Primary.copy(alpha = 0.15f) else SurfaceContainerLow)
                 .border(
-                    1.5.dp,
-                    if (active) KnobAmber else PanelHighlight.copy(alpha = 0.4f),
-                    RoundedCornerShape(6.dp),
+                    1.dp,
+                    if (active) Primary else OutlineVariant,
+                    RoundedCornerShape(RadiusMd),
                 ).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            color = if (active) KnobAmber else TextSecondary,
-            fontSize = 9.sp,
+            color = if (active) Primary else TextSecondary,
+            style = CaptionSmall,
             fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
             maxLines = 1,
         )
@@ -863,14 +873,13 @@ private fun InsertFxSheet(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(Spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
         Text(
             text = "Inserts – Track ${trackIndex + 1}",
-            color = KnobCyan,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
+            color = OnSurface,
+            style = TitleLarge,
         )
 
         channel.inserts.forEachIndexed { slot, insert ->
@@ -912,12 +921,12 @@ private fun InsertSlotRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Text(
             text = "${slot + 1}",
             color = TextSecondary,
-            fontSize = 12.sp,
+            style = CaptionSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.width(20.dp),
         )
@@ -929,24 +938,34 @@ private fun InsertSlotRow(
                     Modifier
                         .weight(1f)
                         .height(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(BgGunmetal)
-                        .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                        .clickable { expanded = true },
+                        .clip(RoundedCornerShape(RadiusSm))
+                        .background(SurfaceContainerLow)
+                        .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                        .clickable { expanded = true }
+                        .padding(horizontal = Spacing.sm),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("+ Add FX", color = TextMuted, fontSize = 10.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = "Add FX",
+                        tint = OnSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text("Add FX", color = OnSurfaceVariant, style = CaptionSmall)
+                }
             }
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                containerColor = BgPanel,
+                containerColor = SurfaceContainerHigh,
             ) {
                 SynthEngine.EffectType.entries
                     .filter { it != SynthEngine.EffectType.None }
                     .forEach { type ->
                         DropdownMenuItem(
-                            text = { Text(type.name, color = TextPrimary, fontSize = 12.sp) },
+                            text = { Text(type.name, color = OnSurface, style = BodyMedium) },
                             onClick = {
                                 onAdd(type)
                                 expanded = false
@@ -958,18 +977,18 @@ private fun InsertSlotRow(
             // Occupied slot
             Text(
                 text = insert.type.name,
-                color = if (insert.bypass) TextMuted else TextPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
+                color = if (insert.bypass) TextDisabled else OnSurface,
+                style = BodyMedium,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
 
-            // Bypass toggle
+            // Bypass toggle — muted/neutral state
             SmallToggle(
                 label = "Byp",
                 checked = insert.bypass,
                 onCheckedChange = onBypass,
-                activeColor = KnobOrange,
+                activeColor = OnSurfaceVariant,
             )
 
             // Remove
@@ -977,13 +996,18 @@ private fun InsertSlotRow(
                 modifier =
                     Modifier
                         .size(28.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(BgGunmetal)
-                        .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(RadiusXs))
+                        .background(SurfaceContainerLow)
+                        .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusXs))
                         .clickable(onClick = onRemove),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("X", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "Remove",
+                    tint = OnSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
             }
 
             // Reorder arrows
@@ -992,12 +1016,17 @@ private fun InsertSlotRow(
                     modifier =
                         Modifier
                             .size(24.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(BgGunmetal)
+                            .clip(RoundedCornerShape(RadiusXs))
+                            .background(SurfaceContainerLow)
                             .clickable(onClick = onMoveUp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("↑", color = TextSecondary, fontSize = 10.sp)
+                    Icon(
+                        imageVector = Icons.Outlined.KeyboardArrowUp,
+                        contentDescription = "Move up",
+                        tint = OnSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
                 }
             }
             if (onMoveDown != null) {
@@ -1005,12 +1034,17 @@ private fun InsertSlotRow(
                     modifier =
                         Modifier
                             .size(24.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(BgGunmetal)
+                            .clip(RoundedCornerShape(RadiusXs))
+                            .background(SurfaceContainerLow)
                             .clickable(onClick = onMoveDown),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("↓", color = TextSecondary, fontSize = 10.sp)
+                    Icon(
+                        imageVector = Icons.Outlined.KeyboardArrowDown,
+                        contentDescription = "Move down",
+                        tint = OnSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
                 }
             }
         }
@@ -1044,20 +1078,19 @@ private fun AutomationMixerContent(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(Spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Text(
             text = "Automation",
-            color = KnobCyan,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
+            color = OnSurface,
+            style = TitleLarge,
         )
 
-        // Param chips
+        // Param chips — selected = Primary (selection convention)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             paramList.forEach { (id, label) ->
                 val isSelected = chosen == id
@@ -1065,22 +1098,22 @@ private fun AutomationMixerContent(
                     modifier =
                         Modifier
                             .height(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSelected) KnobCyan.copy(alpha = 0.25f) else BgGunmetal)
+                            .clip(RoundedCornerShape(RadiusMd))
+                            .background(if (isSelected) Primary.copy(alpha = 0.12f) else SurfaceContainerLow)
                             .border(
                                 1.dp,
-                                if (isSelected) KnobCyan else PanelHighlight.copy(alpha = 0.4f),
-                                RoundedCornerShape(6.dp),
+                                if (isSelected) Primary else OutlineVariant,
+                                RoundedCornerShape(RadiusMd),
                             ).clickable {
                                 chosen = id
                                 onParamSelect(id)
-                            }.padding(horizontal = 8.dp),
+                            }.padding(horizontal = Spacing.md),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = label,
-                        color = if (isSelected) KnobCyan else TextSecondary,
-                        fontSize = 9.sp,
+                        color = if (isSelected) Primary else TextSecondary,
+                        style = CaptionSmall,
                         maxLines = 1,
                     )
                 }
@@ -1097,20 +1130,20 @@ private fun AutomationMixerContent(
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         Box(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .height(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(BgGunmetal)
-                    .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(RadiusLg))
+                    .background(SurfaceContainerLow)
+                    .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
                     .clickable(onClick = onDismiss),
             contentAlignment = Alignment.Center,
         ) {
-            Text("Close", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Close", color = OnSurface, style = LabelSmall)
         }
     }
 }

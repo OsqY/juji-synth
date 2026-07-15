@@ -17,7 +17,12 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewModule
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.RadioButtonChecked
+import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -28,6 +33,7 @@ import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,6 +55,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.jujidaw.JujiDawApp
 import com.jujidaw.R
 import com.jujidaw.model.TICKS_PER_STEP
@@ -264,53 +271,61 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
     Row(
         modifier =
             modifier
-                .height(48.dp)
-                .background(BgPanel)
-                .padding(horizontal = 8.dp),
+                .height(TransportHeight)
+                .background(SurfaceContainer)
+                .padding(horizontal = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Transport group: [Play][Stop][Record][Reset]
+        // Transport group: [Play][Stop][Record][Reset] — flat Material Symbols Outlined icons
+        // on SurfaceContainer. Active states use Primary/StateActive/StateRecording per plan §1.
         TransportMiniButton(
-            label = "\u25B6",
+            icon = Icons.Outlined.PlayArrow,
+            contentDescription = "Play",
             active = transportState.playing,
-            activeColor = TransportGreen,
+            activeColor = StateActive,
             onClick = { if (!transportState.playing) transportController.play() },
-            modifier = Modifier.size(36.dp),
         )
         TransportMiniButton(
-            label = "\u25A0",
+            icon = Icons.Outlined.Stop,
+            contentDescription = "Stop",
             active = false,
-            activeColor = TransportRed,
+            activeColor = Primary,
             onClick = { transportController.stop() },
-            modifier = Modifier.size(36.dp),
         )
         RecordButton(
             recording = transportState.recording,
             onClick = { transportController.setRecording(!transportState.recording) },
         )
         TransportMiniButton(
-            label = "\u21BA",
+            icon = Icons.Outlined.RestartAlt,
+            contentDescription = "Return to start",
             active = false,
-            activeColor = TransportRed,
+            activeColor = Primary,
             onClick = {
                 transportController.stop()
                 transportController.seek(com.jujidaw.model.TransportPosition())
             },
-            modifier = Modifier.size(32.dp),
         )
 
         GroupDivider()
 
-        // Position: bar|beat|step
+        // Position chip — bar|beat|step readout, monoLarge in Primary per plan §1.
         val step = transportState.position.tick / TICKS_PER_STEP
-        Text(
-            text = "${transportState.position.bar + 1}|${transportState.position.beat + 1}|${step + 1}",
-            color = KnobAmber,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-        )
+        Box(
+            modifier =
+                Modifier
+                    .clip(RoundedCornerShape(RadiusSm))
+                    .background(SurfaceContainerLow)
+                    .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+        ) {
+            Text(
+                text = "${transportState.position.bar + 1}|${transportState.position.beat + 1}|${step + 1}",
+                color = Primary,
+                style = MonoLarge,
+            )
+        }
 
         GroupDivider()
 
@@ -328,7 +343,8 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
 }
 
 /**
- * Tempo edit dialog: numeric field + slider, clamped to [MIN_BPM]..[MAX_BPM].
+ * Tempo edit dialog — SurfaceContainerHigh container, RadiusLg corner, xl padding,
+ * Space Grotesk title (TitleLarge). Numeric field + slider, clamped to [MIN_BPM]..[MAX_BPM].
  */
 @Composable
 private fun BpmEditDialog(
@@ -339,12 +355,26 @@ private fun BpmEditDialog(
     var text by remember { mutableStateOf("%.1f".format(currentBpm)) }
     val parsed = text.toFloatOrNull()
     val clamped = parsed?.coerceIn(MIN_BPM, MAX_BPM) ?: currentBpm
+    val canConfirm = parsed != null && parsed >= MIN_BPM && parsed <= MAX_BPM
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Tempo (BPM)") },
-        text = {
-            Column {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            color = SurfaceContainerHigh,
+            shape = RoundedCornerShape(RadiusLg),
+            tonalElevation = 0.dp,
+        ) {
+            Column(
+                modifier =
+                    Modifier
+                        .padding(Spacing.xl)
+                        .width(IntrinsicSize.Max),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                Text(
+                    text = "Tempo (BPM)",
+                    color = OnSurface,
+                    style = TitleLarge,
+                )
                 OutlinedTextField(
                     value = text,
                     onValueChange = { value ->
@@ -352,31 +382,47 @@ private fun BpmEditDialog(
                     },
                     singleLine = true,
                     label = { Text("$MIN_BPM..$MAX_BPM") },
-                    isError = parsed == null || parsed < MIN_BPM || parsed > MAX_BPM,
+                    isError = !canConfirm,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
                 Slider(
                     value = clamped,
                     onValueChange = { text = "%.1f".format(it) },
                     valueRange = MIN_BPM..MAX_BPM,
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = OnSurface)
+                    }
+                    Spacer(Modifier.width(Spacing.sm))
+                    TextButton(
+                        onClick = { onConfirm(clamped) },
+                        enabled = canConfirm,
+                    ) {
+                        Text("Set", color = Primary)
+                    }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(clamped) },
-                enabled = parsed != null && parsed >= MIN_BPM && parsed <= MAX_BPM,
-            ) { Text("Set") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
+        }
+    }
 }
 
+/**
+ * Flat transport icon chip on the 48dp transport strip.
+ *
+ * 44dp touch rect (TouchTargetMin) with a 36dp visual inner stock so the icon stays
+ * compact per plan §1 while satisfying the 44dp minimum interactive target. Inactive
+ * = transparent + OutlineVariant border + OnSurface icon; active = activeColor 15%
+ * tinted fill + activeColor border + activeColor icon. Replaces the legacy unicode-glyph
+ * transport buttons (play / stop / restart / minus / plus) with Material Symbols Outlined icons.
+ */
 @Composable
 private fun TransportMiniButton(
-    label: String,
+    icon: ImageVector,
+    contentDescription: String?,
     active: Boolean,
     activeColor: Color,
     onClick: () -> Unit,
@@ -385,24 +431,41 @@ private fun TransportMiniButton(
     Box(
         modifier =
             modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (active) activeColor else BgGunmetal)
-                .border(
-                    1.dp,
-                    if (active) activeColor else PanelHighlight.copy(alpha = 0.4f),
-                    RoundedCornerShape(6.dp),
-                ).clickable(onClick = onClick),
+                .size(TouchTargetMin)
+                .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            color = if (active) Color.White else TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-        )
+        Box(
+            modifier =
+                Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(RadiusSm))
+                    .background(if (active) activeColor.copy(alpha = 0.15f) else Color.Transparent)
+                    .border(
+                        1.dp,
+                        if (active) activeColor else OutlineVariant,
+                        RoundedCornerShape(RadiusSm),
+                    ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = if (active) activeColor else OnSurface,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
+/**
+ * Record-arm control. 44dp touch rect (TouchTargetMin) on the 48dp transport strip.
+ *
+ * Per plan §1: "recording = StateRecording filled circle". At rest the control shows
+ * `radio_button_checked` (Material Symbols Outlined) tinted StateRecording; when armed
+ * (recording=true) the visual switches to a StateRecording-filled inner circle on a
+ * StateRecording 15% tinted chip so the record state reads from across the room.
+ */
 @Composable
 private fun RecordButton(
     recording: Boolean,
@@ -412,38 +475,55 @@ private fun RecordButton(
     Box(
         modifier =
             modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (recording) TransportRed.copy(alpha = 0.25f) else BgGunmetal)
+                .size(TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (recording) StateRecording.copy(alpha = 0.15f) else Color.Transparent)
                 .border(
                     1.dp,
-                    if (recording) TransportRed else TransportRed.copy(alpha = 0.6f),
-                    RoundedCornerShape(8.dp),
+                    if (recording) StateRecording else OutlineVariant,
+                    RoundedCornerShape(RadiusSm),
                 ).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        // Unambiguous red filled circle — the Record arm control.
-        Box(
-            modifier =
-                Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(TransportRed),
-        )
+        if (recording) {
+            // Record = filled circle (StateRecording). Pulsing animation deferred to Phase 5.
+            Box(
+                modifier =
+                    Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(StateRecording),
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.RadioButtonChecked,
+                contentDescription = "Record",
+                tint = StateRecording,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
 @Composable
 private fun GroupDivider() {
+    // 1dp × 20dp OutlineVariant per plan §1: subtle structural separator between
+    // transport groups (Play/Stop/Record/Reset | Position | BPM).
     Box(
         modifier =
             Modifier
                 .width(1.dp)
-                .height(24.dp)
-                .background(PanelHighlight.copy(alpha = 0.4f)),
+                .height(20.dp)
+                .background(OutlineVariant),
     )
 }
 
+/**
+ * BPM chip — monoLarge numeric readout + LabelSmall "BPM" tag on SurfaceContainerLow,
+ * tap to open BpmEditDialog and nudge with Material Symbols Outlined `add`/`remove`
+ * icons (replaces legacy unicode `−`/`+` per plan §3 step 1). Nudge buttons reuse the
+ * 44dp-touch TransportMiniButton shape.
+ */
 @Composable
 private fun BpmChip(
     bpm: Float,
@@ -453,40 +533,37 @@ private fun BpmChip(
     Row(
         modifier =
             Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(BgGunmetal)
-                .border(1.dp, KnobGreen.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                 .clickable(onClick = onTap)
-                .padding(horizontal = 6.dp, vertical = 3.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Text(
-            text = "BPM:",
+            text = "BPM",
             color = TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
+            style = LabelSmall,
         )
         Text(
             text = "%d".format(bpm.toInt()),
-            color = KnobGreen,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            color = OnSurface,
+            style = MonoLarge,
         )
         TransportMiniButton(
-            label = "\u2212",
+            icon = Icons.Outlined.Remove,
+            contentDescription = "Decrease BPM",
             active = false,
-            activeColor = KnobGreen,
+            activeColor = Primary,
             onClick = { onNudge(-1f) },
-            modifier = Modifier.size(26.dp),
         )
         TransportMiniButton(
-            label = "+",
+            icon = Icons.Outlined.Add,
+            contentDescription = "Increase BPM",
             active = false,
-            activeColor = KnobGreen,
+            activeColor = Primary,
             onClick = { onNudge(1f) },
-            modifier = Modifier.size(26.dp),
         )
     }
 }

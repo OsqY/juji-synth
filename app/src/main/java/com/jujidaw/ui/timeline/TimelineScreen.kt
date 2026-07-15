@@ -11,8 +11,16 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.ZoomOut
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -21,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -30,7 +39,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.model.AudioClip
-import com.jujidaw.model.AutomationCurve
 import com.jujidaw.model.Clip
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
@@ -38,7 +46,6 @@ import com.jujidaw.model.PatternClip
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TransportPosition
 import com.jujidaw.model.TransportState
-import com.jujidaw.ui.LcdDisplay
 import com.jujidaw.ui.theme.*
 
 /**
@@ -100,7 +107,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
 
     var draggedClipId by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier = modifier.fillMaxSize().background(BgGunmetal).statusBarsPadding()) {
+    Column(modifier = modifier.fillMaxSize().background(Bg0).statusBarsPadding()) {
         TransportStrip(
             transport = transport,
             snap = snap,
@@ -117,25 +124,24 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
             onZoomChange = { viewModel.setZoom(it) },
         )
 
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(Spacing.xs))
 
         // Pattern selector (1-16). Buttons scroll if they don't fit the width.
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(34.dp)
-                    .background(BgPanel)
-                    .padding(horizontal = 4.dp),
+                    .height(44.dp)
+                    .background(SurfaceContainer)
+                    .padding(horizontal = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(
                 "Pattern: 1-16",
-                color = TextSecondary,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(end = 4.dp),
+                color = OnSurfaceVariant,
+                style = LabelSmall,
+                modifier = Modifier.padding(end = Spacing.sm),
             )
             Row(
                 modifier =
@@ -144,28 +150,36 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                         .fillMaxHeight()
                         .horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 for (i in 0 until 16) {
+                    val selected = selectedPatternId == i
                     Box(
                         modifier =
                             Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(if (selectedPatternId == i) KnobAmber else BgGunmetal)
-                                .border(
-                                    1.dp,
-                                    if (selectedPatternId == i) KnobAmber else PanelHighlight.copy(alpha = 0.3f),
-                                    RoundedCornerShape(4.dp),
-                                ).clickable { viewModel.selectPattern(i) },
+                                .size(TouchTargetMin)
+                                .clickable { viewModel.selectPattern(i) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            "${i + 1}",
-                            color = if (selectedPatternId == i) Color.Black else TextPrimary,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(RadiusSm))
+                                    .background(if (selected) Primary.copy(alpha = 0.12f) else SurfaceContainerLow)
+                                    .border(
+                                        1.dp,
+                                        if (selected) Primary else OutlineVariant,
+                                        RoundedCornerShape(RadiusSm),
+                                    ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "${i + 1}",
+                                color = if (selected) Primary else OnSurface,
+                                style = LabelSmall,
+                            )
+                        }
                     }
                 }
             }
@@ -176,18 +190,17 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(34.dp)
-                    .background(BgPanel)
-                    .padding(horizontal = 4.dp),
+                    .height(44.dp)
+                    .background(SurfaceContainer)
+                    .padding(horizontal = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(
                 "Drop Pad to Timeline",
-                color = KnobCyan,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(end = 4.dp),
+                color = Secondary,
+                style = LabelSmall,
+                modifier = Modifier.padding(end = Spacing.sm),
             )
             Row(
                 modifier =
@@ -196,34 +209,40 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                         .fillMaxHeight()
                         .horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 for (i in 0 until 16) {
                     Box(
                         modifier =
                             Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(BgGunmetal)
-                                .border(1.dp, KnobCyan.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                .size(TouchTargetMin)
                                 .clickable {
                                     val playheadTick = transport.position.toTicks()
                                     viewModel.addPadClip(selectedTrack, playheadTick, i)
                                 },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            "${i + 1}",
-                            color = TextPrimary,
-                            fontSize = 7.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(RadiusSm))
+                                    .background(SurfaceContainerLow)
+                                    .border(1.dp, Secondary.copy(alpha = 0.4f), RoundedCornerShape(RadiusSm)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "${i + 1}",
+                                color = OnSurface,
+                                style = LabelSmall,
+                            )
+                        }
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(Spacing.xs))
 
         // Main area: track headers + timeline
         Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -233,9 +252,9 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                     Modifier
                         .width(headerWidth)
                         .fillMaxHeight()
-                        .background(BgPanel),
+                        .background(SurfaceContainer),
             ) {
-                Box(modifier = Modifier.fillMaxWidth().height(rulerHeight).background(BgGunmetal))
+                Box(modifier = Modifier.fillMaxWidth().height(rulerHeight).background(SurfaceContainerLow))
                 for (i in 0 until 16) {
                     key(i) {
                         TrackHeader(
@@ -257,8 +276,8 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(BgPanel)
+                        .clip(RoundedCornerShape(RadiusLg))
+                        .background(Bg1)
                         .pointerInput(Unit) {
                             detectHorizontalDragGestures(
                                 onDragStart = { followPlayhead = false },
@@ -283,7 +302,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                             for (b in 0..totalBars) {
                                 val x = b * barWidthPx
                                 drawLine(
-                                    color = PanelHighlight.copy(alpha = 0.25f),
+                                    color = OutlineVariant.copy(alpha = 0.25f),
                                     start = Offset(x, 0f),
                                     end = Offset(x, size.height),
                                     strokeWidth = 1f,
@@ -291,7 +310,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                 for (beat in 1 until 4) {
                                     val bx = x + beat * barWidthPx / 4f
                                     drawLine(
-                                        color = PanelHighlight.copy(alpha = 0.1f),
+                                        color = OutlineVariant.copy(alpha = 0.1f),
                                         start = Offset(bx, 0f),
                                         end = Offset(bx, size.height),
                                         strokeWidth = 0.5f,
@@ -302,7 +321,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                             for (t in 0..16) {
                                 val y = t * trackHeightPx + rulerPx
                                 drawLine(
-                                    color = PanelDivider,
+                                    color = OutlineVariant,
                                     start = Offset(0f, y),
                                     end = Offset(size.width, y),
                                     strokeWidth = 1f,
@@ -360,7 +379,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                                 .offset { IntOffset(left.toInt(), top.toInt()) }
                                                 .width(with(density) { width.toDp() })
                                                 .height(with(density) { trackHeightPx.toDp() })
-                                                .padding(2.dp),
+                                                .padding(Spacing.xs),
                                         onTap = { viewModel.toggleMuteClip(clip.id) },
                                         onLongPress = { draggedClipId = clip.id },
                                         onDelete = { viewModel.deleteClip(clip.id) },
@@ -390,7 +409,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                                 )
                                             }.width(with(density) { (clip.durationTicks * tickWidthPx).toDp() })
                                             .height(with(density) { trackHeightPx.toDp() })
-                                            .padding(2.dp)
+                                            .padding(Spacing.xs)
                                             .pointerInput(draggedClipId) {
                                                 detectDragGestures(
                                                     onDrag = { change, dragAmount ->
@@ -434,7 +453,7 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                                         )
                                     }.width(2.dp)
                                     .fillMaxHeight()
-                                    .background(KnobAmber),
+                                    .background(Primary),
                         )
                     }
                 }
@@ -469,16 +488,15 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                     Modifier
                         .fillMaxWidth()
                         .height(40.dp)
-                        .background(BgPanel)
-                        .padding(horizontal = 4.dp),
+                        .background(SurfaceContainer)
+                        .padding(horizontal = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 Text(
                     "AUTO",
-                    color = TextSecondary,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
+                    color = OnSurfaceVariant,
+                    style = LabelSmall,
                 )
                 val params =
                     listOf(
@@ -491,21 +509,43 @@ fun TimelineScreen(modifier: Modifier = Modifier) {
                     Box(
                         modifier =
                             Modifier
-                                .height(28.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(BgGunmetal)
-                                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                .height(32.dp)
+                                .clip(RoundedCornerShape(RadiusSm))
+                                .background(SurfaceContainerLow)
+                                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                                 .clickable { viewModel.selectAutomationParam(id) }
-                                .padding(horizontal = 8.dp),
+                                .padding(horizontal = Spacing.md),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(label, color = TextPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        Text(label, color = OnSurface, style = CaptionSmall)
                     }
                 }
             }
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Clip color mapping — track hue from the ClipColors grid (saturated representative,
+// index 1 per Color.kt row semantics). PatternClip -> warm half (Red..Green),
+// AudioClip -> cool half (Teal..Blue) per plan §Color System.
+// ---------------------------------------------------------------------------
+
+private fun clipBaseHue(clip: Clip): Color =
+    when (clip) {
+        is PatternClip -> {
+            ClipColors[clip.trackIndex % 6][1]
+        }
+
+        is AudioClip -> {
+            val cool = listOf(6, 7, 8, 9)
+            ClipColors[cool[clip.trackIndex % cool.size]][1]
+        }
+
+        else -> {
+            OnSurfaceVariant
+        }
+    }
 
 // ---------------------------------------------------------------------------
 // Transport Strip
@@ -531,39 +571,39 @@ private fun TransportStrip(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(BgPanel)
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+                .clip(RoundedCornerShape(RadiusLg))
+                .background(SurfaceContainer)
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         // Row 1 — Loop & Punch groups. Horizontally scrollable so the clear
         // text labels never clip on narrow screens.
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             TransportButton(
                 label = if (transport.loopEnabled) "Loop: On" else "Loop: Off",
                 active = transport.loopEnabled,
-                activeColor = TransportAmber,
+                activeColor = StateSolo,
                 onClick = onToggleLoop,
-                modifier = Modifier.size(width = 58.dp, height = 30.dp),
+                modifier = Modifier.size(width = 64.dp, height = 36.dp),
             )
-            LabeledTinyButton("Loop Start", onLoopStart, width = 58.dp)
-            LabeledTinyButton("Loop End", onLoopEnd, width = 54.dp)
+            LabeledTinyButton("Loop Start", onLoopStart, width = 64.dp)
+            LabeledTinyButton("Loop End", onLoopEnd, width = 58.dp)
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.md))
 
             TransportButton(
                 label = if (transport.punchEnabled) "Punch: On" else "Punch: Off",
                 active = transport.punchEnabled,
-                activeColor = KnobCyan,
+                activeColor = Secondary,
                 onClick = onTogglePunch,
-                modifier = Modifier.size(width = 62.dp, height = 30.dp),
+                modifier = Modifier.size(width = 68.dp, height = 36.dp),
             )
-            LabeledTinyButton("● Punch In", onPunchIn, width = 64.dp)
-            LabeledTinyButton("● Punch Out", onPunchOut, width = 68.dp)
+            LabeledTinyButton("Punch In", onPunchIn, width = 64.dp)
+            LabeledTinyButton("Punch Out", onPunchOut, width = 70.dp)
         }
 
         // Row 2 — Playhead nudge + grid controls. Position/BPM are shown in
@@ -571,39 +611,39 @@ private fun TransportStrip(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            // ◀ = backward (-ticks), ▶ = forward (+ticks). These call onNudge only;
+            // Nudge playhead by one step. These call onNudge only;
             // they never switch the active tab/screen.
-            NudgeArrow("◀") { onNudge(-TICKS_PER_STEP.toLong()) }
-            NudgeArrow("▶") { onNudge(TICKS_PER_STEP.toLong()) }
+            NudgeArrow(Icons.Outlined.ChevronLeft) { onNudge(-TICKS_PER_STEP.toLong()) }
+            NudgeArrow(Icons.Outlined.ChevronRight) { onNudge(TICKS_PER_STEP.toLong()) }
 
             Spacer(Modifier.weight(1f))
 
             Box(
                 modifier =
                     Modifier
-                        .height(26.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(BgGunmetal)
-                        .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(RadiusSm))
+                        .background(SurfaceContainerLow)
+                        .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                         .clickable {
                             val values = TimelineViewModel.Snap.values()
                             val next = values[(snap.ordinal + 1) % values.size]
                             onSnapChange(next)
-                        }.padding(horizontal = 8.dp),
+                        }.padding(horizontal = Spacing.md),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Snap: ${snap.label}", color = TextPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Text("Snap: ${snap.label}", color = OnSurface, style = LabelSmall)
             }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
-                Text("Zoom", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                ZoomStepButton("−") { onZoomChange(zoom - 0.2f) }
-                ZoomStepButton("+") { onZoomChange(zoom + 0.2f) }
+                Text("Zoom", color = OnSurfaceVariant, style = CaptionSmall)
+                ZoomStepButton(Icons.Outlined.ZoomOut) { onZoomChange(zoom - 0.2f) }
+                ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
             }
         }
     }
@@ -620,20 +660,20 @@ private fun TransportButton(
     Box(
         modifier =
             modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (active) activeColor else BgGunmetal)
+                .clip(RoundedCornerShape(RadiusMd))
+                .background(if (active) activeColor.copy(alpha = 0.25f) else SurfaceContainerLow)
                 .border(
                     1.dp,
-                    if (active) activeColor else PanelHighlight.copy(alpha = 0.3f),
-                    RoundedCornerShape(6.dp),
+                    if (active) activeColor else OutlineVariant,
+                    RoundedCornerShape(RadiusMd),
                 ).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            color = if (active) Color.White else TextPrimary,
-            fontSize = if (label.length == 1) 14.sp else 12.sp,
-            fontWeight = FontWeight.Bold,
+            color = if (active) activeColor else OnSurface,
+            style = LabelSmall,
+            maxLines = 1,
         )
     }
 }
@@ -647,18 +687,17 @@ private fun LabeledTinyButton(
     Box(
         modifier =
             Modifier
-                .size(width = width, height = 22.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(BgGunmetal)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(3.dp))
+                .size(width = width, height = 28.dp)
+                .clip(RoundedCornerShape(RadiusXs))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusXs))
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            color = TextSecondary,
-            fontSize = 7.sp,
-            fontWeight = FontWeight.Bold,
+            color = OnSurfaceVariant,
+            style = CaptionSmall,
             maxLines = 1,
         )
     }
@@ -666,48 +705,48 @@ private fun LabeledTinyButton(
 
 @Composable
 private fun NudgeArrow(
-    glyph: String,
+    icon: ImageVector,
     onClick: () -> Unit,
 ) {
     Box(
         modifier =
             Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(BgGunmetal)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                .size(TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            glyph,
-            color = TextPrimary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
+        Icon(
+            imageVector = icon,
+            contentDescription = "Nudge playhead",
+            tint = OnSurface,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
 
 @Composable
 private fun ZoomStepButton(
-    glyph: String,
+    icon: ImageVector,
     onClick: () -> Unit,
 ) {
     Box(
         modifier =
             Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(BgGunmetal)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                .size(36.dp)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            glyph,
-            color = TextPrimary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
+        Icon(
+            imageVector = icon,
+            contentDescription = "Zoom",
+            tint = OnSurface,
+            modifier = Modifier.size(18.dp),
         )
     }
 }
@@ -731,48 +770,41 @@ private fun TrackHeader(
             Modifier
                 .fillMaxWidth()
                 .height(56.dp)
-                .background(if (isSelected) PanelHighlight.copy(alpha = 0.25f) else Color.Transparent)
+                .background(if (isSelected) Primary.copy(alpha = 0.12f) else Color.Transparent)
                 .clickable { onSelect() }
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         Text(
             text = "${index + 1}",
-            color = if (isSelected) KnobAmber else TextSecondary,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
+            color = if (isSelected) Primary else OnSurfaceVariant,
+            style = LabelSmall,
             modifier = Modifier.width(16.dp),
         )
         Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             modifier = Modifier.weight(1f),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                TrackButton("M", state.mute, KnobRed, onMute, Modifier.size(22.dp))
-                TrackButton("S", state.solo, KnobAmber, onSolo, Modifier.size(22.dp))
-                TrackButton("R", state.arm, TransportRed, onArm, Modifier.size(22.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                TrackButton("M", state.mute, OnSurfaceVariant, OnPrimary, onMute, Modifier.size(22.dp))
+                TrackButton("S", state.solo, StateSolo, OnStateSolo, onSolo, Modifier.size(22.dp))
+                TrackButton("R", state.arm, StateRecording, OnStateRecording, onArm, Modifier.size(22.dp))
             }
             Box(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .height(6.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(TextMuted),
+                        .clip(RoundedCornerShape(RadiusXs))
+                        .background(SurfaceContainerLow),
             ) {
                 Box(
                     modifier =
                         Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(state.level)
-                            .background(
-                                when {
-                                    state.level > 0.9f -> KnobRed
-                                    state.level > 0.7f -> KnobAmber
-                                    else -> KnobGreen
-                                },
-                            ),
+                            .background(if (state.level > 0.9f) StateRecording else StateActive),
                 )
             }
         }
@@ -784,26 +816,26 @@ private fun TrackButton(
     label: String,
     active: Boolean,
     activeColor: Color,
+    onColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
         modifier =
             modifier
-                .clip(RoundedCornerShape(3.dp))
-                .background(if (active) activeColor else BgGunmetal)
+                .clip(RoundedCornerShape(RadiusXs))
+                .background(if (active) activeColor else SurfaceContainerLow)
                 .border(
                     1.dp,
-                    if (active) activeColor else PanelHighlight.copy(alpha = 0.3f),
-                    RoundedCornerShape(3.dp),
+                    if (active) activeColor else OutlineVariant,
+                    RoundedCornerShape(RadiusXs),
                 ).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            color = if (active) Color.White else TextSecondary,
-            fontSize = 7.sp,
-            fontWeight = FontWeight.Bold,
+            color = if (active) onColor else OnSurfaceVariant,
+            style = LabelSmall,
         )
     }
 }
@@ -823,13 +855,12 @@ private fun TimelineRuler(
         for (b in 0 until totalBars) {
             Text(
                 text = "${b + 1}",
-                color = TextMuted,
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold,
+                color = OnSurfaceVariant,
+                style = CaptionSmall,
                 modifier =
                     Modifier
                         .offset(x = with(density) { (b * barWidthPx).toDp() })
-                        .padding(start = 2.dp, top = 4.dp),
+                        .padding(start = Spacing.xs, top = Spacing.sm),
             )
         }
     }
@@ -851,24 +882,22 @@ private fun ClipItem(
     onDelete: () -> Unit = {},
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val bg =
+    val hue = clipBaseHue(clip)
+    val bg = if (clip.mute) hue.copy(alpha = 0.5f) else hue.copy(alpha = 0.6f)
+    val edge =
         when {
-            clip.mute -> TextMuted.copy(alpha = 0.5f)
-            clip is PatternClip -> KnobAmber.copy(alpha = 0.75f)
-            clip is AudioClip -> KnobCyan.copy(alpha = 0.75f)
-            else -> TextMuted
+            clip.mute -> OnSurfaceVariant
+            clip is AudioClip -> Secondary
+            else -> hue
         }
     Box {
         Box(
             modifier =
                 modifier
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(RadiusSm))
                     .background(bg)
-                    .border(
-                        1.dp,
-                        if (clip.mute) TextMuted else Color.White.copy(alpha = 0.4f),
-                        RoundedCornerShape(4.dp),
-                    ).pointerInput(clip.id) {
+                    .border(1.dp, edge, RoundedCornerShape(RadiusSm))
+                    .pointerInput(clip.id) {
                         detectTapGestures(
                             onTap = { onTap() },
                             onLongPress = { onLongPress() },
@@ -881,21 +910,21 @@ private fun ClipItem(
                         is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
                         is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
                     },
-                color = Color.Black,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(4.dp).align(Alignment.TopStart),
+                color = if (clip.mute) OnSurfaceVariant else OnSurface,
+                style = CaptionSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(Spacing.xs).align(Alignment.TopStart),
             )
 
             if (clip is AudioClip) {
                 val hash = remember(clip.id) { clip.id.hashCode() }
-                Canvas(modifier = Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = 4.dp)) {
+                Canvas(modifier = Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = Spacing.xs)) {
                     val bars = (size.width / 6).toInt().coerceAtLeast(4)
                     val w = size.width / bars
                     for (i in 0 until bars) {
                         val h = kotlin.math.abs((hash + i * 71) % 100) / 100f * size.height * 0.7f
                         drawRect(
-                            color = Color.Black.copy(alpha = 0.25f),
+                            color = OnSurface.copy(alpha = 0.4f),
                             topLeft = Offset(i * w + 1f, (size.height - h) / 2),
                             size =
                                 androidx.compose.ui.geometry
@@ -911,7 +940,7 @@ private fun ClipItem(
                     modifier =
                         Modifier
                             .align(Alignment.CenterEnd)
-                            .width(14.dp)
+                            .width(20.dp)
                             .fillMaxHeight()
                             .pointerInput(clip.id) {
                                 detectHorizontalDragGestures(
@@ -936,38 +965,51 @@ private fun ClipItem(
                                 .width(2.dp)
                                 .fillMaxHeight(0.6f)
                                 .align(Alignment.Center)
-                                .background(Color.White.copy(alpha = 0.5f)),
+                                .background(OnSurface.copy(alpha = 0.5f)),
                     )
                 }
             }
 
-            // Always-visible three-dot menu button (top-right corner).
+            // Always-visible context-menu button (top-right corner).
             // Tapping it opens a Delete-only context menu; long-press anywhere
             // else on the clip starts drag-to-move, short tap toggles mute.
             Box(
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
-                        .size(14.dp)
+                        .size(36.dp)
                         .clickable { showMenu = true },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "\u22EE",
-                    color = Color.Black,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = "Clip actions",
+                    tint = OnSurface,
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }
 
-        // Context menu: three-dot button → delete
+        // Context menu: more-vert button -> delete
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
         ) {
             DropdownMenuItem(
-                text = { Text("🗑 Delete") },
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "Delete",
+                            tint = OnSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text("Delete", color = OnSurface, style = LabelSmall)
+                    }
+                },
                 onClick = {
                     showMenu = false
                     onDelete()
@@ -984,23 +1026,26 @@ private fun ClipContent(
     isGhost: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val hue = clipBaseHue(clip)
     val bg =
+        if (clip.mute) {
+            hue.copy(alpha = 0.5f)
+        } else {
+            hue.copy(alpha = if (isGhost) 0.9f else 0.6f)
+        }
+    val edge =
         when {
-            clip.mute -> TextMuted.copy(alpha = 0.5f)
-            clip is PatternClip -> KnobAmber.copy(alpha = if (isGhost) 0.9f else 0.75f)
-            clip is AudioClip -> KnobCyan.copy(alpha = if (isGhost) 0.9f else 0.75f)
-            else -> TextMuted
+            isGhost -> Primary
+            clip.mute -> OnSurfaceVariant
+            clip is AudioClip -> Secondary
+            else -> hue
         }
     Box(
         modifier =
             modifier
-                .clip(RoundedCornerShape(4.dp))
+                .clip(RoundedCornerShape(RadiusSm))
                 .background(bg)
-                .border(
-                    1.dp,
-                    if (isGhost) KnobAmber else Color.White.copy(alpha = 0.4f),
-                    RoundedCornerShape(4.dp),
-                ),
+                .border(1.dp, edge, RoundedCornerShape(RadiusSm)),
     ) {
         Text(
             text =
@@ -1008,10 +1053,10 @@ private fun ClipContent(
                     is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
                     is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
                 },
-            color = Color.Black,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(4.dp),
+            color = if (clip.mute) OnSurfaceVariant else OnSurface,
+            style = CaptionSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(Spacing.xs),
         )
     }
 }
@@ -1033,16 +1078,15 @@ private fun AutomationLane(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.background(BgPanel).padding(4.dp)) {
+    Column(modifier = modifier.background(SurfaceContainerLow).padding(Spacing.sm)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
                 text = "AUTO: $paramId",
-                color = KnobAmber,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
+                color = Primary,
+                style = LabelSmall,
             )
             Spacer(Modifier.weight(1f))
             TextButton(
@@ -1050,10 +1094,10 @@ private fun AutomationLane(
                     points.maxByOrNull { it.point.tick }?.let { onDeletePoint(it.id) }
                 },
             ) {
-                Text("DEL LAST", color = KnobRed, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text("DEL LAST", color = StateRecording, style = CaptionSmall)
             }
             TextButton(onClick = onClose) {
-                Text("CLOSE", color = TextSecondary, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text("CLOSE", color = OnSurfaceVariant, style = CaptionSmall)
             }
         }
         BoxWithConstraints(
@@ -1061,8 +1105,8 @@ private fun AutomationLane(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF1A1A1E)),
+                    .clip(RoundedCornerShape(RadiusSm))
+                    .background(Bg0),
         ) {
             val density = LocalDensity.current
             val hPx = with(density) { maxHeight.toPx() }
@@ -1071,7 +1115,7 @@ private fun AutomationLane(
                 for (b in 0..totalBars) {
                     val x = b * barWidthPx
                     drawLine(
-                        PanelHighlight.copy(alpha = 0.15f),
+                        OutlineVariant.copy(alpha = 0.15f),
                         Offset(x, 0f),
                         Offset(x, size.height),
                         1f,
@@ -1086,14 +1130,14 @@ private fun AutomationLane(
                         val y1 = (1f - p1.point.value) * size.height
                         val x2 = p2.point.tick * tickWidthPx
                         val y2 = (1f - p2.point.value) * size.height
-                        drawLine(KnobAmber, Offset(x1, y1), Offset(x2, y2), strokeWidth = 2f)
+                        drawLine(Primary, Offset(x1, y1), Offset(x2, y2), strokeWidth = 2f)
                     }
                 }
                 for (p in sorted) {
                     val x = p.point.tick * tickWidthPx
                     val y = (1f - p.point.value) * size.height
-                    drawCircle(KnobAmber, radius = 5f, center = Offset(x, y))
-                    drawCircle(Color.White, radius = 2.5f, center = Offset(x, y))
+                    drawCircle(Primary, radius = 5f, center = Offset(x, y))
+                    drawCircle(OnSurface, radius = 2.5f, center = Offset(x, y))
                 }
             }
 

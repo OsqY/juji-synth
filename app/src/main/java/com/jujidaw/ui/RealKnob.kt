@@ -2,31 +2,38 @@ package com.jujidaw.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.jujidaw.ui.theme.*
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Photorealistic hardware knob with metal rim, tick marks, value arc, LED ring, and vertical drag.
+ * Flat Ableton-style dial: "a dial is just a curved slider."
+ *
+ * Renders a flat track ring (SurfaceContainerHigh, 3dp) + value arc (Accent or Secondary)
+ * + a single OnSurface 2dp line indicator. No metal rim, no 30 ticks, no radial gradient,
+ * no LED glow. An optional Accent low-alpha (0.25) active ring conveys learn mode; a
+ * Primary ring conveys selection. All parameters, signatures, and drag logic are unchanged.
+ *
+ * See `docs/ui-design-overhaul-plan.md` Phase 2 step 1 and Component Inventory #4.
  */
 @Composable
 fun RealKnob(
@@ -35,8 +42,8 @@ fun RealKnob(
     modifier: Modifier = Modifier,
     label: String = "",
     valueDisplay: String = "",
-    accentColor: Color = KnobCyan,
-    ledColor: Color = LedCyan,
+    accentColor: Color = Secondary,
+    ledColor: Color = Accent,
     size: Dp = 48.dp,
     learnMode: Boolean = false,
     isSelected: Boolean = false,
@@ -44,13 +51,14 @@ fun RealKnob(
 ) {
     val sizePx = with(LocalDensity.current) { size.toPx() }
     val radius = sizePx / 2f
-    val indicatorAngle = -135f + value * 270f // -135 to +135 degrees
-    val indicatorRad = indicatorAngle * PI.toFloat() / 180f
 
     var showTooltip by remember { mutableStateOf(false) }
     var dragValue by remember { mutableStateOf(value) }
     val density = LocalDensity.current
     val touchSlopPx = with(density) { DraggableValueController.touchSlop.toPx() }
+    val trackStrokePx = with(density) { 3.dp.toPx() } // 3dp track ring + value arc
+    val indicatorStrokePx = with(density) { 2.dp.toPx() } // 2dp line indicator
+    val ringOffsetPx = with(density) { 4.dp.toPx() } // active/selection ring offset
     var dragStartY by remember { mutableStateOf(0f) }
     var hasExceededSlop by remember { mutableStateOf(false) }
 
@@ -97,103 +105,67 @@ fun RealKnob(
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val cx = sizePx / 2f
                 val cy = sizePx / 2f
-                val knobRadius = radius - 1f
+                val knobRadius = radius - trackStrokePx / 2f
+                val arcDiameter = knobRadius * 2f
+                val arcTopLeft = Offset(cx - knobRadius, cy - knobRadius)
+                val arcStart = 135f // gap at bottom; 270-degree sweep (-135deg -> +135deg preserved)
+                val arcSweep = 270f
+                val valueSweep = value.coerceIn(0f, 1f) * arcSweep
 
-                // 1. Outer shadow
-                drawCircle(
-                    color = Color.Black.copy(alpha = 0.35f),
-                    radius = knobRadius,
-                    center = Offset(cx + 2.5f, cy + 2.5f),
+                // 1. Track ring (SurfaceContainerHigh, 3dp)
+                drawArc(
+                    color = SurfaceContainerHigh,
+                    startAngle = arcStart,
+                    sweepAngle = arcSweep,
+                    useCenter = false,
+                    topLeft = arcTopLeft,
+                    size = Size(arcDiameter, arcDiameter),
+                    style = Stroke(width = trackStrokePx, cap = StrokeCap.Round),
                 )
 
-                // 2. Knob body (radial gradient effect via concentric circles)
-                drawCircle(
-                    brush =
-                        androidx.compose.ui.graphics.Brush.radialGradient(
-                            colors =
-                                listOf(
-                                    Color(0xFF4A4A52),
-                                    Color(0xFF2D2D35),
-                                    Color(0xFF1A1A22),
-                                ),
-                            center = Offset(cx - radius * 0.25f, cy - radius * 0.30f),
-                            radius = knobRadius,
-                        ),
-                    radius = knobRadius,
-                    center = Offset(cx, cy),
-                )
-
-                // 3. Metal rim
-                drawCircle(
-                    color = KnobRim,
-                    radius = knobRadius,
-                    center = Offset(cx, cy),
-                    style = Stroke(width = 3f),
-                )
-
-                // 4. Tick marks (30 ticks around perimeter)
-                val tickRadius = knobRadius - 4f
-                val tickLength = 3f
-                for (i in 0 until 30) {
-                    val angleDeg = -135f + (i / 29f) * 270f
-                    val angleRad = angleDeg * PI.toFloat() / 180f
-                    val outerX = cx + cos(angleRad) * tickRadius
-                    val outerY = cy + sin(angleRad) * tickRadius
-                    val innerX = cx + cos(angleRad) * (tickRadius - tickLength)
-                    val innerY = cy + sin(angleRad) * (tickRadius - tickLength)
-
-                    val tickFraction = i / 29f
-                    val tickColor = if (tickFraction <= value) accentColor else TextMuted
-                    drawLine(
-                        color = tickColor,
-                        start = Offset(innerX, innerY),
-                        end = Offset(outerX, outerY),
-                        strokeWidth = 1.5f,
+                // 2. Value arc (Accent or Secondary)
+                if (valueSweep > 0f) {
+                    drawArc(
+                        color = accentColor,
+                        startAngle = arcStart,
+                        sweepAngle = valueSweep,
+                        useCenter = false,
+                        topLeft = arcTopLeft,
+                        size = Size(arcDiameter, arcDiameter),
+                        style = Stroke(width = trackStrokePx, cap = StrokeCap.Round),
                     )
                 }
 
-                // 5. Value arc (thick glow stroke along rim)
-                val arcStartRad = (-135f) * PI.toFloat() / 180f
-                val arcEndRad = (-135f + value * 270f) * PI.toFloat() / 180f
-                if (value > 0.01f) {
-                    // Glow layer (wider, transparent)
-                    drawCircle(
-                        color = accentColor.copy(alpha = 0.2f),
-                        radius = knobRadius - 1f,
-                        center = Offset(cx, cy),
-                        style = Stroke(width = 5f),
-                    )
-                }
-
-                // 6. Pointer needle
-                val pointerLen = knobRadius * 0.65f
-                val pointerX = cx + cos(indicatorRad) * pointerLen
-                val pointerY = cy + sin(indicatorRad) * pointerLen
+                // 3. Single OnSurface line indicator (center -> rim, 2dp)
+                val pointerAngleDeg = arcStart + valueSweep
+                val pointerRad = pointerAngleDeg * PI.toFloat() / 180f
+                val pointerLen = knobRadius
                 drawLine(
-                    color = KnobIndicator,
+                    color = OnSurface,
                     start = Offset(cx, cy),
-                    end = Offset(pointerX, pointerY),
-                    strokeWidth = 2.5f,
+                    end =
+                        Offset(
+                            cx + cos(pointerRad) * pointerLen,
+                            cy + sin(pointerRad) * pointerLen,
+                        ),
+                    strokeWidth = indicatorStrokePx,
+                    cap = StrokeCap.Round,
                 )
 
-                // 7. LED ring (glows brighter with value)
-                if (value > 0f) {
-                    val ledAlpha = (0.1f + value * 0.5f).coerceIn(0f, 1f)
-                    drawCircle(
-                        color = ledColor.copy(alpha = ledAlpha),
-                        radius = knobRadius + 2f,
-                        center = Offset(cx, cy),
-                        style = Stroke(width = 2f),
-                    )
-                }
-
-                // 8. MIDI learn selected highlight
+                // 4. Optional Accent low-alpha active ring (learn) / Primary selection ring
                 if (isSelected) {
                     drawCircle(
-                        color = MidiLearnGlow,
-                        radius = knobRadius + 3f,
+                        color = Primary,
+                        radius = knobRadius + ringOffsetPx,
                         center = Offset(cx, cy),
-                        style = Stroke(width = 2f),
+                        style = Stroke(width = indicatorStrokePx),
+                    )
+                } else if (learnMode) {
+                    drawCircle(
+                        color = ledColor.copy(alpha = 0.25f),
+                        radius = knobRadius + ringOffsetPx,
+                        center = Offset(cx, cy),
+                        style = Stroke(width = indicatorStrokePx),
                     )
                 }
             }
@@ -213,16 +185,16 @@ fun RealKnob(
                         modifier =
                             Modifier
                                 .background(
-                                    Color(0xE6000000),
-                                    shape =
-                                        androidx.compose.foundation.shape
-                                            .RoundedCornerShape(4.dp),
-                                ).padding(horizontal = 6.dp, vertical = 3.dp),
+                                    SurfaceContainerHigh,
+                                    shape = RoundedCornerShape(RadiusSm),
+                                ).border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                     ) {
                         Text(
                             text = "$label: $valueDisplay",
-                            color = TextPrimary,
-                            fontSize = 9.sp,
+                            color = OnSurface,
+                            style = MonoMedium,
+                            maxLines = 1,
                         )
                     }
                 }
@@ -234,9 +206,7 @@ fun RealKnob(
             Text(
                 text = label,
                 color = TextSecondary,
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.3.sp,
+                style = LabelSmall,
                 maxLines = 1,
             )
         }
@@ -246,9 +216,8 @@ fun RealKnob(
             Text(
                 text = valueDisplay,
                 color = accentColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                style = MonoMedium,
+                maxLines = 1,
             )
         }
     }

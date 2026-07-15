@@ -6,8 +6,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChevronLeft
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -141,15 +146,19 @@ private fun KeyboardTopBar(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            MiniButton("-") { viewModel.setBaseOctave(state.baseOctave - 1) }
+            OctaveShiftButton(Icons.Outlined.ChevronLeft, "Lower octave") {
+                viewModel.setBaseOctave(state.baseOctave - 1)
+            }
             Text(
                 text = "C${state.baseOctave}",
-                color = KnobCyan,
+                color = Secondary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 8.dp),
             )
-            MiniButton("+") { viewModel.setBaseOctave(state.baseOctave + 1) }
+            OctaveShiftButton(Icons.Outlined.ChevronRight, "Raise octave") {
+                viewModel.setBaseOctave(state.baseOctave + 1)
+            }
         }
 
         Row {
@@ -411,6 +420,31 @@ private fun KeyPad(
 }
 
 // ── Small reusable controls ────────────────────────────────────────────────
+
+@Composable
+private fun OctaveShiftButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = OnSurface,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
 
 @Composable
 private fun MiniButton(

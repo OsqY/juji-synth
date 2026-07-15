@@ -13,32 +13,45 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.material.icons.outlined.FileUpload
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujidaw.ui.SynthKnob
 import com.jujidaw.ui.SynthToggle
 import com.jujidaw.ui.theme.*
+import kotlinx.coroutines.delay
 
 /**
  * Sampler pad performance screen.
  *
- * - 4×4 velocity-sensitive pads with bank A/B toggle.
+ * - 4x4 velocity-sensitive pads with bank A/B toggle.
  * - Import, Chop, Time-stretch, and Edit controls.
  * - Pad edit bottom sheet for per-pad parameters.
  *
  * Phone-first: pads are large, square, and spaced for finger drumming.
+ *
+ * Visuals: see `docs/ui-design-overhaul-plan.md` Phase 4.3 / component #6 (pad grid).
+ * - 4x4 pads on `Bg1`; pad fill `SurfaceContainerLow` + bank-hue 25% tint.
+ * - Stranger pad = `PadBankB` (Indigo).
+ * - Struck pad = bank hue at value-alpha + `PadActiveRing` (`Primary`) 2dp ring (120ms).
+ * - Selected pad = `Primary` 1dp outline.
+ * - Toolbar icons: file_upload / content_cut / timer / tune (Material Outlined).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,8 +81,8 @@ fun PadsScreen(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(BgGunmetal)
-                .padding(4.dp),
+                .background(Bg0)
+                .padding(Spacing.sm),
     ) {
         // Toolbar: bank toggle + selected pad label + action buttons
         PadsToolbar(
@@ -83,10 +96,16 @@ fun PadsScreen(
             isTimeStretching = state.isTimeStretching,
         )
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(Spacing.sm))
 
-        // 4×4 pad grid fills remaining space
-        Box(modifier = Modifier.weight(1f)) {
+        // 4x4 pad grid fills remaining space
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(RadiusLg))
+                    .background(Bg1),
+        ) {
             PadsGrid(
                 activePads = state.activePads,
                 selectedPad = state.selectedPad,
@@ -115,9 +134,9 @@ fun PadsScreen(
     if (state.showEditSheet) {
         ModalBottomSheet(
             onDismissRequest = viewModel::dismissEditSheet,
-            containerColor = BgPanel,
+            containerColor = SurfaceContainerHigh,
             tonalElevation = 0.dp,
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            shape = RoundedCornerShape(topStart = RadiusLg, topEnd = RadiusLg),
         ) {
             val globalPad = state.currentBank * 16 + state.selectedPad
             PadEditSheet(
@@ -150,35 +169,49 @@ private fun PadsToolbar(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(BgPanel)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .height(44.dp)
+                .clip(RoundedCornerShape(RadiusLg))
+                .background(SurfaceContainer)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
+                .padding(horizontal = Spacing.md),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Bank A / B toggle
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Bank A / B toggle (text "A"/"B" badges)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             BankButton(label = "A", selected = currentBank == 0, onClick = { onBankChange(0) })
             BankButton(label = "B", selected = currentBank == 1, onClick = { onBankChange(1) })
         }
 
         Text(
             text = "Pad ${selectedPad + 1}",
-            color = TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
+            color = OnSurface,
+            style = LabelSmall,
         )
 
-        // Action buttons
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ToolbarButton("Import", onImportClick)
-            ToolbarButton("Chop", onChopClick)
+        // Action buttons: Import / Chop / Stretch / Edit (Material Outlined icons)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             ToolbarButton(
-                label = if (isTimeStretching) "..." else "Stretch",
+                icon = Icons.Outlined.FileUpload,
+                contentDescription = "Import",
+                onClick = onImportClick,
+            )
+            ToolbarButton(
+                icon = Icons.Outlined.ContentCut,
+                contentDescription = "Chop",
+                onClick = onChopClick,
+            )
+            ToolbarButton(
+                icon = Icons.Outlined.Timer,
+                contentDescription = "Time Stretch",
                 onClick = onTimeStretchClick,
                 enabled = !isTimeStretching,
             )
-            ToolbarButton("Edit", onEditClick)
+            ToolbarButton(
+                icon = Icons.Outlined.Tune,
+                contentDescription = "Edit",
+                onClick = onEditClick,
+            )
         }
     }
 }
@@ -189,23 +222,24 @@ private fun BankButton(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val bg = if (selected) Primary.copy(alpha = 0.15f) else SurfaceContainerLow
+    val bd = if (selected) Primary else OutlineVariant
+    val fg = if (selected) Primary else OnSurface
+
     Box(
         modifier =
             Modifier
-                .size(width = 36.dp, height = 28.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (selected) KnobAmber else BgGunmetal)
-                .border(
-                    1.dp,
-                    if (selected) KnobAmber else PanelHighlight.copy(alpha = 0.4f),
-                    RoundedCornerShape(6.dp),
-                ).clickable(onClick = onClick),
+                .size(44.dp)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(bg)
+                .border(1.dp, bd, RoundedCornerShape(RadiusSm))
+                .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            color = if (selected) Color.Black else TextSecondary,
-            fontSize = 12.sp,
+            color = fg,
+            style = LabelSmall,
             fontWeight = FontWeight.Bold,
         )
     }
@@ -213,26 +247,32 @@ private fun BankButton(
 
 @Composable
 private fun ToolbarButton(
-    label: String,
+    icon: ImageVector,
+    contentDescription: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
 ) {
+    val bgColor =
+        if (enabled) SurfaceContainerLow else DisabledFill
+
     Box(
         modifier =
             Modifier
-                .height(28.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (enabled) BgGunmetal else BgPanel)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                .clickable(enabled = enabled, onClick = onClick)
-                .padding(horizontal = 10.dp),
+                .size(44.dp)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(bgColor)
+                .border(
+                    1.dp,
+                    if (enabled) OutlineVariant else OutlineVariant.copy(alpha = 0.5f),
+                    RoundedCornerShape(RadiusSm),
+                ).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            color = if (enabled) TextPrimary else TextMuted,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) OnSurface else DisabledText,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -247,9 +287,14 @@ private fun PadsGrid(
     onPadUp: (Int) -> Unit,
     onPadSelect: (Int) -> Unit,
 ) {
+    val bankHue = if (currentBank == 0) PadBankA else PadBankB
+
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         for (row in 0 until 4) {
             Row(
@@ -257,7 +302,7 @@ private fun PadsGrid(
                     Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 for (col in 0 until 4) {
                     val padIndex = row * 4 + col
@@ -266,6 +311,7 @@ private fun PadsGrid(
                         label = padNames.getOrElse(globalIndex) { "P${padIndex + 1}" },
                         isActive = padIndex in activePads,
                         isSelected = padIndex == selectedPad,
+                        bankHue = bankHue,
                         onDown = { normalizedY -> onPadDown(padIndex, normalizedY) },
                         onUp = { onPadUp(padIndex) },
                         onSelect = { onPadSelect(padIndex) },
@@ -282,35 +328,64 @@ private fun SamplerPad(
     label: String,
     isActive: Boolean,
     isSelected: Boolean,
+    bankHue: Color,
     onDown: (Float) -> Unit,
     onUp: () -> Unit,
     onSelect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val activeColor by animateColorAsState(
-        targetValue =
-            when {
-                isActive -> KnobAmber
-                isSelected -> PanelHighlight.copy(alpha = 0.6f)
-                else -> BgPanel
-            },
-        label = "padBg",
+    // Last strike velocity (visual-only local state; does not affect audio logic).
+    var lastVelocity by remember { mutableStateOf(1f) }
+
+    // Struck-pad transient ring: shown for 120ms on each strike.
+    var struckRing by remember { mutableStateOf(false) }
+    LaunchedEffect(isActive) {
+        if (isActive) {
+            struckRing = true
+            delay(120)
+            struckRing = false
+        } else {
+            struckRing = false
+        }
+    }
+
+    val shape = RoundedCornerShape(RadiusSm)
+
+    // Bank hue at value-alpha while struck; 25% resting tint otherwise.
+    val tintAlpha = if (isActive) 0.45f + lastVelocity.coerceIn(0f, 1f) * 0.35f else 0.25f
+    val tint by animateColorAsState(
+        targetValue = bankHue.copy(alpha = tintAlpha),
+        label = "padTint",
     )
+
+    // Border: struck ring (2dp Primary) > selected outline (1dp Primary) > rest (1dp OutlineVariant).
+    val (borderW, borderC) =
+        when {
+            struckRing -> 2.dp to PadActiveRing
+            isSelected -> 1.dp to Primary
+            else -> 1.dp to OutlineVariant
+        }
+
+    val textColor =
+        when {
+            isActive -> OnSurface
+            isSelected -> OnSurface
+            else -> OnSurfaceVariant
+        }
 
     Box(
         modifier =
             modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(8.dp))
-                .background(activeColor)
-                .border(
-                    width = if (isSelected) 2.dp else 1.dp,
-                    color = if (isSelected) KnobAmber else PanelHighlight.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(8.dp),
-                ).pointerInput(Unit) {
+                .clip(shape)
+                .background(SurfaceContainerLow, shape)
+                .background(tint, shape)
+                .border(borderW, borderC, shape)
+                .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val normalizedY = down.position.y / size.height
+                        lastVelocity = normalizedY
                         onSelect() // any touch selects the pad
                         onDown(normalizedY) // trigger with velocity
                         down.consume()
@@ -331,14 +406,8 @@ private fun SamplerPad(
     ) {
         Text(
             text = label,
-            color =
-                when {
-                    isActive -> Color.Black
-                    isSelected -> TextPrimary
-                    else -> TextSecondary
-                },
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
+            color = textColor,
+            style = CaptionSmall,
             maxLines = 1,
         )
     }
@@ -355,10 +424,17 @@ private fun TimeStretchDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = BgPanel,
-        title = { Text("Time Stretch", fontWeight = FontWeight.Bold, color = KnobCyan) },
+        containerColor = SurfaceContainerHigh,
+        shape = RoundedCornerShape(RadiusLg),
+        title = {
+            Text(
+                "Time Stretch",
+                color = Secondary,
+                style = TitleLarge,
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 OutlinedTextField(
                     value = originalBpm,
                     onValueChange = onOriginalBpmChange,
@@ -366,11 +442,13 @@ private fun TimeStretchDialog(
                     singleLine = true,
                     colors =
                         OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = KnobCyan,
-                            unfocusedBorderColor = PanelHighlight,
-                            cursorColor = TextPrimary,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = Secondary,
+                            unfocusedBorderColor = Outline,
+                            cursorColor = OnSurface,
+                            focusedTextColor = OnSurface,
+                            unfocusedTextColor = OnSurface,
+                            focusedLabelColor = Secondary,
+                            unfocusedLabelColor = OnSurfaceVariant,
                         ),
                 )
                 OutlinedTextField(
@@ -380,23 +458,25 @@ private fun TimeStretchDialog(
                     singleLine = true,
                     colors =
                         OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = KnobCyan,
-                            unfocusedBorderColor = PanelHighlight,
-                            cursorColor = TextPrimary,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = Secondary,
+                            unfocusedBorderColor = Outline,
+                            cursorColor = OnSurface,
+                            focusedTextColor = OnSurface,
+                            unfocusedTextColor = OnSurface,
+                            focusedLabelColor = Secondary,
+                            unfocusedLabelColor = OnSurfaceVariant,
                         ),
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Apply", color = KnobCyan)
+                Text("Apply", color = Primary, style = LabelSmall)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextMuted)
+                Text("Cancel", color = TextSecondary, style = LabelSmall)
             }
         },
     )
@@ -418,18 +498,17 @@ private fun PadEditSheet(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(Spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
         Text(
             text = "$padName (Pad ${globalPadIndex + 1})",
-            color = KnobCyan,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
+            color = OnSurface,
+            style = TitleLarge,
         )
 
         // Continuous parameters
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             // Row 1: Tune, Volume, Pan
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -440,7 +519,7 @@ private fun PadEditSheet(
                     onValueChange = { onParamChange(padIndex, PadParamIds.PITCH, it * 48f - 24f) },
                     label = "Tune",
                     valueDisplay = "%.1f".format(params.pitch),
-                    accentColor = KnobAmber,
+                    accentColor = Primary,
                     size = 64.dp,
                 )
                 SynthKnob(
@@ -448,7 +527,7 @@ private fun PadEditSheet(
                     onValueChange = { onParamChange(padIndex, PadParamIds.VOLUME, it) },
                     label = "Volume",
                     valueDisplay = "%.0f%%".format(params.volume * 100),
-                    accentColor = KnobAmber,
+                    accentColor = Primary,
                     size = 64.dp,
                 )
                 SynthKnob(
@@ -456,7 +535,7 @@ private fun PadEditSheet(
                     onValueChange = { onParamChange(padIndex, PadParamIds.PAN, it * 2f - 1f) },
                     label = "Pan",
                     valueDisplay = "%.0f".format(params.pan * 100),
-                    accentColor = KnobAmber,
+                    accentColor = Primary,
                     size = 64.dp,
                 )
             }
@@ -471,7 +550,7 @@ private fun PadEditSheet(
                     onValueChange = { onParamChange(padIndex, PadParamIds.ATTACK, it) },
                     label = "Attack",
                     valueDisplay = "%.2f".format(params.attack),
-                    accentColor = KnobAmber,
+                    accentColor = Primary,
                     size = 64.dp,
                 )
                 SynthKnob(
@@ -479,7 +558,7 @@ private fun PadEditSheet(
                     onValueChange = { onParamChange(padIndex, PadParamIds.RELEASE, it) },
                     label = "Release",
                     valueDisplay = "%.2f".format(params.release),
-                    accentColor = KnobAmber,
+                    accentColor = Primary,
                     size = 64.dp,
                 )
                 SynthKnob(
@@ -487,7 +566,7 @@ private fun PadEditSheet(
                     onValueChange = { onParamChange(padIndex, PadParamIds.FILTER_CUTOFF, it) },
                     label = "Filter",
                     valueDisplay = "%.0f%%".format(params.filterCutoff * 100),
-                    accentColor = KnobAmber,
+                    accentColor = Secondary,
                     size = 64.dp,
                 )
             }
@@ -502,7 +581,7 @@ private fun PadEditSheet(
                     onValueChange = { onParamChange(padIndex, PadParamIds.FILTER_RESONANCE, it) },
                     label = "Resonance",
                     valueDisplay = "%.0f%%".format(params.filterResonance * 100),
-                    accentColor = KnobAmber,
+                    accentColor = Secondary,
                     size = 64.dp,
                 )
             }
@@ -518,26 +597,26 @@ private fun PadEditSheet(
                     checked = params.reverse,
                     onCheckedChange = { onParamChange(padIndex, PadParamIds.REVERSE, if (it) 1f else 0f) },
                     label = "Reverse",
-                    enabledColor = KnobAmber,
+                    enabledColor = Primary,
                 )
                 SynthToggle(
                     checked = params.oneShot,
                     onCheckedChange = { onParamChange(padIndex, PadParamIds.ONE_SHOT, if (it) 1f else 0f) },
                     label = "One-Shot",
-                    enabledColor = KnobAmber,
+                    enabledColor = Primary,
                 )
                 SynthToggle(
                     checked = params.useFilter,
                     onCheckedChange = { onParamChange(padIndex, PadParamIds.USE_FILTER, if (it) 1f else 0f) },
                     label = "Filter",
-                    enabledColor = KnobAmber,
+                    enabledColor = Primary,
                 )
             }
             SynthToggle(
                 checked = params.synthMode,
                 onCheckedChange = { onParamChange(padIndex, PadParamIds.SYNTH_MODE, if (it) 1f else 0f) },
                 label = "Synth",
-                enabledColor = KnobAmber,
+                enabledColor = Primary,
             )
         }
 
@@ -548,90 +627,77 @@ private fun PadEditSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Root Note", color = TextSecondary, fontSize = 12.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(BgGunmetal)
-                                .clickable {
-                                    val newNote = (params.synthRootNote - 1).coerceAtLeast(0)
-                                    onParamChange(padIndex, PadParamIds.SYNTH_ROOT_NOTE, newNote.toFloat())
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("-", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Root Note", color = TextSecondary, style = LabelSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    StepperBox(label = "-") {
+                        val newNote = (params.synthRootNote - 1).coerceAtLeast(0)
+                        onParamChange(padIndex, PadParamIds.SYNTH_ROOT_NOTE, newNote.toFloat())
                     }
                     Text(
                         text = midiNoteName(params.synthRootNote),
-                        color = TextPrimary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
+                        color = OnSurface,
+                        style = MonoMedium,
                         modifier = Modifier.width(48.dp),
                         maxLines = 1,
                     )
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(BgGunmetal)
-                                .clickable {
-                                    val newNote = (params.synthRootNote + 1).coerceAtMost(127)
-                                    onParamChange(padIndex, PadParamIds.SYNTH_ROOT_NOTE, newNote.toFloat())
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("+", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    StepperBox(label = "+") {
+                        val newNote = (params.synthRootNote + 1).coerceAtMost(127)
+                        onParamChange(padIndex, PadParamIds.SYNTH_ROOT_NOTE, newNote.toFloat())
                     }
                 }
             }
 
             // Preset picker (only when synth mode is active)
-            Text("Preset", color = TextSecondary, fontSize = 12.sp)
+            Text("Preset", color = TextSecondary, style = LabelSmall)
             val presetNames = PadsViewModel.FACTORY_PRESETS
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 items(presetNames) { presetName ->
                     FilterChip(
                         selected = false,
                         onClick = { onLoadPreset(presetName) },
-                        label = { Text(presetName, fontSize = 10.sp) },
+                        label = { Text(presetName, style = CaptionSmall) },
                         colors =
                             FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = KnobCyan.copy(alpha = 0.2f),
-                                selectedLabelColor = KnobCyan,
+                                containerColor = SurfaceContainerLow,
+                                labelColor = OnSurface,
+                                selectedContainerColor = Primary.copy(alpha = 0.12f),
+                                selectedLabelColor = Primary,
                             ),
-                        modifier = Modifier.height(28.dp),
+                        border =
+                            FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = false,
+                                borderColor = OutlineVariant,
+                            ),
+                        modifier = Modifier.height(32.dp),
                     )
                 }
             }
         } else {
             // Slice controls (TODO: engine support)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Slice (TODO: engine)", color = TextMuted, fontSize = 10.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Text("Slice (TODO: engine)", color = TextDisabled, style = CaptionSmall)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Start", color = TextSecondary, fontSize = 10.sp, modifier = Modifier.width(32.dp))
+                    Text("Start", color = TextSecondary, style = CaptionSmall, modifier = Modifier.width(32.dp))
                     Slider(
                         value = params.sliceStart,
                         onValueChange = { onSliceStartChange(padIndex, it) },
                         modifier = Modifier.weight(1f),
                         colors =
                             SliderDefaults.colors(
-                                thumbColor = KnobAmber,
-                                activeTrackColor = KnobAmber,
-                                inactiveTrackColor = PanelHighlight.copy(alpha = 0.3f),
+                                thumbColor = Primary,
+                                activeTrackColor = Primary,
+                                inactiveTrackColor = OutlineVariant,
                             ),
                     )
                     Text(
                         "%.0f%%".format(params.sliceStart * 100),
-                        color = TextPrimary,
-                        fontSize = 10.sp,
+                        color = OnSurface,
+                        style = MonoMedium,
                         modifier = Modifier.width(36.dp),
                     )
                 }
@@ -640,22 +706,22 @@ private fun PadEditSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("End  ", color = TextSecondary, fontSize = 10.sp, modifier = Modifier.width(32.dp))
+                    Text("End  ", color = TextSecondary, style = CaptionSmall, modifier = Modifier.width(32.dp))
                     Slider(
                         value = params.sliceEnd.coerceAtLeast(params.sliceStart),
                         onValueChange = { onSliceEndChange(padIndex, it.coerceAtLeast(params.sliceStart)) },
                         modifier = Modifier.weight(1f),
                         colors =
                             SliderDefaults.colors(
-                                thumbColor = KnobAmber,
-                                activeTrackColor = KnobAmber,
-                                inactiveTrackColor = PanelHighlight.copy(alpha = 0.3f),
+                                thumbColor = Primary,
+                                activeTrackColor = Primary,
+                                inactiveTrackColor = OutlineVariant,
                             ),
                     )
                     Text(
                         "%.0f%%".format(params.sliceEnd * 100),
-                        color = TextPrimary,
-                        fontSize = 10.sp,
+                        color = OnSurface,
+                        style = MonoMedium,
                         modifier = Modifier.width(36.dp),
                     )
                 }
@@ -668,44 +734,49 @@ private fun PadEditSheet(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Choke Group (TODO)", color = TextMuted, fontSize = 10.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(BgGunmetal)
-                            .clickable {
-                                onChokeGroupChange(padIndex, (params.chokeGroup - 1).coerceAtLeast(0))
-                            },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("-", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("Choke Group (TODO)", color = TextDisabled, style = CaptionSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                StepperBox(label = "-") {
+                    onChokeGroupChange(padIndex, (params.chokeGroup - 1).coerceAtLeast(0))
                 }
                 Text(
                     text = "${params.chokeGroup}",
-                    color = TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
+                    color = OnSurface,
+                    style = MonoMedium,
                     modifier = Modifier.width(32.dp),
                     maxLines = 1,
                 )
-                Box(
-                    modifier =
-                        Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(BgGunmetal)
-                            .clickable {
-                                onChokeGroupChange(padIndex, params.chokeGroup + 1)
-                            },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("+", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                StepperBox(label = "+") {
+                    onChokeGroupChange(padIndex, params.chokeGroup + 1)
                 }
             }
         }
+    }
+}
+
+/** Small square stepper button used for +/- value nudges (root note, choke group). */
+@Composable
+private fun StepperBox(
+    label: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = OnSurface,
+            style = BodyMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 
