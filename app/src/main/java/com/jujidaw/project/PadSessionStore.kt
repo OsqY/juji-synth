@@ -1,5 +1,6 @@
 package com.jujidaw.project
 
+import com.jujidaw.model.SynthState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -56,5 +57,35 @@ object PadSessionStore {
         val result = this.toMutableList()
         for (i in this.size until size) result.add(fill(i))
         return result
+    }
+}
+
+/**
+ * App-level bridge for the complete state of synth-mode pads. Native pad
+ * synths deliberately have no bulk getter because the audio thread owns their
+ * live DSP state, so the UI keeps the authoritative serializable snapshots.
+ *
+ * Keys are global pad indexes (0..31): Bank A occupies 0..15 and Bank B
+ * occupies 16..31.
+ */
+object PadSynthSessionStore {
+    private const val NUM_PADS = 32
+
+    private val _state = MutableStateFlow<Map<Int, SynthState>>(emptyMap())
+    val state: StateFlow<Map<Int, SynthState>> = _state
+
+    fun snapshot(): Map<Int, SynthState> = _state.value
+
+    fun setPadState(globalIndex: Int, synthState: SynthState) {
+        if (globalIndex !in 0 until NUM_PADS) return
+        _state.update { it + (globalIndex to synthState) }
+    }
+
+    fun replace(states: Map<Int, SynthState>) {
+        _state.value = states.filterKeys { it in 0 until NUM_PADS }
+    }
+
+    fun clear() {
+        _state.value = emptyMap()
     }
 }

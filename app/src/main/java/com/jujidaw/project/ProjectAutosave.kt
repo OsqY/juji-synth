@@ -5,6 +5,9 @@ import com.jujidaw.audio.SynthEngine
 import com.jujidaw.data.SettingsDataStore
 import com.jujidaw.engine.TransportController
 import com.jujidaw.model.AudioClip
+import com.jujidaw.model.SynthState
+import com.jujidaw.model.defaultTrackSynthState
+import com.jujidaw.model.toParamsArray
 import com.jujidaw.ui.pads.PadParamIds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -85,6 +88,7 @@ object ProjectAutosave {
             // Pad sample paths + cached params live in PadsViewModel; the
             // store is the bridge that keeps them available here.
             pads = normalizePads(PadSessionStore.snapshot()),
+            padSynthStates = PadSynthSessionStore.snapshot(),
         )
 
     /** Apply a [Project] to the live engine (BPM, patterns, arrangement, mixer, audio clips). */
@@ -112,8 +116,13 @@ object ProjectAutosave {
                 if (File(full).exists()) SynthEngine.loadAudioClip(clip.id, full)
             }
         }
+        // Make the incoming snapshots authoritative before mode restoration.
+        // This prevents a synth state from the previously open project being
+        // used as the fallback for an older project with no padSynthStates.
+        PadSynthSessionStore.replace(project.padSynthStates)
         // Re-hydrate pad samplers + cached params so pads survive restart.
         applyPadSettings(project.pads)
+        applyPadSynthStates(project.padSynthStates)
     }
 
     /**
@@ -155,12 +164,13 @@ object ProjectAutosave {
         SynthEngine.setPadParam(globalIndex, paramId, value)
         // Mirror PadsViewModel.setPadParam's synth-mode side effect.
         if (paramId == PadParamIds.SYNTH_MODE) {
-            val padIdx = globalIndex % 16
             if (value > 0.5f) {
-                SynthEngine.setPadSynthEnabled(padIdx, true)
-                SynthEngine.applyPadSynthState(padIdx, SynthEngine.defaultSynthParams())
+                val state = PadSynthSessionStore.snapshot()[globalIndex] ?: defaultTrackSynthState()
+                PadSynthSessionStore.setPadState(globalIndex, state)
+                SynthEngine.setPadSynthEnabled(globalIndex, true)
+                SynthEngine.applyPadSynthState(globalIndex, state.toParamsArray())
             } else {
-                SynthEngine.setPadSynthEnabled(padIdx, false)
+                SynthEngine.setPadSynthEnabled(globalIndex, false)
             }
         }
     }
@@ -180,6 +190,17 @@ object ProjectAutosave {
         SynthEngine.setMasterFader(state.masterFaderDb)
         SynthEngine.setBusFader(0, state.busA.faderDb)
         SynthEngine.setBusFader(1, state.busB.faderDb)
+    }
+
+    /** Restore the complete synth snapshots only after pad modes are restored. */
+    fun applyPadSynthStates(states: Map<Int, SynthState>) {
+        val normalized = states.filterKeys { it in 0 until NUM_PADS }
+        PadSynthSessionStore.replace(normalized)
+        if (!SynthEngine.isLoaded) return
+        normalized.forEach { (globalIndex, state) ->
+            SynthEngine.setPadSynthEnabled(globalIndex, true)
+            SynthEngine.applyPadSynthState(globalIndex, state.toParamsArray())
+        }
     }
 
     /**

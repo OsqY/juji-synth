@@ -55,9 +55,14 @@ public:
     void setParams(const SynthParams& params) { synthInstrument_->setParams(params); }
 
     // ---- Per-pad synth pool (multi-timbral) ----
-    static constexpr int PAD_SYNTH_COUNT = 16;
-    /** Lazily create / retrieve the SynthInstrument for [padIndex] (0..15). */
+    // The sampler has two 16-pad banks. Each of its 32 pads needs an
+    // independent synth state; sharing index 0 with index 16 makes Bank B
+    // overwrite Bank A's sound.
+    static constexpr int PAD_SYNTH_COUNT = NUM_PADS;
+    /** Lazily create / retrieve the SynthInstrument for [padIndex] (0..31). */
     SynthInstrument* getPadSynth(int padIndex);
+    /** Return an already-created pad synth without allocating on the audio thread. */
+    SynthInstrument* getExistingPadSynth(int padIndex) const;
     /** Apply a full SynthParams snapshot to a per-pad synth. */
     void applyPadSynthState(int padIndex, const SynthParams& params);
     void setAllParamsFromArray(const float* values, int count) { synthInstrument_->setAllParamsFromArray(values, count); }
@@ -189,9 +194,9 @@ private:
     std::unique_ptr<SynthInstrument> synthInstrument_;
     std::unique_ptr<SamplerInstrument> sampler_;
     // Per-pad synth pool: lazily created SynthInstrument instances,
-    // one per pad (0..15). Pads in SYNTH mode route noteOn to these
+    // one per sampler pad (0..31). Pads in SYNTH mode route noteOn to these
     // instead of the shared channel-0 synth.
-    std::array<SynthInstrument*, PAD_SYNTH_COUNT> synthForPad_{};
+    std::array<std::unique_ptr<SynthInstrument>, PAD_SYNTH_COUNT> synthForPad_{};
     AudioRecorder recorder_;
     TimeStretchWorker timeStretchWorker_;
     jujidaw::Transport transport_;

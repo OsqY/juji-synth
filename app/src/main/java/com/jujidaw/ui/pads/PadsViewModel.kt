@@ -10,6 +10,9 @@ import com.jujidaw.audio.TimeStretchListener
 import com.jujidaw.project.PadParamValues
 import com.jujidaw.project.PadSessionStore
 import com.jujidaw.project.PadSettings
+import com.jujidaw.project.PadSynthSessionStore
+import com.jujidaw.model.defaultTrackSynthState
+import com.jujidaw.model.toParamsArray
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -391,13 +394,14 @@ class PadsViewModel :
 
         // Enable/disable per-pad synth engine on mode toggle.
         if (paramId == PadParamIds.SYNTH_MODE) {
-            val padIdx = globalIndex % 16
             if (value > 0.5f) {
-                SynthEngine.setPadSynthEnabled(padIdx, true)
+                val state = PadSynthSessionStore.snapshot()[globalIndex] ?: defaultTrackSynthState()
+                PadSynthSessionStore.setPadState(globalIndex, state)
+                SynthEngine.setPadSynthEnabled(globalIndex, true)
                 // Apply default synth params so the pad makes audible sound.
-                SynthEngine.applyPadSynthState(padIdx, SynthEngine.defaultSynthParams())
+                SynthEngine.applyPadSynthState(globalIndex, state.toParamsArray())
             } else {
-                SynthEngine.setPadSynthEnabled(padIdx, false)
+                SynthEngine.setPadSynthEnabled(globalIndex, false)
             }
         }
         publishPad(globalIndex)
@@ -413,9 +417,10 @@ class PadsViewModel :
         presetName: String,
     ) {
         val globalIndex = _uiState.value.currentBank * 16 + padIndex
-        val padIdx = globalIndex % 16
-        SynthEngine.setPadSynthEnabled(padIdx, true)
-        SynthEngine.applyPadSynthState(padIdx, SynthEngine.defaultSynthParams())
+        val state = PadSynthSessionStore.snapshot()[globalIndex] ?: defaultTrackSynthState()
+        PadSynthSessionStore.setPadState(globalIndex, state)
+        SynthEngine.setPadSynthEnabled(globalIndex, true)
+        SynthEngine.applyPadSynthState(globalIndex, state.toParamsArray())
         showToast("Loaded: $presetName")
     }
 

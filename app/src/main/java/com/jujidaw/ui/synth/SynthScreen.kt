@@ -118,6 +118,12 @@ fun SynthScreen(
             onSelectTrack = viewModel::selectTrack
         )
 
+        PadSynthSelectorRow(
+            selectedPadIndex = uiState.selectedPadIndex,
+            onSelectGlobal = { viewModel.selectTrack(uiState.selectedTrack) },
+            onSelectPad = viewModel::selectPad,
+        )
+
         // ── SYNTH PANELS ──
         HardwareChassis(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -379,5 +385,91 @@ private fun TrackSelectorRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * Select the sound source being edited. The global track synth remains
+ * available, while Pads A and B each expose their 16 independent synths.
+ */
+@Composable
+private fun PadSynthSelectorRow(
+    selectedPadIndex: Int,
+    onSelectGlobal: () -> Unit,
+    onSelectPad: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "SOURCE",
+            color = TextSecondary,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(end = 4.dp),
+        )
+        SourceSelectorButton(
+            label = "GLOBAL",
+            selected = selectedPadIndex < 0,
+            onClick = onSelectGlobal,
+        )
+        repeat(32) { padIndex ->
+            if (padIndex == 0) {
+                Text(
+                    "A",
+                    color = KnobCyan,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+            if (padIndex == 16) {
+                Text(
+                    "B",
+                    color = KnobCyan,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+            SourceSelectorButton(
+                label = "P${padIndex % 16 + 1}",
+                selected = selectedPadIndex == padIndex,
+                onClick = { onSelectPad(padIndex) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SourceSelectorButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .height(28.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (selected) KnobAmber.copy(alpha = 0.35f) else BgPanel)
+                .border(1.dp, if (selected) KnobAmber else PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            color = if (selected) KnobAmber else TextSecondary,
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }

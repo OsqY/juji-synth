@@ -13,6 +13,7 @@ import com.jujidaw.model.ModulationRoute
 import com.jujidaw.model.SynthState
 import com.jujidaw.model.defaultTrackSynthState
 import com.jujidaw.model.toParamsArray
+import com.jujidaw.project.PadSynthSessionStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,9 +65,6 @@ class SynthViewModel(
     /** Per-track SynthState map for multi-timbral routing. */
     var trackStates: MutableMap<Int, SynthState> = mutableMapOf(0 to defaultTrackSynthState())
 
-    /** Per-pad SynthState map: padIndex -> synth state. */
-    var padSynthStates: MutableMap<Int, SynthState> = mutableMapOf()
-
     /** External MIDI mapping store; injected from the UI layer because it needs a [Context]. */
     var midiMappingStore: MidiMappingStore? = null
         private set
@@ -94,10 +92,11 @@ class SynthViewModel(
         applySynthStateToEngine(state)
     }
 
-    /** Select a pad's synth for editing (0..15). */
+    /** Select a pad's synth for editing (0..31 across Banks A and B). */
     fun selectPad(padIndex: Int) {
-        if (padIndex !in 0..15) return
-        val state = padSynthStates.getOrPut(padIndex) { defaultTrackSynthState() }
+        if (padIndex !in 0..31) return
+        val state = PadSynthSessionStore.snapshot()[padIndex] ?: defaultTrackSynthState()
+        PadSynthSessionStore.setPadState(padIndex, state)
         _uiState.value =
             _uiState.value.copy(
                 selectedPadIndex = padIndex,
@@ -114,7 +113,7 @@ class SynthViewModel(
         _uiState.value = _uiState.value.copy(synthState = newState)
         if (padIdx >= 0) {
             // Route to per-pad synth
-            padSynthStates[padIdx] = newState
+            PadSynthSessionStore.setPadState(padIdx, newState)
             SynthEngine.applyPadSynthState(padIdx, newState.toParamsArray())
         } else {
             // Route to global synth (channel 0)
@@ -134,8 +133,9 @@ class SynthViewModel(
         }
         try {
             val loadedState = presetJson.decodeFromString(SynthState.serializer(), preset.parametersJson)
-            _uiState.value = _uiState.value.copy(synthState = loadedState)
-            applySynthStateToEngine(loadedState)
+            // updateSynthState routes the snapshot to the selected pad when
+            // editing pad-synth mode, otherwise to the global synth.
+            updateSynthState(loadedState)
             showToast("Loaded: ${preset.name}")
         } catch (_: Exception) {
             showToast("Failed to load preset")
@@ -233,6 +233,7 @@ class SynthViewModel(
         _uiState.value = _uiState.value.copy(synthState = newState)
         val padIdx = _uiState.value.selectedPadIndex
         if (padIdx >= 0) {
+            PadSynthSessionStore.setPadState(padIdx, newState)
             SynthEngine.applyPadSynthState(padIdx, newState.toParamsArray())
         } else {
             SynthEngine.setModulationRoute(index, route.source, route.destination, route.amount, route.active)

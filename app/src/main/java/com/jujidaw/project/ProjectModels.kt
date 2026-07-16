@@ -145,4 +145,6 @@ data class Project(
     val trackSynthStates: Map<Int, SynthState> = emptyMap(),
     /** Per-pad state (32 entries, bank A then bank B). Added for pad autosave. */
     val pads: List<PadSettings> = emptyList(),
+    /** Full independent synth snapshots for pads in synth mode, keyed 0..31. */
+    val padSynthStates: Map<Int, SynthState> = emptyMap(),
 )

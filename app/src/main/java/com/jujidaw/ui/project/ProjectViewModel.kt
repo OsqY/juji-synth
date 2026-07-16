@@ -12,6 +12,7 @@ import com.jujidaw.model.PPQ
 import com.jujidaw.model.ParamIds
 import com.jujidaw.project.MixerState
 import com.jujidaw.project.Project
+import com.jujidaw.project.ProjectAutosave
 import com.jujidaw.project.ProjectInfo
 import com.jujidaw.project.ProjectRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -128,14 +129,7 @@ class ProjectViewModel(
         if (name.isBlank()) return
         _uiState.value = _uiState.value.copy(showNewDialog = false)
 
-        val project = Project(
-            name = name,
-            bpm = transportController.transportState.tempoBpm,
-            timeSignature = transportController.transportState.timeSignature,
-            patterns = transportController.patterns,
-            arrangement = transportController.arrangement,
-            mixerState = captureMixerState()
-        )
+        val project = ProjectAutosave.buildProjectFromEngine(name, transportController)
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
@@ -158,14 +152,7 @@ class ProjectViewModel(
     fun saveProject() {
         val name = _uiState.value.currentProjectName ?: return
 
-        val project = Project(
-            name = name,
-            bpm = transportController.transportState.tempoBpm,
-            timeSignature = transportController.transportState.timeSignature,
-            patterns = transportController.patterns,
-            arrangement = transportController.arrangement,
-            mixerState = captureMixerState()
-        )
+        val project = ProjectAutosave.buildProjectFromEngine(name, transportController)
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
@@ -191,37 +178,11 @@ class ProjectViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true)
             val result = repository?.loadProject(projectInfo.name)
             result?.onSuccess { project ->
-                // Restore BPM.
-                transportController.setTempo(project.bpm)
-                SynthEngine.setParam(ParamIds.SEQ_TEMPO, project.bpm)
-
-                // Restore patterns.
-                transportController.loadPatterns(project.patterns)
-
-                // Restore arrangement.
-                transportController.loadArrangement(project.arrangement)
-
-                // Restore mixer state via JNI.
-                applyMixerState(project.mixerState)
-
-                // Reload audio clips referenced by the arrangement.
-                val projectsBase = (JujiDawApp.instance.getExternalFilesDir(null)
-                    ?: JujiDawApp.instance.filesDir)
-                    .resolve("projects")
-                    .resolve(project.name)
-
-                for (clip in project.arrangement.clips) {
-                    if (clip is AudioClip) {
-                        val fullPath = if (File(clip.audioFilePath).isAbsolute) {
-                            clip.audioFilePath
-                        } else {
-                            projectsBase.resolve(clip.audioFilePath).absolutePath
-                        }
-                        if (File(fullPath).exists()) {
-                            SynthEngine.loadAudioClip(clip.id, fullPath)
-                        }
-                    }
-                }
+                ProjectAutosave.applyProjectToEngine(
+                    project,
+                    transportController,
+                    JujiDawApp.instance.applicationContext,
+                )
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,

@@ -100,7 +100,12 @@ class ProjectSerializationTest {
                             ),
                     ),
                     PadSettings(samplePath = "/sdcard/pad/snare.wav", name = "Snare"),
-                ),
+                ) + List(14) { PadSettings() } +
+                    PadSettings(
+                        name = "Bank B Lead",
+                        params = PadParamValues(synthMode = true, synthRootNote = 72),
+                    ) +
+                    List(15) { PadSettings() },
             automation =
                 listOf(
                     AutomationClip(
@@ -115,6 +120,7 @@ class ProjectSerializationTest {
                 ),
             midiMappings = listOf(MidiMapping(ccNumber = 74)),
             trackSynthStates = mapOf(0 to SynthState(filterCutoff = 0.5f)),
+            padSynthStates = mapOf(16 to SynthState(osc1Level = 0.42f, filterCutoff = 0.31f)),
         )
 
     @Test
@@ -151,10 +157,21 @@ class ProjectSerializationTest {
         assertTrue(decoded.arrangement.loopEnabled)
 
         // 4. Pad state (sample path + cached params incl. synth mode).
-        assertEquals(2, decoded.pads.size)
+        assertEquals(32, decoded.pads.size)
         val pad0 = decoded.pads[0]
         assertEquals("/sdcard/pad/kick.wav", pad0.samplePath)
         assertTrue(pad0.params.synthMode)
         assertEquals(48, pad0.params.synthRootNote)
+
+        // 5. The Bank B pad retains independent synth-mode configuration.
+        val bankBPad = decoded.pads[16]
+        assertEquals("Bank B Lead", bankBPad.name)
+        assertTrue(bankBPad.params.synthMode)
+        assertEquals(72, bankBPad.params.synthRootNote)
+
+        // 6. Full Bank B synth state remains independent of the global synth.
+        val bankBSynth = decoded.padSynthStates.getValue(16)
+        assertEquals(0.42f, bankBSynth.osc1Level)
+        assertEquals(0.31f, bankBSynth.filterCutoff)
     }
 }

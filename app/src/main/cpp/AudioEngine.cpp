@@ -42,8 +42,11 @@ void AudioEngine::init(double sampleRate) {
     sampler_->setAudioEngine(this);
     channels_[1].setInstrument(sampler_.get());
 
-    // Zero-initialise the per-pad synth pool (lazy creation).
-    synthForPad_.fill(nullptr);
+    // Clear the per-pad synth pool; instances are created only when a pad
+    // enters synth mode or receives a pad-synth parameter update.
+    for (auto& synth : synthForPad_) {
+        synth.reset();
+    }
 
     // Start background time-stretch worker
     timeStretchWorker_.setSampler(sampler_.get());
@@ -447,11 +450,16 @@ void AudioEngine::triggerPerformFx(int type) {
 SynthInstrument* AudioEngine::getPadSynth(int padIndex) {
     if (padIndex < 0 || padIndex >= PAD_SYNTH_COUNT) return nullptr;
     if (!synthForPad_[padIndex]) {
-        synthForPad_[padIndex] = new SynthInstrument();
+        synthForPad_[padIndex] = std::make_unique<SynthInstrument>();
         synthForPad_[padIndex]->init(sampleRate_);
         LOGI("Created per-pad synth for pad %d", padIndex);
     }
-    return synthForPad_[padIndex];
+    return synthForPad_[padIndex].get();
+}
+
+SynthInstrument* AudioEngine::getExistingPadSynth(int padIndex) const {
+    if (padIndex < 0 || padIndex >= PAD_SYNTH_COUNT) return nullptr;
+    return synthForPad_[padIndex].get();
 }
 
 void AudioEngine::applyPadSynthState(int padIndex, const SynthParams& params) {

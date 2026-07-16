@@ -1077,6 +1077,11 @@ Java_com_jujidaw_audio_SynthEngine_nativeReorderChannelInserts(JNIEnv* /*env*/, 
         // Eagerly create the synth instance so it's ready when triggered.
         if (enabled) {
             SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
+        } else if (auto* synth = SynthEngine::getInstance().getAudioEngine().getExistingPadSynth(padIndex)) {
+            // A pad changes between mutually-exclusive sample and synth modes.
+            // Stop its voices immediately without discarding the stored state,
+            // so re-enabling the pad restores its own previous sound.
+            synth->panic();
         }
     }
     

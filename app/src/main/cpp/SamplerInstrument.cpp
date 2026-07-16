@@ -28,7 +28,10 @@ float SamplerInstrument::process() {
     // Mix in per-pad synth output (synth-mode pads).
     if (audioEngine_) {
         for (int p = 0; p < AudioEngine::PAD_SYNTH_COUNT; p++) {
-            auto* padSynth = audioEngine_->getPadSynth(p);
+            // process() runs on the real-time audio thread: never cause a
+            // lazy allocation here. Only pads explicitly put into synth mode
+            // create an instrument.
+            auto* padSynth = audioEngine_->getExistingPadSynth(p);
             if (padSynth && padSynth->isActive()) {
 sum += padSynth->process();
 active++;
@@ -48,9 +51,9 @@ void SamplerInstrument::noteOn(int midiNote, int velocity) {
     // Synth-pad mode: forward to the per-pad synth via AudioEngine pool.
     if (pad.synthMode) {
         if (audioEngine_) {
-            auto* padSynth = audioEngine_->getPadSynth(padIndex % 16);
+            auto* padSynth = audioEngine_->getPadSynth(padIndex);
             if (padSynth) {
-                int targetNote = pad.synthRootNote + (midiNote - (activeBank_ * 16 + (padIndex % 16)));
+                int targetNote = pad.synthRootNote + (midiNote - padIndex);
                 padSynth->noteOn(targetNote, velocity);
             }
         }
@@ -87,7 +90,14 @@ void SamplerInstrument::noteOff(int midiNote) {
 
 void SamplerInstrument::releasePad(int padIndex) {
     int base = activeBank_ * 16;
-    int note = base + (padIndex % 16);
+    int localPadIndex = padIndex % 16;
+    int globalPadIndex = base + localPadIndex;
+    int note = globalPadIndex;
+    if (audioEngine_ && pads_[globalPadIndex].synthMode) {
+        if (auto* padSynth = audioEngine_->getExistingPadSynth(globalPadIndex)) {
+            padSynth->noteOff(pads_[globalPadIndex].synthRootNote);
+        }
+    }
     noteOff(note);
 }
 
