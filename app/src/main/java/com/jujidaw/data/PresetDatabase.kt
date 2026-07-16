@@ -21,6 +21,9 @@ interface PresetDao {
     @Query("SELECT * FROM presets WHERE id = :id")
     suspend fun getPresetById(id: Long): PresetEntity?
 
+    @Query("SELECT * FROM presets WHERE name = :name LIMIT 1")
+    suspend fun getPresetByName(name: String): PresetEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPreset(preset: PresetEntity): Long
 

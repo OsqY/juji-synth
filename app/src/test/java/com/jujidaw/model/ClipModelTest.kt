@@ -8,6 +8,21 @@ import org.junit.Test
 
 class ClipModelTest {
 
+    @Test
+    fun patternClipAcceptsGlobalBankBPadIndex() {
+        val clip =
+            PatternClip(
+                id = "bank-b-pad",
+                trackIndex = 0,
+                startTick = 0,
+                durationTicks = PPQ.toLong(),
+                patternId = 1000,
+                padIndex = 31,
+            )
+
+        assertEquals(31, clip.padIndex)
+    }
+
     private val json = Json {
         ignoreUnknownKeys = true
         classDiscriminator = "type"

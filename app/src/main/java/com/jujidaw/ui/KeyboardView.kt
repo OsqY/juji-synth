@@ -166,18 +166,24 @@ private fun KeyboardKeys(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(64.dp),
+                .fillMaxHeight()
+                .heightIn(min = 160.dp),
     ) {
-        val keyboardWidth = maxWidth * (OCTAVE_COUNT / 2f)
+        // Keep enough width for playable keys, while allowing wide screens to
+        // expand the keyboard instead of leaving an unused panel below it.
+        val keyboardWidth = maxOf(maxWidth, 42.dp * 7 * OCTAVE_COUNT)
 
         Box(
             modifier =
-                Modifier
+                Modifier.fillMaxSize().horizontalScroll(scrollState),
+        ) {
+            Box(
+                modifier =
+                    Modifier
                     .width(keyboardWidth)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(RadiusSm))
                     .background(SurfaceContainer)
-                    .horizontalScroll(scrollState)
                     // key = octaveOffset → restarts gesture detector when octave changes
                     .pointerInput(octaveOffset) {
                         awaitPointerEventScope {
@@ -250,8 +256,8 @@ private fun KeyboardKeys(
                             }
                         }
                     },
-        ) {
-            Canvas(modifier = Modifier.width(keyboardWidth).fillMaxHeight()) {
+            ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
                 drawKeyboard(
                     viewWidth = size.width,
                     viewHeight = size.height,
@@ -262,6 +268,7 @@ private fun KeyboardKeys(
                     octaveOffset = octaveOffset,
                     textMeasurer = textMeasurer,
                 )
+            }
             }
         }
     }

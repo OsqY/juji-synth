@@ -65,6 +65,28 @@ class TransportControllerTest {
         assertEquals(original, restored)
     }
 
+    @Test
+    fun loadArrangementPublishesPersistedLoopAndPunchStateToTransport() {
+        controller.loadArrangement(
+            Arrangement(
+                loopEnabled = true,
+                loopStartTick = PPQ.toLong(),
+                loopEndTick = PPQ * 5L,
+                punchEnabled = true,
+                punchInTick = PPQ * 2L,
+                punchOutTick = PPQ * 3L,
+            ),
+        )
+
+        val state = controller.transportState
+        assertTrue(state.loopEnabled)
+        assertEquals(PPQ.toLong(), state.loopStart.toTicks())
+        assertEquals(PPQ * 5L, state.loopEnd.toTicks())
+        assertTrue(state.punchEnabled)
+        assertEquals(PPQ * 2L, state.punchIn.toTicks())
+        assertEquals(PPQ * 3L, state.punchOut.toTicks())
+    }
+
     // ================================================================
     //  1.  schedulePatternClip — exact-duration bug
     // ================================================================

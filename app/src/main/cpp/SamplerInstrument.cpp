@@ -188,9 +188,37 @@ void SamplerInstrument::setActiveBank(int bank) {
 }
 
 void SamplerInstrument::triggerPad(int padIndex, int velocity) {
-    int base = activeBank_ * 16;
-    int note = base + (padIndex % 16);
-    noteOn(note, velocity);
+    if (padIndex < 0 || padIndex >= NUM_PADS) return;
+
+    const auto& pad = pads_[padIndex];
+    if (pad.synthMode) {
+        if (audioEngine_) {
+            if (auto* padSynth = audioEngine_->getExistingPadSynth(padIndex)) {
+                padSynth->noteOn(pad.synthRootNote, velocity);
+            }
+        }
+        return;
+    }
+
+    if (!pad.buffer || !pad.buffer->isLoaded()) return;
+    int voiceIdx = allocateVoice();
+    if (voiceIdx < 0) return;
+
+    auto& voice = voices_[voiceIdx];
+    voice.pitch = pad.pitch;
+    voice.pan = pad.pan;
+    voice.volume = pad.volume;
+    voice.attack = pad.attack;
+    voice.release = pad.release;
+    voice.reverse = pad.reverse;
+    voice.loop = pad.loop;
+    voice.oneShot = pad.oneShot;
+    voice.useFilter = pad.useFilter;
+    voice.filter.setCutoff(static_cast<double>(pad.filterCutoff));
+    voice.filter.setResonance(static_cast<double>(pad.filterResonance));
+    // Keep the global pad index as the voice note so release/voice tracking
+    // remains deterministic regardless of the currently selected UI bank.
+    voice.start(pad.buffer.get(), padIndex, velocity);
 }
 
 int SamplerInstrument::allocateVoice() {

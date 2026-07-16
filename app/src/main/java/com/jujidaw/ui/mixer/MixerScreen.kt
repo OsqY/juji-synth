@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +69,7 @@ fun MixerScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var showPerformFx by rememberSaveable { mutableStateOf(false) }
 
     // Wire the app-wide MIDI router into the ViewModel
     val app = remember { context.applicationContext as JujiDawApp }
@@ -112,14 +115,12 @@ fun MixerScreen(
         Spacer(Modifier.height(Spacing.sm))
 
         // Horizontally-scrollable strips
-        Box(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-        ) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                modifier =
+                    Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 state.channels.forEachIndexed { index, ch ->
@@ -173,11 +174,17 @@ fun MixerScreen(
 
         Spacer(Modifier.height(Spacing.sm))
 
-        PerformFxGrid(
-            activeFx = state.activePerformFx,
-            onToggle = viewModel::togglePerformFx,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        ToolbarActionButton(if (showPerformFx) "Hide FX" else "Perform FX") {
+            showPerformFx = !showPerformFx
+        }
+        if (showPerformFx) {
+            Spacer(Modifier.height(Spacing.sm))
+            PerformFxGrid(
+                activeFx = state.activePerformFx,
+                onToggle = viewModel::togglePerformFx,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 
     // Insert FX bottom sheet — raised popover surface
@@ -257,14 +264,6 @@ private fun MixerToolbar(
                 text = "MST",
                 color = TextSecondary,
                 style = LabelSmall,
-            )
-            VerticalFader(
-                value = masterState.faderDb,
-                onValueChange = onMasterFaderChange,
-                modifier =
-                    Modifier
-                        .width(44.dp) // hit width bumped 36 -> 44 (cap stays centered)
-                        .height(80.dp),
             )
             Text(
                 text = "%.1f".format(masterState.faderDb),
@@ -359,7 +358,7 @@ private fun ChannelStrip(
     Column(
         modifier =
             modifier
-                .width(76.dp)
+                .width(112.dp)
                 .clip(RoundedCornerShape(RadiusLg))
                 .background(if (isSelected) SurfaceContainerHighest else SurfaceContainer)
                 .border(
@@ -382,7 +381,7 @@ private fun ChannelStrip(
 
         // Meter + Fader
         Row(
-            modifier = Modifier.height(160.dp),
+            modifier = Modifier.height(144.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             LevelMeter(
@@ -447,7 +446,7 @@ private fun ChannelStrip(
                 label = "A",
                 valueDisplay = "%.0f".format(channel.sendA * 100),
                 accentColor = Secondary,
-                size = 40.dp,
+                size = 44.dp,
             )
             SynthKnob(
                 value = channel.sendB.coerceIn(0f, 1f),
@@ -455,7 +454,7 @@ private fun ChannelStrip(
                 label = "B",
                 valueDisplay = "%.0f".format(channel.sendB * 100),
                 accentColor = Secondary,
-                size = 40.dp,
+                size = 44.dp,
             )
         }
 

@@ -26,7 +26,7 @@ data class NoteEvent(
     val startTick: Long, // tick offset from start of pattern
     val durationTicks: Long, // must be > 0
     val trackIndex: Int = 0, // mixer channel target, denormalized for convenience
-    val padIndex: Int = -1, // pad to trigger (-1 = legacy/unknown, use noteOn path)
+    val padIndex: Int = -1, // global pad to trigger (-1 = legacy/unknown, use noteOn path)
 ) {
     init {
         require(note in 0..127) { "Note must be between 0 and 127" }
@@ -34,7 +34,7 @@ data class NoteEvent(
         require(startTick >= 0) { "Note start tick must be non-negative" }
         require(durationTicks > 0) { "Note duration must be positive" }
         require(trackIndex in 0..15) { "Track index must be between 0 and 15" }
-        require(padIndex in -1..15) { "Pad index must be between -1 and 15" }
+        require(padIndex in -1..31) { "Pad index must be between -1 and 31" }
     }
 }
 
@@ -44,7 +44,7 @@ data class NoteEvent(
  */
 @Serializable
 data class Pattern(
-    // 0..15 = user patterns; 1000..1015 = cached pad-trigger patterns
+    // 0..15 = user patterns; 1000..1031 = cached pad-trigger patterns
     // (see TimelineViewModel.PAD_PATTERN_ID_BASE). Resolved by id via
     // List.find, never used as a fixed-size array index.
     val id: Int,

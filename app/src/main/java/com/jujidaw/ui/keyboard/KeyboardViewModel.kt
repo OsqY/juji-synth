@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.jujidaw.JujiDawApp
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.model.ParamIds
+import com.jujidaw.project.PadSelectionStore
+import com.jujidaw.project.PadSessionStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -116,6 +118,15 @@ class KeyboardViewModel : ViewModel() {
     private var arpIndex = 0
     private var arpDirectionUp = true
     private var currentArpNote: Int? = null
+
+    init {
+        viewModelScope.launch {
+            PadSelectionStore.selectedPad.collect { globalPad ->
+                val isSynthPad = PadSessionStore.snapshot().getOrNull(globalPad)?.params?.synthMode == true
+                if (isSynthPad) setTarget(KeyboardTarget.SelectedPad(globalPad))
+            }
+        }
+    }
 
     companion object {
         const val MIN_VELOCITY = 30
@@ -339,7 +350,7 @@ class KeyboardViewModel : ViewModel() {
                 KeyboardTarget.SamplerA,
                 KeyboardTarget.SamplerB,
             ) + (0..15).map { KeyboardTarget.Track(it) } +
-                (0..15).map { KeyboardTarget.SelectedPad(it) }
+                (0..31).map { KeyboardTarget.SelectedPad(it) }
         val idx = targets.indexOf(_uiState.value.target)
         val next = targets.getOrElse((idx + 1) % targets.size) { targets.first() }
         setTarget(next)
@@ -412,12 +423,11 @@ class KeyboardViewModel : ViewModel() {
             }
 
             is KeyboardTarget.Track -> {
-                SynthEngine.scheduleNoteOn(t.index, note, velocity.toFloat())
+                SynthEngine.scheduleNoteOn(t.index, note, velocity / 127f)
             }
 
             is KeyboardTarget.SelectedPad -> {
-                // Play the selected pad's loaded content (sample or synth).
-                SynthEngine.triggerPad(t.padIndex, velocity)
+                SynthEngine.synthNoteOn(t.padIndex, note, velocity / 127f)
             }
         }
     }
@@ -437,7 +447,7 @@ class KeyboardViewModel : ViewModel() {
             }
 
             is KeyboardTarget.SelectedPad -> {
-                // Pads are one-shot; no note-off required
+                SynthEngine.synthNoteOff(t.padIndex, note)
             }
         }
     }

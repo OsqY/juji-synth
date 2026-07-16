@@ -214,6 +214,15 @@ class TransportController(
      */
     fun loadArrangement(newArrangement: Arrangement) {
         arrangement = newArrangement
+        transportState =
+            transportState.copy(
+                loopEnabled = newArrangement.loopEnabled,
+                loopStart = TransportPosition.fromTicks(newArrangement.loopStartTick, transportState.timeSignature),
+                loopEnd = TransportPosition.fromTicks(newArrangement.loopEndTick, transportState.timeSignature),
+                punchEnabled = newArrangement.punchEnabled,
+                punchIn = TransportPosition.fromTicks(newArrangement.punchInTick, transportState.timeSignature),
+                punchOut = TransportPosition.fromTicks(newArrangement.punchOutTick, transportState.timeSignature),
+            )
     }
 
     /**

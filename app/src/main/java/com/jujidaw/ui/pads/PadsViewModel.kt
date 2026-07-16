@@ -11,6 +11,9 @@ import com.jujidaw.project.PadParamValues
 import com.jujidaw.project.PadSessionStore
 import com.jujidaw.project.PadSettings
 import com.jujidaw.project.PadSynthSessionStore
+import com.jujidaw.project.PadSelectionStore
+import com.jujidaw.JujiDawApp
+import kotlinx.serialization.json.Json
 import com.jujidaw.model.defaultTrackSynthState
 import com.jujidaw.model.toParamsArray
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -142,7 +145,10 @@ class PadsViewModel :
         val existing = PadSessionStore.snapshot().getOrNull(globalIndex) ?: PadSettings()
         val params = cur.padParams.getOrNull(globalIndex) ?: PadParams()
         val name = cur.padNames.getOrNull(globalIndex) ?: "Pad ${globalIndex + 1}"
-        PadSessionStore.setPad(globalIndex, PadSettings(existing.samplePath, name, toValues(params)))
+        PadSessionStore.setPad(
+            globalIndex,
+            PadSettings(existing.samplePath, name, toValues(params), existing.synthPresetName),
+        )
     }
 
     private fun toValues(p: PadParams): PadParamValues =
@@ -211,7 +217,10 @@ class PadsViewModel :
 
     /** Select a pad (0..15) within the current bank. */
     fun selectPad(padIndex: Int) {
-        _uiState.update { it.copy(selectedPad = padIndex.coerceIn(0, 15)) }
+        val localIndex = padIndex.coerceIn(0, 15)
+        val globalIndex = _uiState.value.currentBank * 16 + localIndex
+        PadSelectionStore.select(globalIndex)
+        _uiState.update { it.copy(selectedPad = localIndex) }
     }
 
     /** Trigger a pad with the given velocity (1..127). */
@@ -405,23 +414,39 @@ class PadsViewModel :
             }
         }
         publishPad(globalIndex)
+        // Publish the synth-mode flag before notifying Keys, so a selected
+        // synth pad is immediately recognised as a chromatic target.
+        if (paramId == PadParamIds.SYNTH_MODE && value > 0.5f) {
+            PadSelectionStore.select(globalIndex)
+        }
     }
 
-    /**
-     * Load a factory preset onto a pad's per-pad synth.
-     * Applies a default synth state (same as the toggle) — the preset name
-     * is recorded for display; full parameter presets can be added per-name later.
-     */
+    /** Load and persist the actual Room preset snapshot for this synth pad. */
     fun loadPadPreset(
         padIndex: Int,
         presetName: String,
     ) {
         val globalIndex = _uiState.value.currentBank * 16 + padIndex
-        val state = PadSynthSessionStore.snapshot()[globalIndex] ?: defaultTrackSynthState()
-        PadSynthSessionStore.setPadState(globalIndex, state)
-        SynthEngine.setPadSynthEnabled(globalIndex, true)
-        SynthEngine.applyPadSynthState(globalIndex, state.toParamsArray())
-        showToast("Loaded: $presetName")
+        viewModelScope.launch {
+            val preset = JujiDawApp.instance.database.presetDao().getPresetByName(presetName)
+            if (preset == null) {
+                showToast("Preset not found: $presetName")
+                return@launch
+            }
+            val synthState = runCatching {
+                Json { ignoreUnknownKeys = true }.decodeFromString(com.jujidaw.model.SynthState.serializer(), preset.parametersJson)
+            }.getOrElse {
+                showToast("Could not load: $presetName")
+                return@launch
+            }
+            PadSynthSessionStore.setPadState(globalIndex, synthState)
+            SynthEngine.setPadSynthEnabled(globalIndex, true)
+            SynthEngine.applyPadSynthState(globalIndex, synthState.toParamsArray())
+            val existing = PadSessionStore.snapshot().getOrNull(globalIndex) ?: PadSettings()
+            PadSessionStore.setPad(globalIndex, existing.copy(synthPresetName = preset.name))
+            setPadParam(padIndex, PadParamIds.SYNTH_MODE, 1f)
+            showToast("Loaded: ${preset.name}")
+        }
     }
 
     /** Set slice start (0..1). TODO: wire to engine when setPadSlice is available. */

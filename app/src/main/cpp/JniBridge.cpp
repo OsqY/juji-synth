@@ -632,6 +632,7 @@ Java_com_jujidaw_audio_SynthEngine_nativeSchedulePadTrigger(JNIEnv* /*env*/, jcl
                                                               jint trackIndex, jint padIndex,
                                                               jfloat velocity, jlong targetSample) {
     if (trackIndex < 0 || trackIndex >= AudioEngine::MAX_TRACKS) return JNI_FALSE;
+    if (padIndex < 0 || padIndex >= NUM_PADS) return JNI_FALSE;
     auto event = jujidaw::ScheduledEvent::makePadTrigger(trackIndex, padIndex, velocity,
                                                           static_cast<int64_t>(targetSample));
     return SynthEngine::getInstance().getAudioEngine().getEventQueue().push(event) ? JNI_TRUE : JNI_FALSE;
@@ -994,6 +995,15 @@ Java_com_jujidaw_audio_SynthEngine_nativeReorderChannelInserts(JNIEnv* /*env*/, 
         auto* synth = SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
         if (!synth) return JNI_FALSE;
         synth->noteOn(static_cast<int>(note), static_cast<int>(velocity * 127.0f + 0.5f));
+        return JNI_TRUE;
+    }
+
+    JNIEXPORT jboolean JNICALL
+    Java_com_jujidaw_audio_SynthEngine_nativeSynthNoteOff(JNIEnv* /*env*/, jclass /*clazz*/,
+                                                           jint padIndex, jint note) {
+        auto* synth = SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
+        if (!synth) return JNI_FALSE;
+        synth->noteOff(static_cast<int>(note));
         return JNI_TRUE;
     }
     

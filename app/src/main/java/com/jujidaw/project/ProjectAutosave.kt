@@ -100,6 +100,9 @@ object ProjectAutosave {
         tc.setTempo(project.bpm)
         tc.loadPatterns(project.patterns)
         tc.loadArrangement(project.arrangement)
+        val loopStartSample = tickToSample(project.arrangement.loopStartTick, project.bpm)
+        val loopEndSample = tickToSample(project.arrangement.loopEndTick, project.bpm)
+        SynthEngine.setLoop(project.arrangement.loopEnabled, loopStartSample, loopEndSample)
         applyMixerState(project.mixerState)
         val projectsBase =
             (context.getExternalFilesDir(null) ?: context.filesDir)
@@ -288,6 +291,9 @@ object ProjectAutosave {
     }
 
     private const val NUM_PADS = 32
+
+    private fun tickToSample(tick: Long, bpm: Float): Long =
+        (tick * (60.0 / bpm) * 48000 / com.jujidaw.model.PPQ).toLong()
 
     private fun normalizePads(pads: List<PadSettings>): List<PadSettings> = (0 until NUM_PADS).map { pads.getOrNull(it) ?: PadSettings() }
 }

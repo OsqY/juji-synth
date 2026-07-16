@@ -79,6 +79,8 @@ data class PadSettings(
     val samplePath: String = "",
     val name: String = "",
     val params: PadParamValues = PadParamValues(),
+    /** Name of the synth preset snapshot assigned to this pad, if any. */
+    val synthPresetName: String = "",
 )
 
 /** Per-track mixer channel state. */

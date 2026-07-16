@@ -62,7 +62,6 @@ fun SequencerScreen(
             modifier
                 .fillMaxSize()
                 .background(Bg0)
-                .statusBarsPadding()
                 .padding(Spacing.sm),
     ) {
         // ── TOP BAR ──
@@ -535,11 +534,13 @@ private fun SequencerPianoRoll(
     val startNote = 36 // C2
     val endNote = 84 // C6
     val noteNames = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
-    val totalNotes = endNote - startNote
+    val totalNotes = endNote - startNote + 1
     val numSteps = 64
     val cellWidthDp = 28.dp
     val cellHeightDp = 14.dp
     val density = LocalDensity.current
+    val hScroll = rememberScrollState()
+    val vScroll = rememberScrollState()
 
     var dragOp by remember { mutableStateOf<PianoRollDragOp?>(null) }
     var velEditNote by remember { mutableStateOf<PianoRollNote?>(null) }
@@ -555,7 +556,7 @@ private fun SequencerPianoRoll(
                     Modifier
                         .fillMaxWidth()
                         .padding(start = 44.dp)
-                        .horizontalScroll(rememberScrollState()),
+                        .horizontalScroll(hScroll),
             ) {
                 for (col in 0 until numSteps) {
                     val isCurrent = isPlaying && col == (currentStep % numSteps)
@@ -589,7 +590,7 @@ private fun SequencerPianoRoll(
                     modifier =
                         Modifier
                             .width(44.dp)
-                            .verticalScroll(rememberScrollState()),
+                            .verticalScroll(vScroll),
                 ) {
                     for (note in endNote downTo startNote) {
                         val name = noteNames[note % 12]
@@ -624,8 +625,8 @@ private fun SequencerPianoRoll(
                     modifier =
                         Modifier
                             .weight(1f)
-                            .horizontalScroll(rememberScrollState())
-                            .verticalScroll(rememberScrollState()),
+                            .horizontalScroll(hScroll)
+                            .verticalScroll(vScroll),
                 ) {
                     Canvas(
                         modifier =

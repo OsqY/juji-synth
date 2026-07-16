@@ -126,11 +126,11 @@ class MidiRouter(
             }
 
             is KeyboardTarget.Track -> {
-                SynthEngine.scheduleNoteOn(t.index, note, velocity.toFloat())
+                SynthEngine.scheduleNoteOn(t.index, note, velocity / 127f)
             }
 
             is KeyboardTarget.SelectedPad -> {
-                SynthEngine.triggerPad(t.padIndex, velocity)
+                SynthEngine.synthNoteOn(t.padIndex, note, velocity / 127f)
             }
         }
     }
@@ -152,7 +152,7 @@ class MidiRouter(
             }
 
             is KeyboardTarget.SelectedPad -> {
-                // Pads are one-shot; no note-off required
+                SynthEngine.synthNoteOff(t.padIndex, note)
             }
         }
     }

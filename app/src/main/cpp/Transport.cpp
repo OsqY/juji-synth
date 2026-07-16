@@ -4,6 +4,7 @@
 #include "SamplerInstrument.h"
 #include "SynthInstrument.h"
 #include <android/log.h>
+#include <algorithm>
 
 #define LOG_TAG "JujiDawTransport"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -20,6 +21,7 @@ void Transport::init(int sampleRate) {
     loopEnabled_ = false;
     loopStartSample_ = 0;
     loopEndSample_ = 0;
+    pendingEvents_.reserve(256);
 }
 
 bool Transport::advance(int numSamples) {
@@ -51,28 +53,29 @@ void Transport::setLoop(bool enabled, int64_t startSample, int64_t endSample) {
 }
 
 void Transport::drainEvents(EventQueue& queue) {
-    // Build into a local vector, then move into member to avoid
-    // capacity bloat from repeated clear()+push_back cycles.
-    std::vector<ScheduledEvent> fresh;
-    fresh.reserve(64);
+    // Append newly scheduled lookahead events. Replacing this vector every
+    // audio buffer discarded events whose target sample was in a later buffer.
     ScheduledEvent event;
     while (queue.pop(event)) {
-        fresh.push_back(event);
+        pendingEvents_.push_back(event);
     }
-    pendingEvents_ = std::move(fresh);
 }
 
 void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample, int numFrames) {
     int64_t bufferEndSample = bufferStartSample + numFrames;
+    size_t keepCount = 0;
     for (const auto& event : pendingEvents_) {
         // Sample-accurate scheduling: events with targetSample >= 0 fire only
         // when targetSample falls within the current buffer range. Events with
         // targetSample < 0 (the default) always fire at buffer boundary, which
         // preserves backward compatibility for transport/automation events.
         if (event.targetSample >= 0) {
-            if (event.targetSample < bufferStartSample || event.targetSample >= bufferEndSample) {
+            if (event.targetSample >= bufferEndSample) {
+                pendingEvents_[keepCount++] = event;
                 continue;
             }
+            // An event that arrived one buffer late should fire once now
+            // instead of remaining permanently inaudible.
         }
 
         int track = event.trackIndex;
@@ -137,7 +140,7 @@ void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample
             }
         }
     }
-    pendingEvents_.clear();
+    pendingEvents_.resize(keepCount);
 }
 
 } // namespace jujidaw

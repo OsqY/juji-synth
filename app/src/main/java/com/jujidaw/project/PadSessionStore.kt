@@ -89,3 +89,13 @@ object PadSynthSessionStore {
         _state.value = emptyMap()
     }
 }
+
+/** The pad currently selected for performance/editing, addressed globally (0..31). */
+object PadSelectionStore {
+    private val _selectedPad = MutableStateFlow(0)
+    val selectedPad: StateFlow<Int> = _selectedPad
+
+    fun select(globalIndex: Int) {
+        if (globalIndex in 0 until 32) _selectedPad.value = globalIndex
+    }
+}

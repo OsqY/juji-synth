@@ -48,13 +48,13 @@ data class PatternClip(
     override val mute: Boolean = false,
     val patternId: Int,
     val transpose: Int = 0,
-    val padIndex: Int = -1, // pad to trigger (-1 = use note's padIndex, then legacy noteOn)
+    val padIndex: Int = -1, // global pad to trigger (-1 = use note's padIndex, then legacy noteOn)
 ) : Clip() {
     init {
         require(trackIndex in 0..15) { "Track index must be between 0 and 15" }
         require(startTick >= 0) { "Clip start tick must be non-negative" }
         require(durationTicks > 0) { "Clip duration must be positive" }
-        require(padIndex in -1..15) { "Pad index must be between -1 and 15" }
+        require(padIndex in -1..31) { "Pad index must be between -1 and 31" }
     }
 }
 

@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujidaw.JujiDawApp
 import com.jujidaw.R
 import com.jujidaw.model.TICKS_PER_STEP
@@ -67,6 +68,8 @@ import com.jujidaw.ui.sequencer.SequencerScreen
 import com.jujidaw.ui.synth.SynthScreen
 import com.jujidaw.ui.theme.*
 import com.jujidaw.ui.timeline.TimelineScreen
+import com.jujidaw.ui.timeline.TimelineLandscapeControls
+import com.jujidaw.ui.timeline.TimelineViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -91,6 +94,7 @@ fun MainScreen(modifier: Modifier = Modifier) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val tabs = MainTab.entries.toTypedArray()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val timelineViewModel: TimelineViewModel = viewModel { TimelineViewModel() }
 
     Scaffold(
         modifier = modifier.background(BgGunmetal),
@@ -144,27 +148,36 @@ fun MainScreen(modifier: Modifier = Modifier) {
                     .background(BgGunmetal),
         ) {
             if (isLandscape) {
-                Row(
+                Column(
                     modifier =
                         Modifier
-                            .fillMaxHeight()
+                            .weight(1f)
                             .background(BgPanel),
                 ) {
-                    Column(
+                    // The global transport must retain a full-width touch
+                    // target in landscape. Keeping it inside the 80dp rail
+                    // made Play/Record/Reset effectively invisible.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().background(SurfaceContainer),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PersistentTransportBar(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                        if (tabs[selectedTab] == MainTab.TIMELINE) {
+                            TimelineLandscapeControls(
+                                viewModel = timelineViewModel,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
+                    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        Column(
                         modifier =
                             Modifier
                                 .fillMaxHeight()
                                 .width(80.dp)
                                 .background(BgPanel),
                     ) {
-                        // Transport bar — fixed at top, not scrolled
-                        PersistentTransportBar(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                        )
-
                         // Navigation rail — scrollable with visible indicator
                         Box(modifier = Modifier.weight(1f)) {
                             val scrollState = rememberScrollState()
@@ -219,18 +232,34 @@ fun MainScreen(modifier: Modifier = Modifier) {
                             }
                         }
                     }
-                }
-            }
 
-            Box(modifier = Modifier.weight(1f)) {
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            when (tabs[selectedTab]) {
+                                MainTab.TIMELINE -> TimelineScreen(
+                                    viewModel = timelineViewModel,
+                                    showTransportControls = false,
+                                )
+                                MainTab.MIXER -> MixerScreen()
+                                MainTab.SYNTH -> SynthScreen()
+                                MainTab.PADS -> PadsScreen()
+                                MainTab.KEYBOARD -> KeyboardScreen()
+                                MainTab.SEQUENCER -> SequencerScreen()
+                                MainTab.PROJECT -> ProjectScreen()
+                            }
+                        }
+                    }
+                }
+            } else {
+                Box(modifier = Modifier.weight(1f)) {
                 when (tabs[selectedTab]) {
-                    MainTab.TIMELINE -> TimelineScreen()
+                    MainTab.TIMELINE -> TimelineScreen(viewModel = timelineViewModel)
                     MainTab.MIXER -> MixerScreen()
                     MainTab.SYNTH -> SynthScreen()
                     MainTab.PADS -> PadsScreen()
                     MainTab.KEYBOARD -> KeyboardScreen()
                     MainTab.SEQUENCER -> SequencerScreen()
                     MainTab.PROJECT -> ProjectScreen()
+                }
                 }
             }
         }
@@ -318,10 +347,14 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
                     .clip(RoundedCornerShape(RadiusSm))
                     .background(SurfaceContainerLow)
                     .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                    .clickable {
+                        transportController.stop()
+                        transportController.seek(com.jujidaw.model.TransportPosition())
+                    }
                     .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
         ) {
             Text(
-                text = "${transportState.position.bar + 1}|${transportState.position.beat + 1}|${step + 1}",
+                text = "POS ${transportState.position.bar + 1}|${transportState.position.beat + 1}|${step + 1}",
                 color = Primary,
                 style = MonoLarge,
             )

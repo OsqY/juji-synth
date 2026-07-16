@@ -36,6 +36,9 @@ class TimelineViewModel(
     private val _patterns = MutableStateFlow(transportController.patterns)
     val patterns: StateFlow<List<Pattern>> = _patterns.asStateFlow()
 
+    private val _deletedClips = MutableStateFlow<List<Clip>>(emptyList())
+    val deletedClips: StateFlow<List<Clip>> = _deletedClips.asStateFlow()
+
     private val _selectedPatternId = MutableStateFlow(0)
     val selectedPatternId: StateFlow<Int> = _selectedPatternId.asStateFlow()
 
@@ -83,12 +86,18 @@ class TimelineViewModel(
             viewModelScope.launch {
                 while (isActive) {
                     val sample = SynthEngine.getPlayheadSample()
-                    val bpm = _transportState.value.tempoBpm
+                    // The controller is shared with the global transport and
+                    // project loader. Read it on every tick so a Timeline VM
+                    // created before auto-load never keeps an empty snapshot.
+                    val controllerState = transportController.transportState
+                    val bpm = controllerState.tempoBpm
                     val tick = sampleToTick(sample, bpm)
                     _transportState.value =
-                        _transportState.value.copy(
-                            position = TransportPosition.fromTicks(tick, _transportState.value.timeSignature),
+                        controllerState.copy(
+                            position = TransportPosition.fromTicks(tick, controllerState.timeSignature),
                         )
+                    _arrangement.value = transportController.arrangement
+                    _patterns.value = transportController.patterns
                     // TODO(integrator): poll per-track level from C++ mixer when API available
                     delay(100)
                 }
@@ -106,7 +115,9 @@ class TimelineViewModel(
 
     override fun onCleared() {
         pollJob?.cancel()
-        transportController.release()
+        // The controller belongs to JujiDawApp and is shared by the global
+        // transport bar. Releasing it here would permanently cancel its
+        // scheduler whenever the user navigates away from Timeline.
         super.onCleared()
     }
 
@@ -144,6 +155,17 @@ class TimelineViewModel(
     fun nudgePlayhead(ticks: Long) {
         val current = _transportState.value.position.toTicks()
         seekToTick(current + ticks)
+    }
+
+    fun resetLoop() {
+        val newArr =
+            _arrangement.value.copy(
+                loopEnabled = false,
+                loopStartTick = 0L,
+                loopEndTick = PPQ * 4L,
+            )
+        updateArrangement(newArr)
+        SynthEngine.setLoop(false, 0L, 0L)
     }
 
     // ---- Loop ----
@@ -262,7 +284,7 @@ class TimelineViewModel(
 
     // ---- Clips ----
 
-    /** Base ID for cached pad-trigger patterns (pad 0..15 → id 1000..1015). */
+    /** Base ID for cached pad-trigger patterns (pad 0..31 → id 1000..1031). */
     companion object {
         const val PAD_PATTERN_ID_BASE = 1000
     }
@@ -328,7 +350,7 @@ class TimelineViewModel(
      * Get or create a cached [Pattern] whose sole note triggers [padIndex].
      */
     private fun getOrCreatePadTriggerPattern(padIndex: Int): Pattern {
-        val id = PAD_PATTERN_ID_BASE + padIndex.coerceIn(0, 15)
+        val id = PAD_PATTERN_ID_BASE + padIndex.coerceIn(0, 31)
         return _patterns.value.find { it.id == id } ?: createPadPattern(id, padIndex)
     }
 
@@ -406,8 +428,16 @@ class TimelineViewModel(
 
     fun deleteClip(clipId: String) {
         val clip = _arrangement.value.clips.find { it.id == clipId }
+        if (clip != null) _deletedClips.value = _deletedClips.value + clip
         if (clip is AudioClip) SynthEngine.unloadAudioClip(clip.id)
         updateClips(_arrangement.value.clips.filter { it.id != clipId })
+    }
+
+    fun restoreLastDeletedClip() {
+        val clip = _deletedClips.value.lastOrNull() ?: return
+        _deletedClips.value = _deletedClips.value.dropLast(1)
+        updateClips(_arrangement.value.clips + clip)
+        if (clip is AudioClip) SynthEngine.loadAudioClip(clip.id, clip.audioFilePath)
     }
 
     private fun updateClips(newClips: List<Clip>) {

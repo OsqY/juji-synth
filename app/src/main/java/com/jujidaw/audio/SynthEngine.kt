@@ -224,6 +224,11 @@ object SynthEngine {
         velocity: Float,
     ): Boolean
 
+    external fun nativeSynthNoteOff(
+        padIndex: Int,
+        note: Int,
+    ): Boolean
+
     external fun nativeSetPadSynthParam(
         padIndex: Int,
         paramIndex: Int,
@@ -349,6 +354,8 @@ object SynthEngine {
         note: Int,
         velocity: Float = 1f,
     ) = nativeSynthNoteOn(padIndex, note, velocity)
+
+    fun synthNoteOff(padIndex: Int, note: Int) = nativeSynthNoteOff(padIndex, note)
 
     fun setPadSynthParam(
         padIndex: Int,

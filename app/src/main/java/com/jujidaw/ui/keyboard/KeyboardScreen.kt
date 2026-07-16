@@ -121,7 +121,7 @@ private fun KeyboardTopBar(
                     KeyboardTarget.SamplerA,
                     KeyboardTarget.SamplerB,
                 ) + (0..15).map { KeyboardTarget.Track(it) } +
-                    (0..15).map { KeyboardTarget.SelectedPad(it) }
+                    (0..31).map { KeyboardTarget.SelectedPad(it) }
             }
 
         Box {
@@ -268,7 +268,7 @@ private fun ChromaticGrid(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(BgPanel)
+                    .background(Bg1)
                     .pointerInput(state.baseOctave) {
                         val activePointers = mutableMapOf<Long, Int>()
                         try {
@@ -388,17 +388,17 @@ private fun KeyPad(
                 .clip(RoundedCornerShape(6.dp))
                 .background(
                     when {
-                        isActive -> KnobAmber
-                        !isInScale -> BgGunmetal
-                        else -> BgPanel
+                        isActive -> Primary
+                        !isInScale -> Bg0
+                        else -> SurfaceContainer
                     },
                 ).border(
                     width = 1.dp,
                     color =
                         if (isInScale) {
-                            PanelHighlight.copy(alpha = 0.3f)
+                            Outline
                         } else {
-                            PanelHighlight.copy(alpha = 0.1f)
+                            OutlineVariant
                         },
                     shape = RoundedCornerShape(6.dp),
                 ),
@@ -409,7 +409,7 @@ private fun KeyPad(
             color =
                 when {
                     isActive -> Color.Black
-                    !isInScale -> TextMuted
+                    !isInScale -> TextDisabled
                     else -> TextSecondary
                 },
             fontSize = 10.sp,

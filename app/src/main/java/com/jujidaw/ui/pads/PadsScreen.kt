@@ -9,6 +9,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -144,6 +146,7 @@ fun PadsScreen(
                 globalPadIndex = globalPad,
                 params = state.padParams.getOrElse(globalPad) { PadParams() },
                 padName = state.padNames.getOrElse(globalPad) { "Pad" },
+                selectedPresetName = com.jujidaw.project.PadSessionStore.snapshot().getOrNull(globalPad)?.synthPresetName.orEmpty(),
                 onParamChange = viewModel::setPadParam,
                 onSliceStartChange = viewModel::setSliceStart,
                 onSliceEndChange = viewModel::setSliceEnd,
@@ -488,6 +491,7 @@ private fun PadEditSheet(
     globalPadIndex: Int,
     params: PadParams,
     padName: String,
+    selectedPresetName: String,
     onParamChange: (Int, Int, Float) -> Unit,
     onSliceStartChange: (Int, Float) -> Unit,
     onSliceEndChange: (Int, Float) -> Unit,
@@ -498,6 +502,7 @@ private fun PadEditSheet(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
@@ -653,7 +658,7 @@ private fun PadEditSheet(
             LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 items(presetNames) { presetName ->
                     FilterChip(
-                        selected = false,
+                        selected = presetName == selectedPresetName,
                         onClick = { onLoadPreset(presetName) },
                         label = { Text(presetName, style = CaptionSmall) },
                         colors =
@@ -666,7 +671,7 @@ private fun PadEditSheet(
                         border =
                             FilterChipDefaults.filterChipBorder(
                                 enabled = true,
-                                selected = false,
+                                selected = presetName == selectedPresetName,
                                 borderColor = OutlineVariant,
                             ),
                         modifier = Modifier.height(32.dp),
