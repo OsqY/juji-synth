@@ -2,6 +2,8 @@ package com.jujidaw.project
 
 import com.jujidaw.model.SynthState
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
@@ -94,8 +96,13 @@ object PadSynthSessionStore {
 object PadSelectionStore {
     private val _selectedPad = MutableStateFlow(0)
     val selectedPad: StateFlow<Int> = _selectedPad
+    private val _selectionEvents = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val selectionEvents = _selectionEvents.asSharedFlow()
 
     fun select(globalIndex: Int) {
-        if (globalIndex in 0 until 32) _selectedPad.value = globalIndex
+        if (globalIndex in 0 until 32) {
+            _selectedPad.value = globalIndex
+            _selectionEvents.tryEmit(globalIndex)
+        }
     }
 }

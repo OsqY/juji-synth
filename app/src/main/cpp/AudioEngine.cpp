@@ -61,6 +61,18 @@ void AudioEngine::init(double sampleRate) {
     LOGI("AudioEngine initialized at %f Hz", sampleRate);
 }
 
+void AudioEngine::panicAllAudio() {
+    if (synthInstrument_) synthInstrument_->panic();
+    if (sampler_) sampler_->panic();
+    for (auto& synth : synthForPad_) {
+        if (synth) synth->panic();
+    }
+    for (int track = 0; track < MAX_TRACKS; ++track) {
+        if (audioClipPlayers_[track]) audioClipPlayers_[track]->stop();
+        channels_[track].setClipPlayer(nullptr);
+    }
+}
+
 int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
     processMixerQueue();
 

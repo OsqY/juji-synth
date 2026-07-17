@@ -77,6 +77,7 @@ data class PadsUiState(
     val activePads: Set<Int> = emptySet(), // 0..15 within current bank (visually held)
     val padLoaded: List<Boolean> = List(32) { false },
     val padNames: List<String> = List(32) { "Pad ${it + 1}" },
+    val synthPresetNames: List<String> = List(32) { "" },
     val showEditSheet: Boolean = false,
     val showTimeStretchDialog: Boolean = false,
     val timeStretchBpm: String = "120",
@@ -111,6 +112,7 @@ class PadsViewModel :
         var changed = false
         val loaded = cur.padLoaded.toMutableList()
         val names = cur.padNames.toMutableList()
+        val presetNames = cur.synthPresetNames.toMutableList()
         val params = cur.padParams.toMutableList()
         for (i in 0 until NUM_PADS) {
             val s = pads.getOrNull(i) ?: PadSettings()
@@ -128,6 +130,10 @@ class PadsViewModel :
                 // Persisted as unloaded but UI thinks loaded: keep UI (user may
                 // have imported during this session without a store write yet).
             }
+            if (presetNames[i] != s.synthPresetName) {
+                presetNames[i] = s.synthPresetName
+                changed = true
+            }
             val newParams = fromValues(s.params)
             if (params[i] != newParams) {
                 params[i] = newParams
@@ -135,7 +141,7 @@ class PadsViewModel :
             }
         }
         if (changed) {
-            _uiState.update { it.copy(padLoaded = loaded, padNames = names, padParams = params) }
+            _uiState.update { it.copy(padLoaded = loaded, padNames = names, synthPresetNames = presetNames, padParams = params) }
         }
     }
 
@@ -212,7 +218,13 @@ class PadsViewModel :
     fun setBank(bank: Int) {
         val b = bank.coerceIn(0, 1)
         SynthEngine.setSamplerBank(b)
-        _uiState.update { it.copy(currentBank = b) }
+        _uiState.update {
+            val selected = it.selectedPad.coerceIn(0, 15)
+            PadSelectionStore.select(b * 16 + selected)
+            // A held pointer from the previous bank must not leave stale
+            // highlights in the newly visible grid.
+            it.copy(currentBank = b, selectedPad = selected, activePads = emptySet())
+        }
     }
 
     /** Select a pad (0..15) within the current bank. */
@@ -228,14 +240,26 @@ class PadsViewModel :
         padIndex: Int,
         velocity: Int,
     ) {
-        SynthEngine.triggerPad(padIndex, velocity.coerceIn(1, 127))
-        _uiState.update { it.copy(activePads = it.activePads + padIndex) }
+        val localIndex = padIndex.coerceIn(0, 15)
+        val globalIndex = _uiState.value.currentBank * 16 + localIndex
+        SynthEngine.triggerPad(globalIndex, velocity.coerceIn(1, 127))
+        _uiState.update { it.copy(activePads = it.activePads + localIndex) }
     }
 
     /** Release a pad. */
     fun releasePad(padIndex: Int) {
-        SynthEngine.releasePad(padIndex)
-        _uiState.update { it.copy(activePads = it.activePads - padIndex) }
+        val localIndex = padIndex.coerceIn(0, 15)
+        val globalIndex = _uiState.value.currentBank * 16 + localIndex
+        SynthEngine.releasePad(globalIndex)
+        _uiState.update { it.copy(activePads = it.activePads - localIndex) }
+    }
+
+    /** Toggle the selected pad between sampler and synth mode from the main toolbar. */
+    fun toggleSelectedSynthMode() {
+        val state = _uiState.value
+        val current = state.padParams[state.currentBank * 16 + state.selectedPad].synthMode
+        setPadParam(state.selectedPad, PadParamIds.SYNTH_MODE, if (current) 0f else 1f)
+        if (!current) showEditSheet()
     }
 
     /**
@@ -286,9 +310,10 @@ class PadsViewModel :
                     // Persist the absolute sample path + params so the pad
                     // survives an app restart via ProjectAutosave.
                     val params0 = _uiState.value.padParams.getOrElse(globalIndex) { PadParams() }
+                    val existing = PadSessionStore.snapshot().getOrNull(globalIndex) ?: PadSettings()
                     PadSessionStore.setPad(
                         globalIndex,
-                        PadSettings(wavFile.absolutePath, dispName, toValues(params0)),
+                        existing.copy(samplePath = wavFile.absolutePath, name = dispName, params = toValues(params0)),
                     )
                     showToast("Sample loaded")
                 } else {
@@ -444,6 +469,11 @@ class PadsViewModel :
             SynthEngine.applyPadSynthState(globalIndex, synthState.toParamsArray())
             val existing = PadSessionStore.snapshot().getOrNull(globalIndex) ?: PadSettings()
             PadSessionStore.setPad(globalIndex, existing.copy(synthPresetName = preset.name))
+            _uiState.update { state ->
+                val names = state.synthPresetNames.toMutableList()
+                names[globalIndex] = preset.name
+                state.copy(synthPresetNames = names)
+            }
             setPadParam(padIndex, PadParamIds.SYNTH_MODE, 1f)
             showToast("Loaded: ${preset.name}")
         }

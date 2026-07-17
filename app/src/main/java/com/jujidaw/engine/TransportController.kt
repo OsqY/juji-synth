@@ -7,6 +7,7 @@ import com.jujidaw.model.NoteEvent
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
+import com.jujidaw.model.PadClip
 import com.jujidaw.model.TICKS_PER_BEAT
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TimeSignature
@@ -106,6 +107,12 @@ class TransportController(
             val track: Int,
             val padIndex: Int,
         ) : ScheduledEventKey
+
+        data class PadRelease(
+            override val startSample: Long,
+            val track: Int,
+            val padIndex: Int,
+        ) : ScheduledEventKey
     }
 
     internal val scheduledEventKeys: MutableSet<ScheduledEventKey> = mutableSetOf()
@@ -134,11 +141,27 @@ class TransportController(
         schedulerJob?.cancel()
         schedulerJob = null
         currentStep = 0
-        scheduler.clearScheduledEvents()
         clearScheduledEventKeys()
         stopAllHeldNotes()
         startedClips.clear()
-        scheduler.setTransport(false, false, transportState.tempoBpm)
+        scheduler.resetTransport(scheduler.getPlayheadSample(), false, false)
+        scheduler.setSequencerEnabled(true)
+    }
+
+    /** Stop all playback and return the transport to the first tick. */
+    fun restart() {
+        schedulerJob?.cancel()
+        schedulerJob = null
+        transportState = transportState.copy(
+            playing = false,
+            recording = false,
+            position = TransportPosition(),
+        )
+        currentStep = 0
+        clearScheduledEventKeys()
+        stopAllHeldNotes()
+        startedClips.clear()
+        scheduler.resetTransport(0L, false, false)
         scheduler.setSequencerEnabled(true)
     }
 
@@ -147,13 +170,14 @@ class TransportController(
      * notes.
      */
     fun seek(position: TransportPosition) {
+        val wasPlaying = transportState.playing
+        val wasRecording = transportState.recording
         transportState = transportState.copy(position = position)
         val sample = tickToSample(position.toTicks(transportState.timeSignature))
-        scheduler.clearScheduledEvents()
         clearScheduledEventKeys()
         stopAllHeldNotes()
         startedClips.clear()
-        scheduler.setPlayheadSample(sample)
+        scheduler.resetTransport(sample, wasPlaying, wasRecording)
     }
 
     /**
@@ -213,7 +237,19 @@ class TransportController(
      * Replace the arrangement.
      */
     fun loadArrangement(newArrangement: Arrangement) {
-        arrangement = newArrangement
+        val migratedClips = newArrangement.clips.map { clip ->
+            if (clip is PatternClip && clip.padIndex in 0..31 && clip.patternId in 1000..1031) {
+                PadClip(
+                    id = clip.id,
+                    trackIndex = clip.trackIndex,
+                    startTick = clip.startTick,
+                    durationTicks = clip.durationTicks,
+                    mute = clip.mute,
+                    padIndex = clip.padIndex,
+                )
+            } else clip
+        }
+        arrangement = newArrangement.copy(clips = migratedClips)
         transportState =
             transportState.copy(
                 loopEnabled = newArrangement.loopEnabled,
@@ -241,6 +277,9 @@ class TransportController(
                     val currentSample = scheduler.getPlayheadSample()
                     val tick = sampleToTick(currentSample, transportState.tempoBpm)
                     currentStep = (tick / TICKS_PER_STEP).toInt()
+                    transportState = transportState.copy(
+                        position = TransportPosition.fromTicks(tick, transportState.timeSignature),
+                    )
                     scheduleNextBlock()
                     delay(schedulingIntervalMs)
                 }
@@ -252,13 +291,6 @@ class TransportController(
      * the scheduling logic without running the real coroutine loop.
      */
     internal fun scheduleNextBlock() {
-        // Clear per-tick de-duplication keys so that notes (especially pad
-        // triggers) can re-fire on every scheduler tick. The original intent
-        // was to prevent double-firing within a single lookahead overlap, but
-        // persisting keys across ticks blocked legitimate re-triggers when the
-        // arrangement loops or a PatternClip should re-enter the window.
-        clearScheduledEventKeys()
-
         val currentSample = scheduler.getPlayheadSample()
         val lookaheadSamples = (sampleRate * lookaheadMs) / 1000
         val windowEnd = currentSample + lookaheadSamples
@@ -320,7 +352,24 @@ class TransportController(
         }
 
         val pattern = patterns.find { it.id == activePatternId } ?: return
-        schedulePatternNotes(pattern, currentSample, windowEnd, bpm, 0L)
+        val patternLength = pattern.lengthTicks.coerceAtLeast(TICKS_PER_STEP.toLong())
+        val currentTick = sampleToTick(currentSample, bpm)
+        val windowEndTick = sampleToTick(windowEnd, bpm)
+        val firstCycle = (currentTick / patternLength) * patternLength
+        // The scheduler ticks frequently enough to revisit the next cycle as
+        // the playhead approaches it. Scheduling only the current cycle keeps
+        // unusually large lookaheads from flooding the native event queue.
+        val cycleStart = firstCycle
+        if (cycleStart <= windowEndTick) {
+            schedulePatternNotes(
+                pattern = pattern,
+                currentSample = currentSample,
+                windowEnd = windowEnd,
+                bpm = bpm,
+                patternStartTickOffset = cycleStart,
+                maxEndTick = cycleStart + patternLength,
+            )
+        }
     }
 
     private fun scheduleArrangement(
@@ -336,8 +385,27 @@ class TransportController(
         for (clip in clips) {
             when (clip) {
                 is PatternClip -> schedulePatternClip(clip, currentSample, windowEnd, bpm)
+                is PadClip -> schedulePadClip(clip, currentSample, windowEnd, bpm)
                 is AudioClip -> scheduleAudioClip(clip, currentSample, windowEnd, bpm)
             }
+        }
+    }
+
+    private fun schedulePadClip(
+        clip: PadClip,
+        currentSample: Long,
+        windowEnd: Long,
+        bpm: Float,
+    ) {
+        val startSample = tickToSample(clip.startTick, bpm)
+        val endSample = startSample + tickToSampleDelta(clip.durationTicks, bpm)
+        if (startSample > windowEnd || endSample < currentSample) return
+        val key = ScheduledEventKey.Pad(startSample, clip.trackIndex, clip.padIndex)
+        if (!scheduledEventKeys.add(key)) return
+        schedulePadTrigger(clip.trackIndex, clip.padIndex, clip.velocity, startSample)
+        val releaseKey = ScheduledEventKey.PadRelease(endSample, clip.trackIndex, clip.padIndex)
+        if (scheduledEventKeys.add(releaseKey)) {
+            schedulePadRelease(clip.trackIndex, clip.padIndex, endSample)
         }
     }
 
@@ -441,6 +509,10 @@ class TransportController(
                 if (padKey in scheduledEventKeys) continue
                 scheduledEventKeys.add(padKey)
                 schedulePadTrigger(track, effectivePadIndex, note.velocity, noteStartSample)
+                val releaseKey = ScheduledEventKey.PadRelease(noteEndSample, track, effectivePadIndex)
+                if (scheduledEventKeys.add(releaseKey)) {
+                    schedulePadRelease(track, effectivePadIndex, noteEndSample)
+                }
             } else {
                 val finalNote = (note.note + transpose).coerceIn(0, 127)
                 val onKey =
@@ -485,11 +557,10 @@ class TransportController(
 
         if (currentSample >= loopEndSample) {
             // Wrap back to loop start. Clear stale events and re-seek.
-            scheduler.clearScheduledEvents()
             clearScheduledEventKeys()
             stopAllHeldNotes()
             startedClips.clear()
-            scheduler.setPlayheadSample(loopStartSample)
+            scheduler.resetTransport(loopStartSample, true, transportState.recording)
             transportState =
                 transportState.copy(
                     position = TransportPosition.fromTicks(arrangement.loopStartTick, timeSignature),
@@ -551,6 +622,14 @@ class TransportController(
         targetSample: Long = -1L,
     ) {
         scheduler.schedulePadTrigger(track, padIndex, velocity, targetSample)
+    }
+
+    internal fun schedulePadRelease(
+        track: Int,
+        padIndex: Int,
+        targetSample: Long = -1L,
+    ) {
+        scheduler.schedulePadRelease(track, padIndex, targetSample)
     }
 
     internal fun stopAllNotesOnTrack(track: Int) {

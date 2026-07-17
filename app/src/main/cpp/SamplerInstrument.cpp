@@ -89,13 +89,14 @@ void SamplerInstrument::noteOff(int midiNote) {
 }
 
 void SamplerInstrument::releasePad(int padIndex) {
-    int base = activeBank_ * 16;
-    int localPadIndex = padIndex % 16;
-    int globalPadIndex = base + localPadIndex;
+    // Scheduler and project state use global pad indices. Keep the release
+    // operation independent of whichever bank the UI currently displays.
+    int globalPadIndex = padIndex;
+    if (globalPadIndex < 0 || globalPadIndex >= NUM_PADS) return;
     int note = globalPadIndex;
     if (audioEngine_ && pads_[globalPadIndex].synthMode) {
         if (auto* padSynth = audioEngine_->getExistingPadSynth(globalPadIndex)) {
-            padSynth->noteOff(pads_[globalPadIndex].synthRootNote);
+            padSynth->panic();
         }
     }
     noteOff(note);

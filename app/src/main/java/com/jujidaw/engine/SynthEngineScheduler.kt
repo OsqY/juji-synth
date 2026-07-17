@@ -35,6 +35,12 @@ interface SynthEngineScheduler {
         targetSample: Long = -1L,
     ): Boolean
 
+    fun schedulePadRelease(
+        trackIndex: Int,
+        padIndex: Int,
+        targetSample: Long = -1L,
+    ): Boolean
+
     fun scheduleAutomation(
         trackIndex: Int,
         paramIndex: Int,
@@ -43,6 +49,8 @@ interface SynthEngineScheduler {
     ): Boolean
 
     fun clearScheduledEvents()
+
+    fun resetTransport(sample: Long, playing: Boolean, recording: Boolean)
 
     fun setTransport(
         playing: Boolean,
@@ -100,6 +108,12 @@ class NativeSynthEngineScheduler : SynthEngineScheduler {
         targetSample: Long,
     ): Boolean = SynthEngine.schedulePadTrigger(trackIndex, padIndex, velocity, targetSample)
 
+    override fun schedulePadRelease(
+        trackIndex: Int,
+        padIndex: Int,
+        targetSample: Long,
+    ): Boolean = SynthEngine.schedulePadRelease(trackIndex, padIndex, targetSample)
+
     override fun scheduleAutomation(
         trackIndex: Int,
         paramIndex: Int,
@@ -108,6 +122,9 @@ class NativeSynthEngineScheduler : SynthEngineScheduler {
     ): Boolean = SynthEngine.scheduleAutomation(trackIndex, paramIndex, value, targetSample)
 
     override fun clearScheduledEvents() = SynthEngine.clearScheduledEvents()
+
+    override fun resetTransport(sample: Long, playing: Boolean, recording: Boolean) =
+        SynthEngine.resetTransport(sample, playing, recording)
 
     override fun setTransport(
         playing: Boolean,

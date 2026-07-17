@@ -187,7 +187,9 @@ Java_com_jujidaw_audio_SynthEngine_nativeNoteOff(JNIEnv* env, jclass /*clazz*/,
 
 JNIEXPORT void JNICALL
 Java_com_jujidaw_audio_SynthEngine_nativePanic(JNIEnv* env, jclass /*clazz*/) {
-    SynthEngine::getInstance().getAudioEngine().panic();
+    auto& engine = SynthEngine::getInstance().getAudioEngine();
+    engine.getEventQueue().push(jujidaw::ScheduledEvent::makeTransportReset(
+        engine.getTransport().getCurrentSample(), false, false));
 }
 
 JNIEXPORT void JNICALL
@@ -650,7 +652,19 @@ Java_com_jujidaw_audio_SynthEngine_nativeScheduleAutomation(JNIEnv* /*env*/, jcl
 
 JNIEXPORT void JNICALL
 Java_com_jujidaw_audio_SynthEngine_nativeClearScheduledEvents(JNIEnv* /*env*/, jclass /*clazz*/) {
-    SynthEngine::getInstance().getAudioEngine().getEventQueue().clear();
+    auto& engine = SynthEngine::getInstance().getAudioEngine();
+    engine.getEventQueue().push(jujidaw::ScheduledEvent::makeTransportReset(
+        engine.getTransport().getCurrentSample(),
+        engine.getTransport().isPlaying(), engine.getTransport().isRecording()));
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujidaw_audio_SynthEngine_nativeResetTransport(JNIEnv* /*env*/, jclass /*clazz*/,
+                                                         jlong sample, jboolean playing,
+                                                         jboolean recording) {
+    auto& engine = SynthEngine::getInstance().getAudioEngine();
+    engine.getEventQueue().push(jujidaw::ScheduledEvent::makeTransportReset(
+        static_cast<int64_t>(sample), playing != JNI_FALSE, recording != JNI_FALSE));
 }
 
 JNIEXPORT void JNICALL
@@ -671,8 +685,21 @@ Java_com_jujidaw_audio_SynthEngine_nativeGetPlayheadSample(JNIEnv* /*env*/, jcla
 JNIEXPORT void JNICALL
 Java_com_jujidaw_audio_SynthEngine_nativeSetPlayheadSample(JNIEnv* /*env*/, jclass /*clazz*/,
                                                             jlong sample) {
-    SynthEngine::getInstance().getAudioEngine().getEventQueue().clear();
-    SynthEngine::getInstance().getAudioEngine().getTransport().setCurrentSample(static_cast<int64_t>(sample));
+    auto& engine = SynthEngine::getInstance().getAudioEngine();
+    engine.getEventQueue().push(jujidaw::ScheduledEvent::makeTransportReset(
+        static_cast<int64_t>(sample), false, false));
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_jujidaw_audio_SynthEngine_nativeSchedulePadRelease(JNIEnv* /*env*/, jclass /*clazz*/,
+                                                              jint trackIndex, jint padIndex,
+                                                              jlong targetSample) {
+    if (trackIndex < 0 || trackIndex >= AudioEngine::MAX_TRACKS) return JNI_FALSE;
+    if (padIndex < 0 || padIndex >= NUM_PADS) return JNI_FALSE;
+    auto event = jujidaw::ScheduledEvent::makePadRelease(
+        trackIndex, padIndex, static_cast<int64_t>(targetSample));
+    return SynthEngine::getInstance().getAudioEngine().getEventQueue().push(event)
+        ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL

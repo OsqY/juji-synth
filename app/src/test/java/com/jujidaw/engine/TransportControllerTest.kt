@@ -6,6 +6,7 @@ import com.jujidaw.model.NoteEvent
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
+import com.jujidaw.model.PadClip
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TimeSignature
 import com.jujidaw.model.TransportPosition
@@ -862,6 +863,28 @@ class TransportControllerTest {
             1,
             fakeScheduler.noteOnEvents.size,
         )
+    }
+
+    @Test
+    fun loadArrangementMigratesLegacyPadPatternClipToOneShotPadClip() {
+        controller.loadArrangement(
+            Arrangement(
+                clips = listOf(
+                    PatternClip(
+                        id = "legacy-pad",
+                        trackIndex = 1,
+                        startTick = 0L,
+                        durationTicks = PPQ * 4L,
+                        patternId = 1007,
+                        padIndex = 7,
+                    ),
+                ),
+            ),
+        )
+
+        val clip = controller.arrangement.clips.single()
+        assertTrue(clip is PadClip)
+        assertEquals(7, (clip as PadClip).padIndex)
     }
 
     // ================================================================

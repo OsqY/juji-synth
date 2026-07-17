@@ -11,7 +11,9 @@ enum class ScheduledEventType : uint8_t {
     NOTE_OFF = 1,
     PAD_TRIGGER = 2,
     AUTOMATION = 3,
-    TRANSPORT = 4
+    TRANSPORT = 4,
+    PAD_RELEASE = 5,
+    TRANSPORT_RESET = 6
 };
 
 /**
@@ -49,6 +51,11 @@ struct ScheduledEvent {
             uint8_t recording;
             float tempoBpm;
         } transport;
+        struct {
+            int64_t sample;
+            uint8_t playing;
+            uint8_t recording;
+        } reset;
 
         EventData() { std::memset(this, 0, sizeof(*this)); }
         ~EventData() = default;
@@ -100,6 +107,28 @@ struct ScheduledEvent {
         e.targetSample = targetSample;
         e.data.automation.paramIndex = paramIndex;
         e.data.automation.value = value;
+        return e;
+    }
+
+    static ScheduledEvent makePadRelease(int track, int padIndex,
+                                         int64_t targetSample = -1) {
+        ScheduledEvent e;
+        e.type = ScheduledEventType::PAD_RELEASE;
+        e.trackIndex = track;
+        e.targetSample = targetSample;
+        e.data.padTrigger.padIndex = padIndex;
+        return e;
+    }
+
+    static ScheduledEvent makeTransportReset(int64_t sample = 0,
+                                              bool playing = false,
+                                              bool recording = false) {
+        ScheduledEvent e;
+        e.type = ScheduledEventType::TRANSPORT_RESET;
+        e.targetSample = -1;
+        e.data.reset.sample = sample;
+        e.data.reset.playing = playing ? 1u : 0u;
+        e.data.reset.recording = recording ? 1u : 0u;
         return e;
     }
 

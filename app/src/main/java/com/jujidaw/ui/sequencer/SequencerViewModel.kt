@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** View mode for the sequencer screen. */
 enum class SequencerViewMode { STEP, PIANO_ROLL }
@@ -112,7 +113,14 @@ class SequencerViewModel(
     val uiState: StateFlow<SequencerUiState> = _uiState.asStateFlow()
 
     init {
-        transportController.isSequencerMode = true
+        // Hydrate the editor from the project's canonical patterns.  Keep the
+        // fixed 16-slot launcher, but never discard patterns loaded by the
+        // timeline/project loader.
+        val hydrated = List(16) { id ->
+            transportController.patterns.firstOrNull { it.id == id }?.toSequencerPattern()
+                ?: SequencerPattern(id = id)
+        }
+        _uiState.value = _uiState.value.copy(patterns = hydrated)
 
         // Load initial patterns into the transport controller.
         syncActivePatternToTransport()
@@ -132,6 +140,15 @@ class SequencerViewModel(
                 delay(33) // ~30 fps
             }
         }
+    }
+
+    fun enterSequencerMode() {
+        transportController.isSequencerMode = true
+    }
+
+    fun leaveSequencerMode() {
+        if (transportController.transportState.playing) transportController.stop()
+        transportController.isSequencerMode = false
     }
 
     /** Switch the active pattern (0..15). */
@@ -300,6 +317,18 @@ class SequencerViewModel(
         }
     }
 
+    /** Local transport controls keep Sequencer usable without the global shell. */
+    fun stopPlayback() {
+        transportController.stop()
+        _uiState.value = _uiState.value.copy(isRecording = false)
+    }
+
+    fun restartPlayback() {
+        transportController.restart()
+        transportController.queuePattern(_uiState.value.selectedPatternId)
+        transportController.play()
+    }
+
     /** Toggle recording arm. */
     fun toggleRecord() {
         val newRecording = !_uiState.value.isRecording
@@ -328,16 +357,8 @@ class SequencerViewModel(
 
     /** Convert the active [SequencerPattern] to a canonical [Pattern] and push to transport. */
     private fun syncActivePatternToTransport() {
-        val seqPattern = _uiState.value.patterns[_uiState.value.selectedPatternId]
-        val pattern =
-            when (_uiState.value.viewMode) {
-                SequencerViewMode.STEP -> seqPattern.toStepPattern()
-                SequencerViewMode.PIANO_ROLL -> seqPattern.toPianoRollPattern()
-            }
         val allPatterns =
-            _uiState.value.patterns.mapIndexed { index, sp ->
-                if (index == _uiState.value.selectedPatternId) pattern else sp.toStepPattern()
-            }
+            _uiState.value.patterns.map { it.toCanonicalPattern() }
         transportController.loadPatterns(allPatterns)
         scheduleAutosave()
     }
@@ -354,8 +375,9 @@ class SequencerViewModel(
     }
 
     override fun onCleared() {
-        transportController.isSequencerMode = false
-        transportController.release()
+        // The controller is app-scoped and shared with Timeline/Mixer.  Stop
+        // this screen's playback ownership, but never release the singleton.
+        leaveSequencerMode()
         super.onCleared()
     }
 }
@@ -369,7 +391,7 @@ private fun SequencerPattern.toStepPattern(): Pattern {
     val noteEvents = mutableListOf<NoteEvent>()
     tracks.forEachIndexed { trackIndex, track ->
         // Row R = Pad R; padIndex defaults to track position.
-        val padIndex = track.padIndex.coerceAtLeast(0).let { if (it < 0) trackIndex else it }
+        val padIndex = if (track.padIndex in 0..31) track.padIndex else trackIndex
         track.steps.forEachIndexed { stepIndex, cell ->
             if (cell.active) {
                 noteEvents.add(
@@ -397,7 +419,7 @@ private fun SequencerPattern.toStepPattern(): Pattern {
 /** Build a [Pattern] from the piano-roll representation. */
 private fun SequencerPattern.toPianoRollPattern(): Pattern {
     val noteEvents =
-        pianoRollNotes.map { prn ->
+        pianoRollNotes.filterNot { it.muted }.map { prn ->
             NoteEvent(
                 note = prn.note.coerceIn(0, 127),
                 velocity = prn.velocity / 127f,
@@ -412,5 +434,52 @@ private fun SequencerPattern.toPianoRollPattern(): Pattern {
         trackIndex = 0,
         lengthSteps = 64,
         notes = noteEvents,
+    )
+}
+
+/** Canonical pattern keeps both editor subsets so switching views cannot erase notes. */
+private fun SequencerPattern.toCanonicalPattern(): Pattern {
+    val step = toStepPattern()
+    val piano = toPianoRollPattern()
+    return step.copy(
+        lengthSteps = lengthSteps.coerceIn(1, 64),
+        lengthTicks = lengthSteps.coerceIn(1, 64) * TICKS_PER_STEP.toLong(),
+        notes = step.notes + piano.notes,
+    )
+}
+
+/** Hydrate the rich editor model from canonical project data. */
+private fun Pattern.toSequencerPattern(): SequencerPattern {
+    val tracks = List(16) { trackIndex ->
+        val pad = notes.firstOrNull { it.trackIndex == trackIndex && it.padIndex >= 0 }?.padIndex
+            ?: trackIndex
+        val steps = List(16) { stepIndex ->
+            val event = notes.firstOrNull {
+                it.trackIndex == trackIndex &&
+                    (it.startTick / TICKS_PER_STEP).toInt() == stepIndex
+            }
+            StepCell(
+                active = event != null,
+                velocity = ((event?.velocity ?: 0.78f) * 127f).roundToInt().coerceIn(0, 127),
+                gate = ((event?.durationTicks ?: (TICKS_PER_STEP * 0.8f).toLong()).toFloat() /
+                    TICKS_PER_STEP).coerceIn(0.05f, 1f),
+            )
+        }
+        StepTrack(steps = steps, defaultNote = notes.firstOrNull { it.trackIndex == trackIndex }?.note ?: 60, padIndex = pad)
+    }
+    val piano = notes.filter { it.padIndex < 0 }.map { event ->
+        PianoRollNote(
+            note = event.note,
+            startStep = event.startTick.toFloat() / TICKS_PER_STEP,
+            duration = event.durationTicks.toFloat() / TICKS_PER_STEP,
+            velocity = (event.velocity * 127f).roundToInt().coerceIn(0, 127),
+        )
+    }
+    return SequencerPattern(
+        id = id,
+        name = name,
+        tracks = tracks,
+        pianoRollNotes = piano,
+        lengthSteps = lengthSteps,
     )
 }

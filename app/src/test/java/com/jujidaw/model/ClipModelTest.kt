@@ -23,6 +23,20 @@ class ClipModelTest {
         assertEquals(31, clip.padIndex)
     }
 
+    @Test
+    fun padClipSerializesAsOneShotPolymorphicClip() {
+        val arrangement = Arrangement(
+            clips = listOf(PadClip("pad", 1, PPQ.toLong(), TICKS_PER_STEP.toLong(), padIndex = 31)),
+        )
+        val decoded = json.decodeFromString(
+            Arrangement.serializer(),
+            json.encodeToString(arrangement),
+        )
+        val clip = decoded.clips.single() as PadClip
+        assertEquals(31, clip.padIndex)
+        assertEquals(TICKS_PER_STEP.toLong(), clip.durationTicks)
+    }
+
     private val json = Json {
         ignoreUnknownKeys = true
         classDiscriminator = "type"

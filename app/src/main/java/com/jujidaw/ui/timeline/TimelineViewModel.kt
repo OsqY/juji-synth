@@ -333,14 +333,11 @@ class TimelineViewModel(
         padIndex: Int,
     ) {
         val snapped = snapTick(startTick.coerceAtLeast(0))
-        val pattern = getOrCreatePadTriggerPattern(padIndex)
         val newClip =
-            PatternClip(
+            PadClip(
                 id = "padClip_${System.nanoTime()}",
                 trackIndex = trackIndex,
                 startTick = snapped,
-                durationTicks = PPQ * 4L,
-                patternId = pattern.id,
                 padIndex = padIndex,
             )
         updateClips(_arrangement.value.clips + newClip)
@@ -393,6 +390,7 @@ class TimelineViewModel(
             _arrangement.value.clips.map {
                 when (it) {
                     is PatternClip -> if (it.id == clipId) it.copy(startTick = snapped, trackIndex = track) else it
+                    is PadClip -> if (it.id == clipId) it.copy(startTick = snapped, trackIndex = track) else it
                     is AudioClip -> if (it.id == clipId) it.copy(startTick = snapped, trackIndex = track) else it
                 }
             },
@@ -408,6 +406,7 @@ class TimelineViewModel(
             _arrangement.value.clips.map {
                 when (it) {
                     is PatternClip -> if (it.id == clipId) it.copy(durationTicks = d) else it
+                    is PadClip -> if (it.id == clipId) it.copy(durationTicks = d) else it
                     is AudioClip -> if (it.id == clipId) it.copy(durationTicks = d) else it
                 }
             },
@@ -420,6 +419,7 @@ class TimelineViewModel(
                 val mute = if (it.id == clipId) !it.mute else it.mute
                 when (it) {
                     is PatternClip -> it.copy(mute = mute)
+                    is PadClip -> it.copy(mute = mute)
                     is AudioClip -> it.copy(mute = mute)
                 }
             },

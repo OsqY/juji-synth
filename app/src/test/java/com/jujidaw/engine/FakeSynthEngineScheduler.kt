@@ -112,6 +112,12 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         return true
     }
 
+    override fun schedulePadRelease(
+        trackIndex: Int,
+        padIndex: Int,
+        targetSample: Long,
+    ): Boolean = true
+
     override fun scheduleAutomation(
         trackIndex: Int,
         paramIndex: Int,
@@ -124,6 +130,14 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
 
     override fun clearScheduledEvents() {
         clearScheduledEventsCount++
+    }
+
+    override fun resetTransport(sample: Long, playing: Boolean, recording: Boolean) {
+        clearScheduledEventsCount++
+        lastSetPlayheadSample = sample
+        controlledPlayheadSample = sample
+        lastTransportPlaying = playing
+        lastTransportRecording = recording
     }
 
     override fun setTransport(

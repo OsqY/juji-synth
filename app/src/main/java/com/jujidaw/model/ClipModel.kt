@@ -37,6 +37,27 @@ sealed class Clip {
     abstract val mute: Boolean
 }
 
+/** A direct one-shot pad hit on the arrangement timeline. */
+@Serializable
+@SerialName("pad")
+data class PadClip(
+    override val id: String,
+    override val trackIndex: Int,
+    override val startTick: Long,
+    override val durationTicks: Long = TICKS_PER_STEP.toLong(),
+    override val mute: Boolean = false,
+    val padIndex: Int,
+    val velocity: Float = 1.0f,
+) : Clip() {
+    init {
+        require(trackIndex in 0..15) { "Clip track index must be between 0 and 15" }
+        require(startTick >= 0) { "Clip start tick must be non-negative" }
+        require(durationTicks > 0) { "Clip duration must be positive" }
+        require(padIndex in 0..31) { "Pad index must be between 0 and 31" }
+        require(velocity in 0.0f..1.0f) { "Pad velocity must be between 0 and 1" }
+    }
+}
+
 /** A clip that plays a pattern for its duration. */
 @Serializable
 @SerialName("pattern")

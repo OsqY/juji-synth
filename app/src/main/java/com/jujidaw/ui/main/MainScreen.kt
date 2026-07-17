@@ -331,10 +331,7 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
             contentDescription = "Return to start",
             active = false,
             activeColor = Primary,
-            onClick = {
-                transportController.stop()
-                transportController.seek(com.jujidaw.model.TransportPosition())
-            },
+            onClick = { transportController.restart() },
         )
 
         GroupDivider()

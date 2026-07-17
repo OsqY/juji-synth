@@ -45,6 +45,7 @@ import com.jujidaw.model.Clip
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
+import com.jujidaw.model.PadClip
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TransportPosition
 import com.jujidaw.model.TransportState
@@ -572,6 +573,10 @@ private fun clipBaseHue(clip: Clip): Color =
     when (clip) {
         is PatternClip -> {
             ClipColors[clip.trackIndex % 6][1]
+        }
+
+        is PadClip -> {
+            ClipColors[clip.trackIndex % 6][3]
         }
 
         is AudioClip -> {
@@ -1109,6 +1114,7 @@ private fun ClipItem(
                 text =
                     when (clip) {
                         is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
+                        is PadClip -> "Pad ${clip.padIndex + 1}"
                         is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
                     },
                 color = if (clip.mute) OnSurfaceVariant else OnSurface,
@@ -1225,6 +1231,7 @@ private fun ClipContent(
             text =
                 when (clip) {
                     is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
+                    is PadClip -> "Pad ${clip.padIndex + 1}"
                     is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
                 },
             color = if (clip.mute) OnSurfaceVariant else OnSurface,

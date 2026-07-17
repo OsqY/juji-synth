@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -121,7 +122,7 @@ class KeyboardViewModel : ViewModel() {
 
     init {
         viewModelScope.launch {
-            PadSelectionStore.selectedPad.collect { globalPad ->
+            merge(PadSelectionStore.selectedPad, PadSelectionStore.selectionEvents).collect { globalPad ->
                 val isSynthPad = PadSessionStore.snapshot().getOrNull(globalPad)?.params?.synthMode == true
                 if (isSynthPad) setTarget(KeyboardTarget.SelectedPad(globalPad))
             }

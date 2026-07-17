@@ -57,6 +57,11 @@ fun SequencerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    DisposableEffect(viewModel) {
+        viewModel.enterSequencerMode()
+        onDispose { viewModel.leaveSequencerMode() }
+    }
+
     Column(
         modifier =
             modifier
@@ -75,6 +80,9 @@ fun SequencerScreen(
             onToggleViewMode = viewModel::toggleViewMode,
             onToggleAutomation = viewModel::toggleAutomation,
             showAutomation = uiState.showAutomation,
+            onPlay = viewModel::togglePlay,
+            onStop = viewModel::stopPlayback,
+            onRestart = viewModel::restartPlayback,
         )
 
         Spacer(Modifier.height(Spacing.sm))
@@ -160,6 +168,9 @@ private fun SequencerTopBar(
     onToggleViewMode: () -> Unit,
     onToggleAutomation: () -> Unit,
     showAutomation: Boolean,
+    onPlay: () -> Unit,
+    onStop: () -> Unit,
+    onRestart: () -> Unit,
 ) {
     SynthPanel(title = "SEQUENCER", accentColor = Primary) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -178,6 +189,9 @@ private fun SequencerTopBar(
 
                 // Copy / Paste / Clear
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    SmallActionButton(label = "▶", onClick = onPlay)
+                    SmallActionButton(label = "■", onClick = onStop)
+                    SmallActionButton(label = "↶", onClick = onRestart)
                     SmallActionButton(label = "C", onClick = onCopy)
                     SmallActionButton(label = "P", onClick = onPaste, enabled = uiState.copyBufferPattern != null)
                     SmallActionButton(label = "X", onClick = onClear)
@@ -543,6 +557,7 @@ private fun SequencerPianoRoll(
     val vScroll = rememberScrollState()
 
     var dragOp by remember { mutableStateOf<PianoRollDragOp?>(null) }
+    var dragAccumulated by remember { mutableStateOf(Offset.Zero) }
     var velEditNote by remember { mutableStateOf<PianoRollNote?>(null) }
 
     val currentNotes by rememberUpdatedState(notes)
@@ -703,6 +718,7 @@ private fun SequencerPianoRoll(
                                                         startNote = hitNote.note,
                                                         origDuration = hitNote.duration,
                                                     )
+                                                dragAccumulated = Offset.Zero
                                                 velEditNote = null
                                             }
                                         },
@@ -716,7 +732,8 @@ private fun SequencerPianoRoll(
 
                                             when (op.mode) {
                                                 PianoRollDragMode.MOVE -> {
-                                                    val deltaSteps = dragAmount.x / cellWpx
+                                            dragAccumulated += dragAmount
+                                            val deltaSteps = dragAccumulated.x / cellWpx
                                                     val rawStep = op.startStep + deltaSteps
                                                     val snappedStep = (rawStep / stepSnap).roundToInt() * stepSnap
                                                     val clampedStep =
@@ -724,14 +741,14 @@ private fun SequencerPianoRoll(
                                                             0f,
                                                             (numSteps - stepSnap).coerceAtLeast(0f),
                                                         )
-                                                    val deltaRows = -(dragAmount.y / cellHeightDp.toPx()).roundToInt()
+                                            val deltaRows = -(dragAccumulated.y / cellHeightDp.toPx()).roundToInt()
                                                     val newNoteVal = (op.startNote + deltaRows).coerceIn(startNote, endNote)
                                                     val updated = note.copy(startStep = clampedStep, note = newNoteVal)
                                                     currentOnNotesChange(curNotes.toMutableList().apply { set(op.idx, updated) })
                                                 }
 
                                                 PianoRollDragMode.RESIZE -> {
-                                                    val deltaSteps = dragAmount.x / cellWpx
+                                            val deltaSteps = dragAccumulated.x / cellWpx
                                                     val rawDur = op.origDuration + deltaSteps
                                                     val snappedDur = (rawDur / stepSnap).roundToInt() * stepSnap
                                                     val clampedDur = snappedDur.coerceAtLeast(stepSnap)
@@ -740,8 +757,8 @@ private fun SequencerPianoRoll(
                                                 }
                                             }
                                         },
-                                        onDragEnd = { dragOp = null },
-                                        onDragCancel = { dragOp = null },
+                                        onDragEnd = { dragOp = null; dragAccumulated = Offset.Zero },
+                                        onDragCancel = { dragOp = null; dragAccumulated = Offset.Zero },
                                     )
                                 },
                     ) {

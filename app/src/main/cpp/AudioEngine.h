@@ -48,7 +48,9 @@ public:
     // channel 0.
     void noteOn(int note, int velocity) { synthInstrument_->noteOn(note, velocity); }
     void noteOff(int note) { synthInstrument_->noteOff(note); }
-    void panic() { synthInstrument_->panic(); }
+    void panic() { panicAllAudio(); }
+    /** Stop every voice/player and clear audio state on the audio thread. */
+    void panicAllAudio();
 
     // ---- Synth parameter updates (delegated to SynthInstrument on channel 0) ----
 

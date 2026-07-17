@@ -63,6 +63,24 @@ void Transport::drainEvents(EventQueue& queue) {
 
 void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample, int numFrames) {
     int64_t bufferEndSample = bufferStartSample + numFrames;
+
+    // A reset is a barrier. Process the newest reset before any older staged
+    // musical events so Stop/Restart cannot leak a note that was already in
+    // the lookahead buffer. Everything staged before/after the barrier is
+    // discarded, and the reset becomes the sole state transition for this
+    // callback.
+    for (const auto& event : pendingEvents_) {
+        if (event.type == ScheduledEventType::TRANSPORT_RESET) {
+            engine.panicAllAudio();
+            currentSample_.store(std::max<int64_t>(0, event.data.reset.sample),
+                                 std::memory_order_release);
+            playing_ = event.data.reset.playing != 0;
+            recording_ = event.data.reset.recording != 0;
+            pendingEvents_.clear();
+            return;
+        }
+    }
+
     size_t keepCount = 0;
     for (const auto& event : pendingEvents_) {
         // Sample-accurate scheduling: events with targetSample >= 0 fire only
@@ -106,6 +124,10 @@ void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample
                 sampler.triggerPad(event.data.padTrigger.padIndex, vel);
                 break;
             }
+            case ScheduledEventType::PAD_RELEASE: {
+                engine.getSampler().releasePad(event.data.padTrigger.padIndex);
+                break;
+            }
             case ScheduledEventType::AUTOMATION: {
                 int pi = event.data.automation.paramIndex;
                 float val = event.data.automation.value;
@@ -138,6 +160,8 @@ void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample
                 tempoBpm_ = event.data.transport.tempoBpm;
                 break;
             }
+            case ScheduledEventType::TRANSPORT_RESET:
+                break; // handled above
         }
     }
     pendingEvents_.resize(keepCount);

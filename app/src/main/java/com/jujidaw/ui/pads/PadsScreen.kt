@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.ContentCut
 import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -95,7 +96,9 @@ fun PadsScreen(
             onChopClick = viewModel::chopSelectedPad,
             onTimeStretchClick = viewModel::showTimeStretchDialog,
             onEditClick = viewModel::showEditSheet,
+            onSynthClick = viewModel::toggleSelectedSynthMode,
             isTimeStretching = state.isTimeStretching,
+            synthEnabled = state.padParams[state.currentBank * 16 + state.selectedPad].synthMode,
         )
 
         Spacer(modifier = Modifier.height(Spacing.sm))
@@ -146,7 +149,7 @@ fun PadsScreen(
                 globalPadIndex = globalPad,
                 params = state.padParams.getOrElse(globalPad) { PadParams() },
                 padName = state.padNames.getOrElse(globalPad) { "Pad" },
-                selectedPresetName = com.jujidaw.project.PadSessionStore.snapshot().getOrNull(globalPad)?.synthPresetName.orEmpty(),
+                selectedPresetName = state.synthPresetNames.getOrElse(globalPad) { "" },
                 onParamChange = viewModel::setPadParam,
                 onSliceStartChange = viewModel::setSliceStart,
                 onSliceEndChange = viewModel::setSliceEnd,
@@ -166,7 +169,9 @@ private fun PadsToolbar(
     onChopClick: () -> Unit,
     onTimeStretchClick: () -> Unit,
     onEditClick: () -> Unit,
+    onSynthClick: () -> Unit,
     isTimeStretching: Boolean,
+    synthEnabled: Boolean,
 ) {
     Row(
         modifier =
@@ -214,6 +219,11 @@ private fun PadsToolbar(
                 icon = Icons.Outlined.Tune,
                 contentDescription = "Edit",
                 onClick = onEditClick,
+            )
+            ToolbarButton(
+                icon = Icons.Outlined.AutoAwesome,
+                contentDescription = if (synthEnabled) "Disable synth pad" else "Add synth pad",
+                onClick = onSynthClick,
             )
         }
     }
@@ -511,6 +521,28 @@ private fun PadEditSheet(
             color = OnSurface,
             style = TitleLarge,
         )
+        Text("Pad mode", color = TextSecondary, style = LabelSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            FilterChip(
+                selected = !params.synthMode,
+                onClick = { onParamChange(padIndex, PadParamIds.SYNTH_MODE, 0f) },
+                label = { Text("Sample", style = CaptionSmall) },
+                modifier = Modifier.height(36.dp),
+            )
+            FilterChip(
+                selected = params.synthMode,
+                onClick = { onParamChange(padIndex, PadParamIds.SYNTH_MODE, 1f) },
+                label = { Text("Synth", style = CaptionSmall) },
+                modifier = Modifier.height(36.dp),
+            )
+        }
+        if (params.synthMode) {
+            Text(
+                text = if (selectedPresetName.isEmpty()) "Synth pad · Default sound" else "Synth pad · $selectedPresetName",
+                color = Primary,
+                style = LabelSmall,
+            )
+        }
 
         // Continuous parameters
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -617,12 +649,6 @@ private fun PadEditSheet(
                     enabledColor = Primary,
                 )
             }
-            SynthToggle(
-                checked = params.synthMode,
-                onCheckedChange = { onParamChange(padIndex, PadParamIds.SYNTH_MODE, if (it) 1f else 0f) },
-                label = "Synth",
-                enabledColor = Primary,
-            )
         }
 
         // Root note selector (only relevant for synth-pad mode)

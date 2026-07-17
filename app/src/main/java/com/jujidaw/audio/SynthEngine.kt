@@ -159,6 +159,12 @@ object SynthEngine {
         targetSample: Long,
     ): Boolean
 
+    external fun nativeSchedulePadRelease(
+        trackIndex: Int,
+        padIndex: Int,
+        targetSample: Long,
+    ): Boolean
+
     external fun nativeScheduleAutomation(
         trackIndex: Int,
         paramIndex: Int,
@@ -167,6 +173,12 @@ object SynthEngine {
     ): Boolean
 
     external fun nativeClearScheduledEvents()
+
+    external fun nativeResetTransport(
+        sample: Long,
+        playing: Boolean,
+        recording: Boolean,
+    )
 
     external fun nativeSetTransport(
         playing: Boolean,
@@ -441,6 +453,12 @@ object SynthEngine {
         targetSample: Long = -1L,
     ) = nativeSchedulePadTrigger(trackIndex, padIndex, velocity, targetSample)
 
+    fun schedulePadRelease(
+        trackIndex: Int,
+        padIndex: Int,
+        targetSample: Long = -1L,
+    ) = nativeSchedulePadRelease(trackIndex, padIndex, targetSample)
+
     fun scheduleAutomation(
         trackIndex: Int,
         paramIndex: Int,
@@ -449,6 +467,9 @@ object SynthEngine {
     ) = nativeScheduleAutomation(trackIndex, paramIndex, value, targetSample)
 
     fun clearScheduledEvents() = nativeClearScheduledEvents()
+
+    fun resetTransport(sample: Long, playing: Boolean, recording: Boolean) =
+        nativeResetTransport(sample, playing, recording)
 
     fun setTransport(
         playing: Boolean,
