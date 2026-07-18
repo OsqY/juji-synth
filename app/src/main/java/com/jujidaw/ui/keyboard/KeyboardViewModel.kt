@@ -414,13 +414,11 @@ class KeyboardViewModel : ViewModel() {
             }
 
             is KeyboardTarget.SamplerA -> {
-                SynthEngine.setSamplerBank(0)
                 SynthEngine.triggerPad(note % 16, velocity)
             }
 
             is KeyboardTarget.SamplerB -> {
-                SynthEngine.setSamplerBank(1)
-                SynthEngine.triggerPad(note % 16, velocity)
+                SynthEngine.triggerPad(16 + (note % 16), velocity)
             }
 
             is KeyboardTarget.Track -> {

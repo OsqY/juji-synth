@@ -29,9 +29,13 @@ object AudioEngineManager {
 
     /** Start the engine if it is not already running. Idempotent. */
     fun ensureStarted(): StartResult {
-        if (_isRunning.value) {
-            return StartResult.Success(0, 0) // already running
+        if (_isRunning.value && SynthEngine.isRunning()) {
+            return StartResult.Success(
+                sampleRate = SynthEngine.getNativeSampleRate(),
+                framesPerBurst = SynthEngine.getNativeFramesPerBurst(),
+            )
         }
+        _isRunning.value = false
         return startInternal()
     }
 
@@ -49,7 +53,9 @@ object AudioEngineManager {
                 framesPerBurst = SynthEngine.getNativeFramesPerBurst()
             )
         } else {
-            val msg = SynthEngine.getNativeLastError() ?: "Audio engine failed to start"
+            val msg = SynthEngine.getNativeLastError()
+                ?.takeIf { it.isNotBlank() }
+                ?: "Audio engine failed to start"
             _lastError.value = msg
             LOGE("AudioEngineManager: $msg")
             StartResult.Failure(msg)

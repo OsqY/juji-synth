@@ -90,8 +90,7 @@ class TimelineViewModel(
                     // project loader. Read it on every tick so a Timeline VM
                     // created before auto-load never keeps an empty snapshot.
                     val controllerState = transportController.transportState
-                    val bpm = controllerState.tempoBpm
-                    val tick = sampleToTick(sample, bpm)
+                    val tick = transportController.sampleToTick(sample, controllerState.tempoBpm)
                     _transportState.value =
                         controllerState.copy(
                             position = TransportPosition.fromTicks(tick, controllerState.timeSignature),
@@ -102,15 +101,6 @@ class TimelineViewModel(
                     delay(100)
                 }
             }
-    }
-
-    private fun sampleToTick(
-        sample: Long,
-        bpm: Float,
-    ): Long {
-        val sampleRate = 48000
-        val samplesPerBeat = (60.0 / bpm) * sampleRate
-        return (sample * PPQ / samplesPerBeat).toLong()
     }
 
     override fun onCleared() {
@@ -176,8 +166,8 @@ class TimelineViewModel(
         val newArr = _arrangement.value.copy(loopEnabled = enabled)
         updateArrangement(newArr)
         val bpm = _transportState.value.tempoBpm
-        val startSample = tickToSample(newArr.loopStartTick, bpm)
-        val endSample = tickToSample(newArr.loopEndTick, bpm)
+        val startSample = transportController.tickToSample(newArr.loopStartTick, bpm)
+        val endSample = transportController.tickToSample(newArr.loopEndTick, bpm)
         SynthEngine.setLoop(enabled, startSample, endSample)
     }
 
@@ -198,8 +188,8 @@ class TimelineViewModel(
             val bpm = _transportState.value.tempoBpm
             SynthEngine.setLoop(
                 true,
-                tickToSample(newArr.loopStartTick, bpm),
-                tickToSample(newArr.loopEndTick, bpm),
+                transportController.tickToSample(newArr.loopStartTick, bpm),
+                transportController.tickToSample(newArr.loopEndTick, bpm),
             )
         }
     }
@@ -211,8 +201,8 @@ class TimelineViewModel(
             val bpm = _transportState.value.tempoBpm
             SynthEngine.setLoop(
                 true,
-                tickToSample(newArr.loopStartTick, bpm),
-                tickToSample(newArr.loopEndTick, bpm),
+                transportController.tickToSample(newArr.loopStartTick, bpm),
+                transportController.tickToSample(newArr.loopEndTick, bpm),
             )
         }
     }
@@ -220,23 +210,41 @@ class TimelineViewModel(
     // ---- Punch ----
 
     fun togglePunch() {
-        val enabled = !_transportState.value.punchEnabled
-        _transportState.value = _transportState.value.copy(punchEnabled = enabled)
-        val newArr = _arrangement.value.copy(punchEnabled = enabled)
+        val state = _transportState.value
+        val enabling = !state.punchEnabled
+        val current = _arrangement.value
+        val oneBarTicks = PPQ * state.timeSignature.numerator.toLong()
+        val newArr =
+            if (enabling) {
+                enablePunchArrangement(current, state.position.toTicks(), oneBarTicks)
+            } else {
+                current.copy(punchEnabled = false)
+            }
         updateArrangement(newArr)
+        _transportState.value = transportController.transportState
         transportController.setRecording(_transportState.value.recording)
     }
 
     fun setPunchInToPlayhead() {
         val tick = _transportState.value.position.toTicks()
-        val newArr = _arrangement.value.copy(punchInTick = tick)
+        val oneBarTicks = PPQ * _transportState.value.timeSignature.numerator.toLong()
+        val newArr =
+            _arrangement.value.copy(
+                punchInTick = tick,
+                punchOutTick = maxOf(_arrangement.value.punchOutTick, tick + oneBarTicks),
+            )
         updateArrangement(newArr)
         if (_transportState.value.recording) transportController.setRecording(true)
     }
 
     fun setPunchOutToPlayhead() {
         val tick = _transportState.value.position.toTicks()
-        val newArr = _arrangement.value.copy(punchOutTick = tick)
+        val oneBarTicks = PPQ * _transportState.value.timeSignature.numerator.toLong()
+        val newArr =
+            _arrangement.value.copy(
+                punchInTick = minOf(_arrangement.value.punchInTick, (tick - oneBarTicks).coerceAtLeast(0L)),
+                punchOutTick = tick.coerceAtLeast(1L),
+            )
         updateArrangement(newArr)
         if (_transportState.value.recording) transportController.setRecording(true)
     }
@@ -544,14 +552,6 @@ class TimelineViewModel(
         return ((tick + res / 2) / res) * res
     }
 
-    private fun tickToSample(
-        tick: Long,
-        bpm: Float,
-    ): Long {
-        val sampleRate = 48000
-        return (tick * (60.0 / bpm) * sampleRate / PPQ).toLong()
-    }
-
     enum class Snap(
         val ticks: Long,
         val label: String,
@@ -562,3 +562,19 @@ class TimelineViewModel(
         SIXTEENTH((PPQ / 4).toLong(), "1/16"),
     }
 }
+
+/** Build a valid punch range without making UI state briefly invalid. */
+internal fun enablePunchArrangement(
+    arrangement: Arrangement,
+    currentTick: Long,
+    oneBarTicks: Long,
+): Arrangement =
+    if (arrangement.punchInTick < arrangement.punchOutTick) {
+        arrangement.copy(punchEnabled = true)
+    } else {
+        arrangement.copy(
+            punchEnabled = true,
+            punchInTick = currentTick.coerceAtLeast(0L),
+            punchOutTick = currentTick.coerceAtLeast(0L) + oneBarTicks.coerceAtLeast(1L),
+        )
+    }

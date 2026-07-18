@@ -63,7 +63,7 @@ StartResult SynthEngine::tryOpenStream(bool lowLatency, bool exclusive) {
     }
 
     stream_ = stream;
-    isRunning_ = true;
+    isRunning_.store(true, std::memory_order_release);
     sampleRate_ = static_cast<int>(actualSampleRate);
     framesPerBurst_ = stream->getFramesPerBurst();
     lastError_.clear();
@@ -75,7 +75,7 @@ StartResult SynthEngine::tryOpenStream(bool lowLatency, bool exclusive) {
 }
 
 StartResult SynthEngine::start() {
-    if (isRunning_) {
+    if (isRunning()) {
         LOGI("Engine already running");
         return {true, "", sampleRate_, framesPerBurst_};
     }
@@ -101,7 +101,7 @@ StartResult SynthEngine::start() {
 }
 
 bool SynthEngine::stop() {
-    if (!isRunning_) return true;
+    if (!isRunning()) return true;
 
     oboe::Result result = stream_->requestStop();
     if (result != oboe::Result::OK) {
@@ -113,7 +113,7 @@ bool SynthEngine::stop() {
         LOGE("Failed to close audio stream: %s", oboe::convertToText(result));
     }
 
-    isRunning_ = false;
+    isRunning_.store(false, std::memory_order_release);
     stream_.reset();
     LOGI("Audio engine stopped");
     return true;
@@ -134,7 +134,7 @@ void SynthEngine::onErrorAfterClose(
     oboe::Result error)
 {
     LOGE("Audio stream error after close: %s", oboe::convertToText(error));
-    isRunning_ = false;
+    isRunning_.store(false, std::memory_order_release);
 }
 
 // ========== JNI Bridge ==========
@@ -428,7 +428,7 @@ Java_com_jujidaw_audio_SynthEngine_nativeSetPadParam(JNIEnv* env, jclass /*clazz
         case 8: pad.loop = value > 0.5f; break;
         case 9: pad.oneShot = value > 0.5f; break;
         case 10: pad.useFilter = value > 0.5f; break;
-        case 11: pad.synthMode = value > 0.5f; break;
+        case 11: pad.synthMode.store(value > 0.5f, std::memory_order_release); break;
         case 12: pad.synthRootNote = static_cast<int>(value); break;
     }
 }
@@ -442,9 +442,10 @@ JNIEXPORT void JNICALL
 Java_com_jujidaw_audio_SynthEngine_nativeTriggerPad(JNIEnv* env, jclass /*clazz*/,
                                                      jint padIndex, jint velocity) {
     auto& sampler = SynthEngine::getInstance().getAudioEngine().getSampler();
-    int base = sampler.getActiveBank() * 16;
-    int note = base + (padIndex % 16);
-    sampler.noteOn(note, velocity);
+    // Kotlin callers use persistent global pad IDs (0..31). Applying the
+    // active bank again made a Pad B selection point at the wrong slot.
+    if (padIndex < 0 || padIndex >= NUM_PADS) return;
+    sampler.triggerPad(padIndex, velocity);
 }
 
 JNIEXPORT void JNICALL
@@ -1116,9 +1117,9 @@ Java_com_jujidaw_audio_SynthEngine_nativeReorderChannelInserts(JNIEnv* /*env*/, 
             SynthEngine::getInstance().getAudioEngine().getPadSynth(padIndex);
         } else if (auto* synth = SynthEngine::getInstance().getAudioEngine().getExistingPadSynth(padIndex)) {
             // A pad changes between mutually-exclusive sample and synth modes.
-            // Stop its voices immediately without discarding the stored state,
+            // Stop voices on the audio thread without discarding stored state,
             // so re-enabling the pad restores its own previous sound.
-            synth->panic();
+            synth->requestPanic();
         }
     }
     

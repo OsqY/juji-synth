@@ -36,8 +36,13 @@ void SynthInstrument::init(double sampleRate) {
 }
 
 float SynthInstrument::process() {
-    processNoteQueue();
+    if (panicRequested_.exchange(false, std::memory_order_acq_rel)) {
+        panic();
+    }
     swapParamsIfNeeded();
+    // Apply a new preset before handling a queued note so the first hit uses
+    // the state the UI just selected rather than the previous synth state.
+    processNoteQueue();
     return processSynthSample();
 }
 
@@ -122,6 +127,18 @@ void SynthInstrument::noteOff(int midiNote) {
     }
 }
 
+void SynthInstrument::noteOnFromAudioThread(int midiNote, int velocity) {
+    handleNoteOn(midiNote, velocity);
+}
+
+void SynthInstrument::noteOffFromAudioThread(int midiNote) {
+    handleNoteOff(midiNote);
+}
+
+void SynthInstrument::requestPanic() {
+    panicRequested_.store(true, std::memory_order_release);
+}
+
 void SynthInstrument::handleNoteOn(int midiNote, int velocity) {
     for (int i = 0; i < MAX_VOICES; i++) {
         if (voiceActive_[i] && voices_[i].getNote() == midiNote) {
@@ -175,6 +192,12 @@ void SynthInstrument::handleNoteOff(int midiNote) {
 
 bool SynthInstrument::isActive() const {
     return activeVoiceCount_.load(std::memory_order_relaxed) > 0;
+}
+
+bool SynthInstrument::needsProcessing() const {
+    return isActive() ||
+        noteQueueHead_.load(std::memory_order_acquire) !=
+            noteQueueTail_.load(std::memory_order_acquire);
 }
 
 void SynthInstrument::processNoteQueue() {

@@ -32,9 +32,13 @@ float SamplerInstrument::process() {
             // lazy allocation here. Only pads explicitly put into synth mode
             // create an instrument.
             auto* padSynth = audioEngine_->getExistingPadSynth(p);
-            if (padSynth && padSynth->isActive()) {
-sum += padSynth->process();
-active++;
+            // A pad synth receives note events from the UI thread. It must be
+            // processed once to consume its queue before it can report an
+            // active voice; checking only isActive() left new synth-pad notes
+            // permanently silent.
+            if (padSynth && padSynth->needsProcessing()) {
+                sum += padSynth->process();
+                active++;
             }
         }
     }
@@ -49,7 +53,7 @@ void SamplerInstrument::noteOn(int midiNote, int velocity) {
     const auto& pad = pads_[padIndex];
 
     // Synth-pad mode: forward to the per-pad synth via AudioEngine pool.
-    if (pad.synthMode) {
+    if (pad.synthMode.load(std::memory_order_acquire)) {
         if (audioEngine_) {
             auto* padSynth = audioEngine_->getPadSynth(padIndex);
             if (padSynth) {
@@ -94,7 +98,7 @@ void SamplerInstrument::releasePad(int padIndex) {
     int globalPadIndex = padIndex;
     if (globalPadIndex < 0 || globalPadIndex >= NUM_PADS) return;
     int note = globalPadIndex;
-    if (audioEngine_ && pads_[globalPadIndex].synthMode) {
+    if (audioEngine_ && pads_[globalPadIndex].synthMode.load(std::memory_order_acquire)) {
         if (auto* padSynth = audioEngine_->getExistingPadSynth(globalPadIndex)) {
             padSynth->panic();
         }
@@ -189,13 +193,25 @@ void SamplerInstrument::setActiveBank(int bank) {
 }
 
 void SamplerInstrument::triggerPad(int padIndex, int velocity) {
+    triggerPadInternal(padIndex, velocity, false);
+}
+
+void SamplerInstrument::triggerPadFromAudioThread(int padIndex, int velocity) {
+    triggerPadInternal(padIndex, velocity, true);
+}
+
+void SamplerInstrument::triggerPadInternal(int padIndex, int velocity, bool fromAudioThread) {
     if (padIndex < 0 || padIndex >= NUM_PADS) return;
 
     const auto& pad = pads_[padIndex];
-    if (pad.synthMode) {
+    if (pad.synthMode.load(std::memory_order_acquire)) {
         if (audioEngine_) {
             if (auto* padSynth = audioEngine_->getExistingPadSynth(padIndex)) {
-                padSynth->noteOn(pad.synthRootNote, velocity);
+                if (fromAudioThread) {
+                    padSynth->noteOnFromAudioThread(pad.synthRootNote, velocity);
+                } else {
+                    padSynth->noteOn(pad.synthRootNote, velocity);
+                }
             }
         }
         return;

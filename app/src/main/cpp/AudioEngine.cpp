@@ -47,6 +47,9 @@ void AudioEngine::init(double sampleRate) {
     for (auto& synth : synthForPad_) {
         synth.reset();
     }
+    for (auto& synth : publishedPadSynths_) {
+        synth.store(nullptr, std::memory_order_relaxed);
+    }
 
     // Start background time-stretch worker
     timeStretchWorker_.setSampler(sampler_.get());
@@ -120,8 +123,8 @@ int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
 
     // Apply per-block automation on active per-pad synths.
     for (int p = 0; p < PAD_SYNTH_COUNT; p++) {
-        if (synthForPad_[p]) {
-        synthForPad_[p]->processBlockAutomation();
+        if (auto* synth = getExistingPadSynth(p)) {
+            synth->processBlockAutomation();
         }
     }
 
@@ -225,8 +228,8 @@ int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
 
     // Sync per-pad synth voice states.
     for (int p = 0; p < PAD_SYNTH_COUNT; p++) {
-        if (synthForPad_[p]) {
-        synthForPad_[p]->syncVoiceActiveStates();
+        if (auto* synth = getExistingPadSynth(p)) {
+            synth->syncVoiceActiveStates();
         }
     }
 
@@ -461,9 +464,13 @@ void AudioEngine::triggerPerformFx(int type) {
 
 SynthInstrument* AudioEngine::getPadSynth(int padIndex) {
     if (padIndex < 0 || padIndex >= PAD_SYNTH_COUNT) return nullptr;
+    if (auto* existing = getExistingPadSynth(padIndex)) return existing;
+
+    std::lock_guard<std::mutex> lock(padSynthCreationMutex_);
     if (!synthForPad_[padIndex]) {
         synthForPad_[padIndex] = std::make_unique<SynthInstrument>();
         synthForPad_[padIndex]->init(sampleRate_);
+        publishedPadSynths_[padIndex].store(synthForPad_[padIndex].get(), std::memory_order_release);
         LOGI("Created per-pad synth for pad %d", padIndex);
     }
     return synthForPad_[padIndex].get();
@@ -471,7 +478,7 @@ SynthInstrument* AudioEngine::getPadSynth(int padIndex) {
 
 SynthInstrument* AudioEngine::getExistingPadSynth(int padIndex) const {
     if (padIndex < 0 || padIndex >= PAD_SYNTH_COUNT) return nullptr;
-    return synthForPad_[padIndex].get();
+    return publishedPadSynths_[padIndex].load(std::memory_order_acquire);
 }
 
 void AudioEngine::applyPadSynthState(int padIndex, const SynthParams& params) {

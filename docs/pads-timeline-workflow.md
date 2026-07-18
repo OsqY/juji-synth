@@ -90,9 +90,9 @@ snap-to-grid editing, and an automation lane.
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  Pad Strip (P1 … P16)       ← tap to drop clips  │
+│  One-shot Pad (P1 … P16)    ← tap to drop a hit   │
 ├──────────────────────────────────────────────────┤
-│  Pattern Selector (1–16)    ← choose active pattern│
+│  Sequencer Pattern (1–16)   ← choose Seq content  │
 ├──────────────────────────────────────────────────┤
 │  Transport Strip                                  │
 │  Row 1: Loop On/Off | Loop Start | Loop End       │
@@ -139,7 +139,7 @@ The **Timeline toolbar** (above the track lanes) adds these controls:
 | **Loop: On/Off** | Toggles the loop region. When enabled, playback wraps between Loop Start and Loop End. |
 | **Loop Start** | Sets the loop start point to the current playhead position. |
 | **Loop End** | Sets the loop end point to the current playhead position. |
-| **Punch: On/Off** | Toggles punch recording. When enabled and recording is armed, audio is recorded only within the punch in/out range. |
+| **Punch: On/Off** | Toggles punch recording. When first enabled, it creates a one-bar range from the current playhead; recording is then confined to the punch range. |
 | **● Punch In** | Sets the punch-in point to the current playhead position. |
 | **● Punch Out** | Sets the punch-out point to the current playhead position. |
 | **◀ / ▶** | Nudges the playhead backward or forward by one step (snap-dependent tick amount). |
@@ -152,10 +152,10 @@ The **Timeline toolbar** (above the track lanes) adds these controls:
 2. Select a **track lane** (T1–T16) by tapping the track header on the left.
 3. Optionally select a **pattern** (1–16) from the pattern selector strip.
 4. Tap one of the **pad buttons (P1–P16)** in the pad strip at the top of the timeline.
-5. A **pad-trigger clip** is created on the selected track at the current playhead position.
-   - The clip is a `PatternClip` with `padIndex` set, referencing a cached pad-trigger pattern (IDs 1000–1015).
-   - Default clip duration is 4 beats (1 bar at the current time signature).
-   - The clip snaps to the active grid resolution.
+5. A **one-shot pad clip** is created on the selected track at the current playhead position.
+   - The clip is a `PadClip` that triggers the selected global pad index once.
+   - It appears as a hit marker with a large touch target, not a repeating block.
+   - The hit snaps to the active grid resolution.
 6. You can also tap an **empty area** on a track lane to place a pattern clip at that tick position.
 
 > **Note:** Pad-trigger clips (placed via the P1–P16 strip) carry a `padIndex` and route
@@ -201,13 +201,13 @@ Clip colors:
 
 ### Pattern Selector
 
-The pattern selector strip sits between the pad strip and the track lanes. It shows buttons
-for **patterns 1–16**.
+The Sequencer Pattern strip sits between the pad strip and the track lanes. It shows buttons
+for **patterns 1–16** created in the Seq screen.
 
-- Tap a pattern number to select it as the **active pattern**.
-- When you place a new pattern clip (by tapping the pad strip or an empty lane), it references this active pattern.
-- Pattern data is managed by the Sequencer screen — each pattern holds a 16×16 step grid (or piano roll notes).
-- The timeline also maintains **cached pad-trigger patterns** (IDs 1000–1015) for clips placed via the P1–P16 pad strip.
+- Tap a pattern number to select it as the **active sequencer pattern**.
+- Tapping an empty timeline lane places a pattern clip that references this pattern.
+- Pattern data is managed by the Sequencer screen — each pattern holds a 16×16 step grid (or piano roll notes). Pattern 1 is not automatically Pad 1; it plays the pads and notes programmed inside Pattern 1.
+- One-shot Pad markers do not reference the selected pattern.
 
 ---
 

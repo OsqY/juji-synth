@@ -14,6 +14,8 @@ import com.jujidaw.model.SynthState
 import com.jujidaw.model.defaultTrackSynthState
 import com.jujidaw.model.toParamsArray
 import com.jujidaw.project.PadSynthSessionStore
+import com.jujidaw.project.PadSessionStore
+import com.jujidaw.ui.pads.PadParamIds
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -97,6 +99,16 @@ class SynthViewModel(
         if (padIndex !in 0..31) return
         val state = PadSynthSessionStore.snapshot()[padIndex] ?: defaultTrackSynthState()
         PadSynthSessionStore.setPadState(padIndex, state)
+        // Selecting a pad in the Synth screen is an explicit request to use
+        // its synth voice, not merely inspect an otherwise disconnected DSP
+        // instance. Keep native and persisted pad mode in sync.
+        SynthEngine.setPadParam(padIndex, PadParamIds.SYNTH_MODE, 1f)
+        val existing = PadSessionStore.snapshot().getOrNull(padIndex)
+            ?: com.jujidaw.project.PadSettings()
+        PadSessionStore.setPad(
+            padIndex,
+            existing.copy(params = existing.params.copy(synthMode = true)),
+        )
         _uiState.value =
             _uiState.value.copy(
                 selectedPadIndex = padIndex,

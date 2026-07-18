@@ -32,6 +32,12 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         val targetSample: Long,
     )
 
+    data class PadReleaseEvent(
+        val trackIndex: Int,
+        val padIndex: Int,
+        val targetSample: Long,
+    )
+
     data class AutomationEvent(
         val trackIndex: Int,
         val paramIndex: Int,
@@ -48,6 +54,7 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
     val noteOnEvents = mutableListOf<NoteOnEvent>()
     val noteOffEvents = mutableListOf<NoteOffEvent>()
     val padTriggers = mutableListOf<PadTriggerEvent>()
+    val padReleases = mutableListOf<PadReleaseEvent>()
     val scheduledAutomation = mutableListOf<AutomationEvent>()
     val audioClipStarts = mutableListOf<AudioClipStartEvent>()
 
@@ -116,7 +123,10 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         trackIndex: Int,
         padIndex: Int,
         targetSample: Long,
-    ): Boolean = true
+    ): Boolean {
+        padReleases.add(PadReleaseEvent(trackIndex, padIndex, targetSample))
+        return true
+    }
 
     override fun scheduleAutomation(
         trackIndex: Int,
@@ -198,6 +208,7 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         noteOnEvents.clear()
         noteOffEvents.clear()
         padTriggers.clear()
+        padReleases.clear()
         audioClipStarts.clear()
         clearScheduledEventsCount = 0
         controlledPlayheadSample = 0L

@@ -45,7 +45,7 @@ class JujiDawApp : Application() {
 
         // Start the audio engine at app level so it survives Activity transitions.
         if (SynthEngine.isLoaded) {
-            AudioEngineManager.ensureStarted()
+            ensureAudioEngineStarted()
         }
 
         // Seed factory presets on first launch
@@ -60,6 +60,15 @@ class JujiDawApp : Application() {
     override fun onTerminate() {
         super.onTerminate()
         AudioEngineManager.stop()
+    }
+
+    /** Start audio and keep transport sample conversion aligned with Oboe. */
+    fun ensureAudioEngineStarted(): AudioEngineManager.StartResult {
+        val result = AudioEngineManager.ensureStarted()
+        if (result is AudioEngineManager.StartResult.Success && result.sampleRate > 0) {
+            transportController.updateSampleRate(result.sampleRate)
+        }
+        return result
     }
 
     companion object {

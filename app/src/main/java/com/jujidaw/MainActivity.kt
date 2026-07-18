@@ -1,6 +1,7 @@
 package com.jujidaw
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -35,7 +36,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        AudioEngineManager.ensureStartedWithToast(this)
+        when (val result = (application as JujiDawApp).ensureAudioEngineStarted()) {
+            is AudioEngineManager.StartResult.Success -> Unit
+            is AudioEngineManager.StartResult.Failure ->
+                Toast.makeText(this, result.message, Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onStop() {

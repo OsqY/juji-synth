@@ -20,6 +20,7 @@
 #include <memory>
 #include <vector>
 #include <atomic>
+#include <mutex>
 #include <cmath>
 #include <unordered_map>
 #include <string>
@@ -198,7 +199,11 @@ private:
     // Per-pad synth pool: lazily created SynthInstrument instances,
     // one per sampler pad (0..31). Pads in SYNTH mode route noteOn to these
     // instead of the shared channel-0 synth.
+    // Ownership remains off the audio thread. Pointers are published only
+    // after initialization and are never reclaimed while the stream runs.
     std::array<std::unique_ptr<SynthInstrument>, PAD_SYNTH_COUNT> synthForPad_{};
+    std::array<std::atomic<SynthInstrument*>, PAD_SYNTH_COUNT> publishedPadSynths_{};
+    std::mutex padSynthCreationMutex_;
     AudioRecorder recorder_;
     TimeStretchWorker timeStretchWorker_;
     jujidaw::Transport transport_;

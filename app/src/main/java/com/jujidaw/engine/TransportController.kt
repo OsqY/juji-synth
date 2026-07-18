@@ -37,12 +37,15 @@ import kotlin.math.roundToLong
  * and re-enabled when stopped.
  */
 class TransportController(
-    private val sampleRate: Int = 48000,
+    sampleRate: Int = 48000,
     private val lookaheadMs: Long = 100,
     private val schedulingIntervalMs: Long = 50,
     private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.Default.limitedParallelism(1)),
     private val scheduler: SynthEngineScheduler = NativeSynthEngineScheduler(),
 ) {
+    @Volatile
+    private var sampleRate: Int = sampleRate
+
     private var schedulerJob: Job? = null
 
     // Mutable state (must be accessed from the scheduler thread only, except
@@ -267,6 +270,16 @@ class TransportController(
     fun release() {
         stop()
         coroutineScope.cancel()
+    }
+
+    /**
+     * Update musical-time conversion to match the rate negotiated by Oboe.
+     * This is safe while stopped or playing; subsequent scheduler ticks use
+     * the new rate for both event targets and playhead position.
+     */
+    fun updateSampleRate(sampleRate: Int) {
+        require(sampleRate > 0) { "Sample rate must be positive" }
+        this.sampleRate = sampleRate
     }
 
     private fun startScheduler() {
@@ -646,7 +659,7 @@ class TransportController(
 
     // ---- Time conversion helpers ----
 
-    internal fun tickToSample(
+    fun tickToSample(
         tick: Long,
         bpm: Float = transportState.tempoBpm,
     ): Long = (tick * samplesPerBeat(bpm) / PPQ).roundToLong()
@@ -656,7 +669,7 @@ class TransportController(
         bpm: Float,
     ): Long = (ticks * samplesPerBeat(bpm) / PPQ).toLong()
 
-    internal fun sampleToTick(
+    fun sampleToTick(
         sample: Long,
         bpm: Float,
     ): Long = (sample * PPQ / samplesPerBeat(bpm)).roundToLong()

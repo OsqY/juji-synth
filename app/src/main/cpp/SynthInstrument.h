@@ -96,8 +96,16 @@ public:
     float process() override;
     void noteOn(int midiNote, int velocity) override;
     void noteOff(int midiNote) override;
+    /** Audio-callback-only path that avoids the UI-to-audio SPSC queue. */
+    void noteOnFromAudioThread(int midiNote, int velocity);
+    /** Audio-callback-only path that avoids the UI-to-audio SPSC queue. */
+    void noteOffFromAudioThread(int midiNote);
+    /** Request a voice reset; the audio callback performs the mutation. */
+    void requestPanic();
     void panic() override;
     bool isActive() const override;
+    /** True when the audio callback must run this synth to consume queued notes. */
+    bool needsProcessing() const;
 
     // ---- Bulk / parameter setters (UI thread; atomic swap on audio thread) ----
     void setParams(const SynthParams& params);
@@ -262,6 +270,9 @@ private:
     std::array<NoteEvent, NOTE_QUEUE_SIZE> noteQueue_;
     std::atomic<int> noteQueueHead_{0};
     std::atomic<int> noteQueueTail_{0};
+
+    // UI requests this; the audio callback performs the mutable voice reset.
+    std::atomic<bool> panicRequested_{false};
 
     int allocateVoice();
     int findVoiceByNote(int midiNote);

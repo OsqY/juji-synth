@@ -169,7 +169,7 @@ fun TimelineScreen(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(
-                "Pattern: 1-16",
+                "Sequencer Pattern",
                 color = OnSurfaceVariant,
                 style = LabelSmall,
                 modifier = Modifier.padding(end = Spacing.sm),
@@ -228,7 +228,7 @@ fun TimelineScreen(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Text(
-                "Drop Pad",
+                "One-shot Pad",
                 color = Secondary,
                 style = LabelSmall,
                 modifier = Modifier.padding(end = Spacing.sm),
@@ -433,6 +433,15 @@ fun TimelineScreen(
                                 val top = rulerPx + scrubPx + clip.trackIndex * trackHeightPx
                                 val left = clip.startTick * tickWidthPx
                                 val width = clip.durationTicks * tickWidthPx
+                                // A pad clip is one musical hit. Give it a
+                                // stable hit target rather than rendering its
+                                // one-step duration as an almost invisible line.
+                                val renderedWidth =
+                                    if (clip is PadClip) {
+                                        maxOf(width, with(density) { 44.dp.toPx() })
+                                    } else {
+                                        width
+                                    }
                                 val isDragging = draggedClipId == clip.id
                                 ClipItem(
                                         clip = clip,
@@ -449,7 +458,7 @@ fun TimelineScreen(
                                                         (top + if (isDragging) draggedClipOffset.y else 0f).toInt(),
                                                     )
                                                 }
-                                                .width(with(density) { width.toDp() })
+                                                .width(with(density) { renderedWidth.toDp() })
                                                 .height(with(density) { trackHeightPx.toDp() })
                                                 .padding(Spacing.xs),
                                         onTap = { viewModel.toggleMuteClip(clip.id) },
@@ -1110,11 +1119,27 @@ private fun ClipItem(
                         )
                     }.clickable(onClick = onTap),
         ) {
+            if (clip is PadClip) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val markerX = 8.dp.toPx()
+                    drawLine(
+                        color = edge,
+                        start = Offset(markerX, 0f),
+                        end = Offset(markerX, size.height),
+                        strokeWidth = 2.dp.toPx(),
+                    )
+                    drawCircle(
+                        color = edge,
+                        radius = 6.dp.toPx(),
+                        center = Offset(markerX, size.height / 2f),
+                    )
+                }
+            }
             Text(
                 text =
                     when (clip) {
                         is PatternClip -> pattern?.name ?: "P${clip.patternId + 1}"
-                        is PadClip -> "Pad ${clip.padIndex + 1}"
+                        is PadClip -> "P${clip.padIndex + 1}"
                         is AudioClip -> clip.audioFilePath.substringAfterLast('/').take(12)
                     },
                 color = if (clip.mute) OnSurfaceVariant else OnSurface,
@@ -1141,7 +1166,7 @@ private fun ClipItem(
                 }
             }
 
-            if (!clip.mute) {
+            if (!clip.mute && clip !is PadClip) {
                 var trimDelta by remember { mutableStateOf(0f) }
                 Box(
                     modifier =

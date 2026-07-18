@@ -29,7 +29,7 @@ struct PadConfig {
     bool loop = false;
     bool oneShot = true;
     bool useFilter = false;
-    bool synthMode = false;      // if true, pad triggers synth instead
+    std::atomic<bool> synthMode{false}; // if true, pad triggers synth instead
     int synthRootNote = 60;      // C4
 };
 
@@ -70,6 +70,8 @@ public:
 
     // Trigger a pad directly (used by the transport scheduler).
     void triggerPad(int padIndex, int velocity);
+    /** Trigger from the audio callback without writing to the UI SPSC queue. */
+    void triggerPadFromAudioThread(int padIndex, int velocity);
 
 private:
     double sampleRate_ = 48000.0;
@@ -83,6 +85,7 @@ private:
 
     int allocateVoice();
     int padIndexFromNote(int midiNote) const;
+    void triggerPadInternal(int padIndex, int velocity, bool fromAudioThread);
 };
 
 #endif // JUJIDAW_SAMPLER_INSTRUMENT_H

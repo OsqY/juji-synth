@@ -104,24 +104,22 @@ void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample
 
         switch (event.type) {
             case ScheduledEventType::NOTE_ON: {
-                auto* instr = engine.getChannel(track).getInstrument();
-                if (instr) {
-                    int vel = static_cast<int>(event.data.noteEvent.velocity * 127.0f + 0.5f);
-                    instr->noteOn(event.data.noteEvent.note, vel);
-                }
+                // Pattern notes are currently rendered by the one global
+                // synth. The event track remains available for future
+                // per-track instruments, but channel 1 is the sampler and
+                // cannot interpret arbitrary synth MIDI notes.
+                int vel = static_cast<int>(event.data.noteEvent.velocity * 127.0f + 0.5f);
+                engine.getSynth().noteOnFromAudioThread(event.data.noteEvent.note, vel);
                 break;
             }
             case ScheduledEventType::NOTE_OFF: {
-                auto* instr = engine.getChannel(track).getInstrument();
-                if (instr) {
-                    instr->noteOff(event.data.noteEvent.note);
-                }
+                engine.getSynth().noteOffFromAudioThread(event.data.noteEvent.note);
                 break;
             }
             case ScheduledEventType::PAD_TRIGGER: {
                 auto& sampler = engine.getSampler();
                 int vel = static_cast<int>(event.data.padTrigger.velocity * 127.0f + 0.5f);
-                sampler.triggerPad(event.data.padTrigger.padIndex, vel);
+                sampler.triggerPadFromAudioThread(event.data.padTrigger.padIndex, vel);
                 break;
             }
             case ScheduledEventType::PAD_RELEASE: {

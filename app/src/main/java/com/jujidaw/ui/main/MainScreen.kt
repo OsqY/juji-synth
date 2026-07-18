@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RadioButtonChecked
 import androidx.compose.material.icons.outlined.Remove
@@ -61,6 +62,7 @@ import com.jujidaw.JujiDawApp
 import com.jujidaw.R
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.ui.keyboard.KeyboardScreen
+import com.jujidaw.ui.help.HelpScreen
 import com.jujidaw.ui.mixer.MixerScreen
 import com.jujidaw.ui.pads.PadsScreen
 import com.jujidaw.ui.project.ProjectScreen
@@ -92,6 +94,7 @@ private enum class MainTab(
 @Composable
 fun MainScreen(modifier: Modifier = Modifier) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var showHelp by rememberSaveable { mutableStateOf(false) }
     val tabs = MainTab.entries.toTypedArray()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val timelineViewModel: TimelineViewModel = viewModel { TimelineViewModel() }
@@ -102,7 +105,10 @@ fun MainScreen(modifier: Modifier = Modifier) {
         bottomBar = {
             if (!isLandscape) {
                 Column {
-                    PersistentTransportBar(modifier = Modifier.fillMaxWidth())
+                    PersistentTransportBar(
+                        modifier = Modifier.fillMaxWidth(),
+                        onHelp = { showHelp = true },
+                    )
                     NavigationBar(
                         containerColor = BgPanel,
                         contentColor = TextPrimary,
@@ -161,7 +167,10 @@ fun MainScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.fillMaxWidth().background(SurfaceContainer),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        PersistentTransportBar(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                        PersistentTransportBar(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            onHelp = { showHelp = true },
+                        )
                         if (tabs[selectedTab] == MainTab.TIMELINE) {
                             TimelineLandscapeControls(
                                 viewModel = timelineViewModel,
@@ -263,11 +272,17 @@ fun MainScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+        if (showHelp) {
+            HelpScreen(onClose = { showHelp = false })
+        }
     }
 }
 
 @Composable
-private fun PersistentTransportBar(modifier: Modifier = Modifier) {
+private fun PersistentTransportBar(
+    modifier: Modifier = Modifier,
+    onHelp: () -> Unit,
+) {
     val context = LocalContext.current
     val transportController =
         remember {
@@ -368,6 +383,14 @@ private fun PersistentTransportBar(modifier: Modifier = Modifier) {
                     (transportState.tempoBpm + delta).coerceIn(MIN_BPM, MAX_BPM),
                 )
             },
+        )
+
+        TransportMiniButton(
+            icon = Icons.Outlined.HelpOutline,
+            contentDescription = "Open workflow help",
+            active = false,
+            activeColor = Primary,
+            onClick = onHelp,
         )
     }
 }

@@ -3,6 +3,7 @@
 
 #include "AudioEngine.h"
 #include <oboe/Oboe.h>
+#include <atomic>
 #include <string>
 
 /**
@@ -29,7 +30,7 @@ public:
 
     StartResult start();
     bool stop();
-    bool isRunning() const { return isRunning_; }
+    bool isRunning() const { return isRunning_.load(std::memory_order_acquire); }
 
     const std::string& getLastError() const { return lastError_; }
     int getSampleRate() const { return sampleRate_; }
@@ -59,7 +60,8 @@ private:
 
     AudioEngine engine_;
     std::shared_ptr<oboe::AudioStream> stream_;
-    bool isRunning_ = false;
+    // Read from JNI/UI and written by the audio-error callback.
+    std::atomic<bool> isRunning_{false};
     std::string lastError_;
     int sampleRate_ = 0;
     int framesPerBurst_ = 0;

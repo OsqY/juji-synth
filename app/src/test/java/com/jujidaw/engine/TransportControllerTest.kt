@@ -51,6 +51,14 @@ class TransportControllerTest {
     }
 
     @Test
+    fun updateSampleRate_changesTransportTimeConversions() {
+        controller.updateSampleRate(44100)
+
+        assertEquals(22050L, controller.tickToSample(PPQ.toLong(), 120f))
+        assertEquals(PPQ.toLong(), controller.sampleToTick(22050L, 120f))
+    }
+
+    @Test
     fun oneBarEqualsFourBeatsInTicks() {
         val ts = TimeSignature(4, 4)
         val bar = TransportPosition(1, 0, 0)
@@ -885,6 +893,43 @@ class TransportControllerTest {
         val clip = controller.arrangement.clips.single()
         assertTrue(clip is PadClip)
         assertEquals(7, (clip as PadClip).padIndex)
+    }
+
+    @Test
+    fun play_enablesNativeTransportAndDisablesInternalSequencer() {
+        controller.play()
+
+        assertTrue(controller.transportState.playing)
+        assertTrue(fakeScheduler.lastTransportPlaying)
+        assertFalse(fakeScheduler.lastSequencerEnabled)
+        assertEquals(120f, fakeScheduler.lastTransportTempoBpm, 0.001f)
+    }
+
+    @Test
+    fun scheduleNextBlock_padClipSchedulesGlobalPadAndReleaseAtClipEnd() {
+        val clip =
+            PadClip(
+                id = "pad-31",
+                trackIndex = 12,
+                startTick = 0L,
+                durationTicks = TICKS_PER_STEP.toLong(),
+                padIndex = 31,
+                velocity = 0.75f,
+            )
+        controller.loadArrangement(Arrangement(clips = listOf(clip)))
+
+        controller.scheduleNextBlock()
+
+        assertEquals(1, fakeScheduler.padTriggers.size)
+        assertEquals(12, fakeScheduler.padTriggers.single().trackIndex)
+        assertEquals(31, fakeScheduler.padTriggers.single().padIndex)
+        assertEquals(0.75f, fakeScheduler.padTriggers.single().velocity, 0.001f)
+        assertEquals(1, fakeScheduler.padReleases.size)
+        assertEquals(31, fakeScheduler.padReleases.single().padIndex)
+        assertEquals(
+            controller.tickToSample(TICKS_PER_STEP.toLong(), 120f),
+            fakeScheduler.padReleases.single().targetSample,
+        )
     }
 
     // ================================================================
