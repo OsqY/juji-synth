@@ -8,6 +8,7 @@ import com.jujidaw.audio.AudioConverter
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.audio.TimeStretchListener
 import com.jujidaw.project.PadParamValues
+import com.jujidaw.project.PadPerformanceEventBus
 import com.jujidaw.project.PadSessionStore
 import com.jujidaw.project.PadSettings
 import com.jujidaw.project.PadSynthSessionStore
@@ -242,7 +243,13 @@ class PadsViewModel :
     ) {
         val localIndex = padIndex.coerceIn(0, 15)
         val globalIndex = _uiState.value.currentBank * 16 + localIndex
-        SynthEngine.triggerPad(globalIndex, velocity.coerceIn(1, 127))
+        val clampedVelocity = velocity.coerceIn(1, 127)
+        SynthEngine.triggerPad(globalIndex, clampedVelocity)
+        PadPerformanceEventBus.emitNoteOn(
+            padIndex = globalIndex,
+            velocity = clampedVelocity,
+            sampleTime = SynthEngine.getPlayheadSample(),
+        )
         _uiState.update { it.copy(activePads = it.activePads + localIndex) }
     }
 
@@ -251,6 +258,10 @@ class PadsViewModel :
         val localIndex = padIndex.coerceIn(0, 15)
         val globalIndex = _uiState.value.currentBank * 16 + localIndex
         SynthEngine.releasePad(globalIndex)
+        PadPerformanceEventBus.emitNoteOff(
+            padIndex = globalIndex,
+            sampleTime = SynthEngine.getPlayheadSample(),
+        )
         _uiState.update { it.copy(activePads = it.activePads - localIndex) }
     }
 

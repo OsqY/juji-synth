@@ -101,40 +101,38 @@ void Transport::firePendingEvents(AudioEngine& engine, int64_t bufferStartSample
             LOGE("Invalid track index %d", track);
             continue;
         }
+        engine.ensureTrackActive(track);
 
         switch (event.type) {
             case ScheduledEventType::NOTE_ON: {
-                // Pattern notes are currently rendered by the one global
-                // synth. The event track remains available for future
-                // per-track instruments, but channel 1 is the sampler and
-                // cannot interpret arbitrary synth MIDI notes.
                 int vel = static_cast<int>(event.data.noteEvent.velocity * 127.0f + 0.5f);
-                engine.getSynth().noteOnFromAudioThread(event.data.noteEvent.note, vel);
+                engine.getSynth().noteOnFromAudioThread(event.data.noteEvent.note, vel, track);
                 break;
             }
             case ScheduledEventType::NOTE_OFF: {
-                engine.getSynth().noteOffFromAudioThread(event.data.noteEvent.note);
+                engine.getSynth().noteOffFromAudioThread(event.data.noteEvent.note, track);
                 break;
             }
             case ScheduledEventType::PAD_TRIGGER: {
                 auto& sampler = engine.getSampler();
                 int vel = static_cast<int>(event.data.padTrigger.velocity * 127.0f + 0.5f);
-                sampler.triggerPadFromAudioThread(event.data.padTrigger.padIndex, vel);
+                sampler.triggerPadFromAudioThread(event.data.padTrigger.padIndex, vel, track,
+                                                  event.data.padTrigger.triggerId);
                 break;
             }
             case ScheduledEventType::PAD_RELEASE: {
-                engine.getSampler().releasePad(event.data.padTrigger.padIndex);
+                engine.getSampler().releasePadFromAudioThread(event.data.padTrigger.padIndex, track,
+                                                               event.data.padTrigger.triggerId);
                 break;
             }
             case ScheduledEventType::AUTOMATION: {
                 int pi = event.data.automation.paramIndex;
                 float val = event.data.automation.value;
                 if (pi <= AUTOMATION_SYNTH_PARAM_MAX) {
-                    auto* instr = engine.getChannel(track).getInstrument();
-                    auto* synth = dynamic_cast<SynthInstrument*>(instr);
-                    if (synth) {
-                        synth->applyAutomationParam(pi, val);
-                    }
+                    // Timeline synth voices share the selected synth state
+                    // while their audio is routed through independent mixer
+                    // rows, so automation always targets that synth.
+                    engine.getSynth().applyAutomationParam(pi, val);
                 } else if (pi >= AUTOMATION_MIXER_PARAM_FIRST && pi <= AUTOMATION_MIXER_PARAM_LAST) {
                     MixerCommand cmd;
                     cmd.track = static_cast<uint8_t>(track);

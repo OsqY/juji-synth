@@ -58,6 +58,11 @@ public:
     /** Get voice age (incremented on each noteOn) */
     uint64_t getAge() const { return age_; }
 
+    // AudioEngine-owned routing metadata. It does not alter voice DSP and is
+    // set by SynthInstrument when a scheduled event starts the voice.
+    int trackIndex = 0;
+    uint64_t triggerId = 0;
+
     /** Mark voice as free (force idle) */
     void stopImmediately();
 

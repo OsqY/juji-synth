@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -49,6 +50,8 @@ import com.jujidaw.model.PadClip
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TransportPosition
 import com.jujidaw.model.TransportState
+import com.jujidaw.project.PadSelectionStore
+import com.jujidaw.project.PatternSelectionStore
 import com.jujidaw.ui.theme.*
 
 /**
@@ -80,14 +83,15 @@ fun TimelineScreen(
     val selectedParam = viewModel.selectedAutomationParam.collectAsState().value
     val automationPoints = viewModel.automationPoints.collectAsState().value
     val trackStates = viewModel.trackStates.collectAsState().value
-    val selectedPatternId = viewModel.selectedPatternId.collectAsState().value
+    val selectedPatternId = PatternSelectionStore.selectedPattern.collectAsState().value
+    val selectedPad = PadSelectionStore.selectedPad.collectAsState().value
+    val tool = viewModel.tool.collectAsState().value
+    val selectedClipIds = viewModel.selectedClipIds.collectAsState().value
     val deletedClipCount = viewModel.deletedClips.collectAsState().value.size
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     var followPlayhead by remember { mutableStateOf(true) }
     var showControls by rememberSaveable { mutableStateOf(true) }
-    var showPatterns by rememberSaveable { mutableStateOf(true) }
-    var showPads by rememberSaveable { mutableStateOf(true) }
     var showAutomation by rememberSaveable { mutableStateOf(false) }
 
     // Timeline mode disables the internal step sequencer
@@ -105,6 +109,8 @@ fun TimelineScreen(
     val headerWidth = 72.dp
     val rulerHeight = 24.dp
     val scrubHeight = 16.dp
+    val rulerPx = with(density) { rulerHeight.toPx() }
+    val scrubPx = with(density) { scrubHeight.toPx() }
     val timelineContentHeight = rulerHeight + scrubHeight + 56.dp * 16
 
     var scrollX by remember { mutableStateOf(0f) }
@@ -126,12 +132,8 @@ fun TimelineScreen(
         SectionVisibilityBar(
             showControls = showControls && showTransportControls,
             allowControls = showTransportControls,
-            showPatterns = showPatterns,
-            showPads = showPads,
             showAutomation = showAutomation,
             onToggleControls = { showControls = !showControls },
-            onTogglePatterns = { showPatterns = !showPatterns },
-            onTogglePads = { showPads = !showPads },
             onToggleAutomation = { showAutomation = !showAutomation },
         )
 
@@ -149,6 +151,7 @@ fun TimelineScreen(
             onPunchIn = { viewModel.setPunchInToPlayhead() },
             onPunchOut = { viewModel.setPunchOutToPlayhead() },
             onBpmChange = { viewModel.setTempo(it) },
+            onSwingChange = viewModel::setSwing,
             onNudge = { viewModel.nudgePlayhead(it) },
             onSnapChange = { viewModel.setSnap(it) },
             onZoomChange = { viewModel.setZoom(it) },
@@ -157,123 +160,24 @@ fun TimelineScreen(
 
         if (showTransportControls && showControls) Spacer(Modifier.height(Spacing.xs))
 
-        // Pattern selector (1-16). Buttons scroll if they don't fit the width.
-        if (showPatterns) Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .background(SurfaceContainer)
-                    .padding(horizontal = Spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            Text(
-                "Sequencer Pattern",
-                color = OnSurfaceVariant,
-                style = LabelSmall,
-                modifier = Modifier.padding(end = Spacing.sm),
+        TimelineEditorToolbar(
+            tool = tool,
+            padIndex = selectedPad,
+            patternId = selectedPatternId,
+            onToolChange = viewModel::setTool,
+        )
+        if (selectedClipIds.isNotEmpty()) {
+            TimelineSelectionToolbar(
+                selectedCount = selectedClipIds.size,
+                onCopy = viewModel::copySelectedClips,
+                onPaste = { viewModel.pasteClipboard(transport.position.toTicks(), selectedTrack) },
+                onDuplicate = viewModel::duplicateSelectedClips,
+                onMute = viewModel::toggleMuteSelectedClips,
+                onDelete = viewModel::deleteSelectedClips,
+                onClear = viewModel::clearClipSelection,
             )
-            Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-            ) {
-                for (i in 0 until 16) {
-                    val selected = selectedPatternId == i
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(TouchTargetMin)
-                                .clickable { viewModel.selectPattern(i) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(RadiusSm))
-                                    .background(if (selected) Primary.copy(alpha = 0.12f) else SurfaceContainerLow)
-                                    .border(
-                                        1.dp,
-                                        if (selected) Primary else OutlineVariant,
-                                        RoundedCornerShape(RadiusSm),
-                                    ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "${i + 1}",
-                                color = if (selected) Primary else OnSurface,
-                                style = LabelSmall,
-                            )
-                        }
-                    }
-                }
-            }
         }
-
-        // Pad strip — own row: drop a pad-trigger clip on the selected track at the playhead.
-        if (showPads) Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .background(SurfaceContainer)
-                    .padding(horizontal = Spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            Text(
-                "One-shot Pad",
-                color = Secondary,
-                style = LabelSmall,
-                modifier = Modifier.padding(end = Spacing.sm),
-            )
-            Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-            ) {
-                for (i in 0 until 32) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(TouchTargetMin)
-                                .clickable {
-                                    val playheadTick = transport.position.toTicks()
-                                    viewModel.addPadClip(selectedTrack, playheadTick, i)
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(RadiusSm))
-                                    .background(SurfaceContainerLow)
-                                    .border(1.dp, Secondary.copy(alpha = 0.4f), RoundedCornerShape(RadiusSm)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                if (i < 16) "A${i + 1}" else "B${i - 15}",
-                                color = OnSurface,
-                                style = LabelSmall,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (showPatterns || showPads) Spacer(Modifier.height(Spacing.xs))
+        Spacer(Modifier.height(Spacing.xs))
 
         // Main area: track headers + timeline
         Row(
@@ -328,12 +232,44 @@ fun TimelineScreen(
                             )
                         },
             ) {
+                var marqueeStart by remember { mutableStateOf<Offset?>(null) }
+                var marqueeEnd by remember { mutableStateOf<Offset?>(null) }
                 Box(modifier = Modifier.offset { IntOffset(-scrollX.toInt(), 0) }) {
                     Box(
                         modifier =
                             Modifier
                                 .width(with(density) { totalWidthPx.toDp() })
-                                .fillMaxHeight(),
+                                .fillMaxHeight()
+                                .pointerInput(tool) {
+                                    if (tool == TimelineTool.SELECT) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                marqueeStart = it
+                                                marqueeEnd = it
+                                            },
+                                            onDrag = { change, _ ->
+                                                change.consume()
+                                                marqueeEnd = change.position
+                                            },
+                                            onDragEnd = {
+                                                val start = marqueeStart
+                                                val end = marqueeEnd
+                                                if (start != null && end != null) {
+                                                    val firstTrack = ((start.y - rulerPx - scrubPx) / trackHeightPx).toInt().coerceIn(0, 15)
+                                                    val lastTrack = ((end.y - rulerPx - scrubPx) / trackHeightPx).toInt().coerceIn(0, 15)
+                                                    viewModel.selectClipsInRange(
+                                                        (start.x / tickWidthPx).toLong(),
+                                                        (end.x / tickWidthPx).toLong(),
+                                                        firstTrack,
+                                                        lastTrack,
+                                                    )
+                                                }
+                                                marqueeStart = null
+                                                marqueeEnd = null
+                                            },
+                                        )
+                                    }
+                                },
                     ) {
                         // Grid + track dividers
                         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -355,8 +291,21 @@ fun TimelineScreen(
                                     )
                                 }
                             }
-                            val rulerPx = with(density) { rulerHeight.toPx() }
-                            val scrubPx = with(density) { scrubHeight.toPx() }
+                            if (snap != TimelineViewModel.Snap.FREE) {
+                                val stepPx = snap.ticks * tickWidthPx
+                                if (stepPx >= 5f) {
+                                    val count = (totalWidthPx / stepPx).toInt()
+                                    for (step in 0..count) {
+                                        val x = step * stepPx
+                                        drawLine(
+                                            color = Primary.copy(alpha = 0.18f),
+                                            start = Offset(x, 0f),
+                                            end = Offset(x, size.height),
+                                            strokeWidth = 1f,
+                                        )
+                                    }
+                                }
+                            }
                             for (t in 0..16) {
                                 val y = t * trackHeightPx + rulerPx + scrubPx
                                 drawLine(
@@ -364,6 +313,28 @@ fun TimelineScreen(
                                     start = Offset(0f, y),
                                     end = Offset(size.width, y),
                                     strokeWidth = 1f,
+                                )
+                            }
+                        }
+
+                        val marqueeFrom = marqueeStart
+                        val marqueeTo = marqueeEnd
+                        if (marqueeFrom != null && marqueeTo != null) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val left = minOf(marqueeFrom.x, marqueeTo.x)
+                                val top = minOf(marqueeFrom.y, marqueeTo.y)
+                                val width = kotlin.math.abs(marqueeTo.x - marqueeFrom.x)
+                                val height = kotlin.math.abs(marqueeTo.y - marqueeFrom.y)
+                                drawRect(
+                                    color = Primary.copy(alpha = 0.12f),
+                                    topLeft = Offset(left, top),
+                                    size = androidx.compose.ui.geometry.Size(width, height),
+                                )
+                                drawRect(
+                                    color = Primary,
+                                    topLeft = Offset(left, top),
+                                    size = androidx.compose.ui.geometry.Size(width, height),
+                                    style = Stroke(width = 1.dp.toPx()),
                                 )
                             }
                         }
@@ -378,8 +349,6 @@ fun TimelineScreen(
                         // Dedicated, low-opacity scrub strip. It sits between
                         // the ruler and clips so seeking never steals clip or
                         // horizontal-scroll gestures.
-                        val rulerPx = with(density) { rulerHeight.toPx() }
-                        val scrubPx = with(density) { scrubHeight.toPx() }
                         fun seekFromTimelineX(x: Float) {
                             viewModel.seekToTick(viewModel.snapTick((x / tickWidthPx).toLong()))
                             followPlayhead = false
@@ -420,7 +389,7 @@ fun TimelineScreen(
                                                         viewModel.snapTick(
                                                             (offset.x / tickWidthPx).toLong(),
                                                         )
-                                                    viewModel.addPatternClip(trackIdx, tapTick)
+                                                    viewModel.placeSelectedSource(trackIdx, tapTick)
                                                 }
                                             },
                                 )
@@ -461,7 +430,8 @@ fun TimelineScreen(
                                                 .width(with(density) { renderedWidth.toDp() })
                                                 .height(with(density) { trackHeightPx.toDp() })
                                                 .padding(Spacing.xs),
-                                        onTap = { viewModel.toggleMuteClip(clip.id) },
+                                        onTap = { viewModel.selectClip(clip.id) },
+                                        isSelected = clip.id in selectedClipIds,
                                         isDragging = isDragging,
                                         onDragStart = {
                                             draggedClipId = clip.id
@@ -476,7 +446,7 @@ fun TimelineScreen(
                                                     (clip.startTick + (draggedClipOffset.x / tickWidthPx).toLong()).coerceAtLeast(0),
                                                 )
                                                 val newTrack = (clip.trackIndex + (draggedClipOffset.y / trackHeightPx).toInt()).coerceIn(0, 15)
-                                                viewModel.moveClip(clip.id, newTick, newTrack)
+                                                viewModel.moveSelectedClips(clip.id, newTick, newTrack)
                                             }
                                             draggedClipId = null
                                             draggedClipOffset = Offset.Zero
@@ -485,6 +455,7 @@ fun TimelineScreen(
                                         onTrim = { newDuration ->
                                             viewModel.trimClip(clip.id, newDuration)
                                         },
+                                        onTrimLeft = { newStart -> viewModel.trimClipFromLeft(clip.id, newStart) },
                                     )
                             }
                         }
@@ -606,12 +577,8 @@ private fun clipBaseHue(clip: Clip): Color =
 private fun SectionVisibilityBar(
     showControls: Boolean,
     allowControls: Boolean,
-    showPatterns: Boolean,
-    showPads: Boolean,
     showAutomation: Boolean,
     onToggleControls: () -> Unit,
-    onTogglePatterns: () -> Unit,
-    onTogglePads: () -> Unit,
     onToggleAutomation: () -> Unit,
 ) {
     Row(
@@ -627,8 +594,6 @@ private fun SectionVisibilityBar(
     ) {
         Text("SHOW", color = OnSurfaceVariant, style = CaptionSmall)
         if (allowControls) SectionToggle("Controls", showControls, onToggleControls)
-        SectionToggle("Patterns", showPatterns, onTogglePatterns)
-        SectionToggle("Pads", showPads, onTogglePads)
         SectionToggle("Automation", showAutomation, onToggleAutomation)
     }
 }
@@ -654,6 +619,110 @@ private fun SectionToggle(
     }
 }
 
+/** The draw source is selected on Pads/Seq; this toolbar only chooses how the lane tap behaves. */
+@Composable
+private fun TimelineEditorToolbar(
+    tool: TimelineTool,
+    padIndex: Int,
+    patternId: Int,
+    onToolChange: (TimelineTool) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .background(SurfaceContainer)
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        Text("DRAW", color = OnSurfaceVariant, style = CaptionSmall)
+        TimelineToolButton("Select", tool == TimelineTool.SELECT, Primary) { onToolChange(TimelineTool.SELECT) }
+        TimelineToolButton(
+            if (padIndex < 16) "Pad A${padIndex + 1}" else "Pad B${padIndex - 15}",
+            tool == TimelineTool.DRAW_PAD,
+            Secondary,
+        ) { onToolChange(TimelineTool.DRAW_PAD) }
+        TimelineToolButton(
+            "Pattern ${patternId + 1}",
+            tool == TimelineTool.DRAW_PATTERN,
+            Primary,
+        ) { onToolChange(TimelineTool.DRAW_PATTERN) }
+        Text(
+            when (tool) {
+                TimelineTool.SELECT -> "tap clips or long-press-drag an area"
+                TimelineTool.DRAW_PAD -> "tap a row to place the selected pad"
+                TimelineTool.DRAW_PATTERN -> "tap a row to place the selected pattern"
+            },
+            color = OnSurfaceVariant,
+            style = CaptionSmall,
+            modifier = Modifier.padding(start = Spacing.xs),
+        )
+    }
+}
+
+@Composable
+private fun TimelineToolButton(
+    label: String,
+    selected: Boolean,
+    accent: Color,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .height(34.dp)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (selected) accent.copy(alpha = 0.18f) else SurfaceContainerLow)
+                .border(1.dp, if (selected) accent else OutlineVariant, RoundedCornerShape(RadiusSm))
+                .clickable(onClick = onClick)
+                .padding(horizontal = Spacing.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = if (selected) accent else OnSurface, style = LabelSmall)
+    }
+}
+
+@Composable
+private fun TimelineSelectionToolbar(
+    selectedCount: Int,
+    onCopy: () -> Unit,
+    onPaste: () -> Unit,
+    onDuplicate: () -> Unit,
+    onMute: () -> Unit,
+    onDelete: () -> Unit,
+    onClear: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .background(SurfaceContainerHigh)
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+    ) {
+        Text("$selectedCount selected", color = Primary, style = CaptionSmall)
+        SelectionAction("Copy", onCopy)
+        SelectionAction("Paste", onPaste)
+        SelectionAction("Duplicate", onDuplicate)
+        SelectionAction("Mute", onMute)
+        SelectionAction("Delete", onDelete, StateRecording)
+        SelectionAction("Clear", onClear)
+    }
+}
+
+@Composable
+private fun SelectionAction(label: String, onClick: () -> Unit, color: Color = OnSurface) {
+    TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp)) {
+        Text(label, color = color, style = CaptionSmall)
+    }
+}
+
 @Composable
 private fun TransportStrip(
     transport: TransportState,
@@ -669,6 +738,7 @@ private fun TransportStrip(
     onPunchIn: () -> Unit,
     onPunchOut: () -> Unit,
     onBpmChange: (Float) -> Unit,
+    onSwingChange: (Float) -> Unit,
     onNudge: (Long) -> Unit,
     onSnapChange: (TimelineViewModel.Snap) -> Unit,
     onZoomChange: (Float) -> Unit,
@@ -712,6 +782,7 @@ private fun TransportStrip(
                 NudgeArrow(Icons.Outlined.ChevronLeft) { onNudge(-snap.ticks) }
                 NudgeArrow(Icons.Outlined.ChevronRight) { onNudge(snap.ticks) }
                 SnapButton(snap, onSnapChange)
+                SwingButton(transport.swing, onSwingChange)
                 ZoomStepButton(Icons.Outlined.ZoomOut) { onZoomChange(zoom - 0.2f) }
                 Text("${(zoom * 100).toInt()}%", color = OnSurfaceVariant, style = CaptionSmall)
                 ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
@@ -766,6 +837,7 @@ private fun TransportStrip(
             Spacer(Modifier.weight(1f))
 
             SnapButton(snap, onSnapChange)
+            SwingButton(transport.swing, onSwingChange)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -804,6 +876,7 @@ fun TimelineLandscapeControls(
         onPunchIn = viewModel::setPunchInToPlayhead,
         onPunchOut = viewModel::setPunchOutToPlayhead,
         onBpmChange = viewModel::setTempo,
+        onSwingChange = viewModel::setSwing,
         onNudge = viewModel::nudgePlayhead,
         onSnapChange = viewModel::setSnap,
         onZoomChange = viewModel::setZoom,
@@ -831,6 +904,32 @@ private fun SnapButton(
         contentAlignment = Alignment.Center,
     ) {
         Text("Snap ${snap.label}", color = Primary, style = LabelSmall)
+    }
+}
+
+@Composable
+private fun SwingButton(
+    swing: Float,
+    onSwingChange: (Float) -> Unit,
+) {
+    val next = when {
+        swing < 0.125f -> 0.25f
+        swing < 0.375f -> 0.5f
+        swing < 0.625f -> 0.75f
+        else -> 0f
+    }
+    Box(
+        modifier =
+            Modifier
+                .height(36.dp)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (swing > 0f) Secondary.copy(alpha = 0.14f) else SurfaceContainerLow)
+                .border(1.dp, if (swing > 0f) Secondary else OutlineVariant, RoundedCornerShape(RadiusSm))
+                .clickable { onSwingChange(next) }
+                .padding(horizontal = Spacing.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("Swing ${(swing * 100).toInt()}%", color = if (swing > 0f) Secondary else OnSurfaceVariant, style = CaptionSmall)
     }
 }
 
@@ -1085,11 +1184,13 @@ private fun ClipItem(
     tickWidthPx: Float,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
+    isSelected: Boolean,
     isDragging: Boolean,
     onDragStart: () -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onTrim: (newDurationTicks: Long) -> Unit,
+    onTrimLeft: (newStartTick: Long) -> Unit,
     onDelete: () -> Unit = {},
 ) {
     val hue = clipBaseHue(clip)
@@ -1097,6 +1198,7 @@ private fun ClipItem(
     val edge =
         when {
             isDragging -> Primary
+            isSelected -> Primary
             clip.mute -> OnSurfaceVariant
             clip is AudioClip -> Secondary
             else -> hue
@@ -1166,7 +1268,37 @@ private fun ClipItem(
                 }
             }
 
-            if (!clip.mute && clip !is PadClip) {
+            if (!clip.mute) {
+                var leftTrimDelta by remember(clip.id) { mutableStateOf(0f) }
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterStart)
+                            .width(20.dp)
+                            .fillMaxHeight()
+                            .pointerInput(clip.id) {
+                                detectHorizontalDragGestures(
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        change.consume()
+                                        leftTrimDelta += dragAmount
+                                    },
+                                    onDragEnd = {
+                                        onTrimLeft(clip.startTick + (leftTrimDelta / tickWidthPx).toLong())
+                                        leftTrimDelta = 0f
+                                    },
+                                )
+                            },
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .width(2.dp)
+                                .fillMaxHeight(0.6f)
+                                .align(Alignment.Center)
+                                .background(OnSurface.copy(alpha = 0.5f)),
+                    )
+                }
+
                 var trimDelta by remember { mutableStateOf(0f) }
                 Box(
                     modifier =

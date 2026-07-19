@@ -94,15 +94,15 @@ fun HelpScreen(onClose: () -> Unit) {
             )
             HelpSection(
                 index = "03",
-                title = "Timeline: patterns versus one-shot pads",
+                title = "Timeline: draw sources into rows",
                 accent = Primary,
-                text = "Tap an empty lane to place the selected Sequencer Pattern. Use One-shot Pad to place exactly one pad hit at the playhead. The hit marker is a single trigger, not a repeating clip; move it to change when the hit occurs.",
+                text = "Choose a pad on Pads or a pattern on Seq, then open Timeline and activate Pad or Pattern draw. Tap any mixer row to place that source there; the row is also its mixer destination. Select mode lets you move, resize, copy, mute, or delete clips. Snap controls the grid, while Free keeps the exact position.",
             )
             HelpSection(
                 index = "04",
-                title = "Punch and loop",
+                title = "Clip length, swing, punch, and loop",
                 accent = Secondary,
-                text = "Punch limits recording, not playback. Turning it on creates a one-bar range from the current playhead if you have not set one yet. Loop repeats playback between its start and end points.",
+                text = "Drag either clip edge to set its musical window. New pad clips reuse your last pad length. Swing delays alternating 1/16 positions without changing stored clips. Punch limits recording, not playback; Loop repeats playback between its start and end points.",
             )
             HelpSection(
                 index = "05",

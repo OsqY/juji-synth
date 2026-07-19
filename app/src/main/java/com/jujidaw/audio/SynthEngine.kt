@@ -157,12 +157,14 @@ object SynthEngine {
         padIndex: Int,
         velocity: Float,
         targetSample: Long,
+        triggerId: Long,
     ): Boolean
 
     external fun nativeSchedulePadRelease(
         trackIndex: Int,
         padIndex: Int,
         targetSample: Long,
+        triggerId: Long,
     ): Boolean
 
     external fun nativeScheduleAutomation(
@@ -451,13 +453,15 @@ object SynthEngine {
         padIndex: Int,
         velocity: Float,
         targetSample: Long = -1L,
-    ) = nativeSchedulePadTrigger(trackIndex, padIndex, velocity, targetSample)
+        triggerId: Long = 0L,
+    ) = nativeSchedulePadTrigger(trackIndex, padIndex, velocity, targetSample, triggerId)
 
     fun schedulePadRelease(
         trackIndex: Int,
         padIndex: Int,
         targetSample: Long = -1L,
-    ) = nativeSchedulePadRelease(trackIndex, padIndex, targetSample)
+        triggerId: Long = 0L,
+    ) = nativeSchedulePadRelease(trackIndex, padIndex, targetSample, triggerId)
 
     fun scheduleAutomation(
         trackIndex: Int,

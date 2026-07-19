@@ -106,22 +106,26 @@ void MixerChannel::applyCommand(const MixerCommand& cmd) {
 }
 
 float MixerChannel::process(float& sendA, float& sendB) {
+    float sample = 0.0f;
+    if (instrument_ != nullptr) {
+        sample = instrument_->process();
+    }
+    return processInput(sample, sendA, sendB);
+}
+
+float MixerChannel::processInput(float input, float& sendA, float& sendB) {
     sendA = 0.0f;
     sendB = 0.0f;
 
     if (mute_) return 0.0f;
 
-    float sample = 0.0f;
-    if (instrument_ != nullptr) {
-        sample = instrument_->process();
-    }
+    float sample = input;
     if (clipPlayer_ != nullptr) {
         sample += clipPlayer_->process();
     }
-    if (instrument_ == nullptr && clipPlayer_ == nullptr) {
-        return 0.0f;
-    }
 
+    // Continue processing insert state with a silent source so delay/reverb
+    // tails survive after a routed instrument voice ends.
     sample = applyInserts(sample);
 
     float linear = dbToLinear(faderDb_);

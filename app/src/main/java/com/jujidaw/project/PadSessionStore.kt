@@ -106,3 +106,18 @@ object PadSelectionStore {
         }
     }
 }
+
+/** The pattern currently selected for arrangement placement, addressed 0..15. */
+object PatternSelectionStore {
+    private val _selectedPattern = MutableStateFlow(0)
+    val selectedPattern: StateFlow<Int> = _selectedPattern
+    private val _selectionEvents = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val selectionEvents = _selectionEvents.asSharedFlow()
+
+    fun select(patternId: Int) {
+        if (patternId in 0..15) {
+            _selectedPattern.value = patternId
+            _selectionEvents.tryEmit(patternId)
+        }
+    }
+}

@@ -33,12 +33,14 @@ interface SynthEngineScheduler {
         padIndex: Int,
         velocity: Float,
         targetSample: Long = -1L,
+        triggerId: Long = 0L,
     ): Boolean
 
     fun schedulePadRelease(
         trackIndex: Int,
         padIndex: Int,
         targetSample: Long = -1L,
+        triggerId: Long = 0L,
     ): Boolean
 
     fun scheduleAutomation(
@@ -106,13 +108,15 @@ class NativeSynthEngineScheduler : SynthEngineScheduler {
         padIndex: Int,
         velocity: Float,
         targetSample: Long,
-    ): Boolean = SynthEngine.schedulePadTrigger(trackIndex, padIndex, velocity, targetSample)
+        triggerId: Long,
+    ): Boolean = SynthEngine.schedulePadTrigger(trackIndex, padIndex, velocity, targetSample, triggerId)
 
     override fun schedulePadRelease(
         trackIndex: Int,
         padIndex: Int,
         targetSample: Long,
-    ): Boolean = SynthEngine.schedulePadRelease(trackIndex, padIndex, targetSample)
+        triggerId: Long,
+    ): Boolean = SynthEngine.schedulePadRelease(trackIndex, padIndex, targetSample, triggerId)
 
     override fun scheduleAutomation(
         trackIndex: Int,

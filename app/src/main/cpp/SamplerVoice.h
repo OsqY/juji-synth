@@ -30,8 +30,11 @@ struct SamplerVoice {
 
     double sampleRate = 48000.0;
     int note = -1;
+    // Destination mixer row, assigned when the voice is triggered.
+    int trackIndex = 1;
     int velocity = 100;
     uint64_t age = 0;
+    uint64_t triggerId = 0;
 
     void init(double sr);
     void start(const SampleBuffer* buf, int midiNote, int vel);

@@ -35,6 +35,34 @@ class ClipModelTest {
         val clip = decoded.clips.single() as PadClip
         assertEquals(31, clip.padIndex)
         assertEquals(TICKS_PER_STEP.toLong(), clip.durationTicks)
+        assertEquals(PadGateMode.LEGACY_ONE_SHOT, clip.gateMode)
+    }
+
+    @Test
+    fun legacyPadClipJsonDefaultsToOneShotGateMode() {
+        val decoded =
+            json.decodeFromString(
+                Arrangement.serializer(),
+                """{"clips":[{"type":"pad","id":"legacy","trackIndex":0,"startTick":0,"durationTicks":120,"padIndex":0}]}""",
+            )
+
+        assertEquals(PadGateMode.LEGACY_ONE_SHOT, (decoded.clips.single() as PadClip).gateMode)
+    }
+
+    @Test
+    fun patternClipSerializesContentOffset() {
+        val original = PatternClip(
+            id = "phase",
+            trackIndex = 0,
+            startTick = 480,
+            durationTicks = 960,
+            patternId = 2,
+            contentOffsetTicks = 120,
+        )
+
+        val decoded = json.decodeFromString<PatternClip>(json.encodeToString(original))
+
+        assertEquals(120L, decoded.contentOffsetTicks)
     }
 
     private val json = Json {

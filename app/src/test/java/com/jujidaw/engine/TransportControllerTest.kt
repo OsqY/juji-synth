@@ -7,6 +7,7 @@ import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
 import com.jujidaw.model.PadClip
+import com.jujidaw.model.PadGateMode
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TimeSignature
 import com.jujidaw.model.TransportPosition
@@ -915,6 +916,7 @@ class TransportControllerTest {
                 durationTicks = TICKS_PER_STEP.toLong(),
                 padIndex = 31,
                 velocity = 0.75f,
+                gateMode = PadGateMode.TIMELINE_GATE,
             )
         controller.loadArrangement(Arrangement(clips = listOf(clip)))
 
@@ -930,6 +932,142 @@ class TransportControllerTest {
             controller.tickToSample(TICKS_PER_STEP.toLong(), 120f),
             fakeScheduler.padReleases.single().targetSample,
         )
+    }
+
+    @Test
+    fun scheduleNextBlock_overlappingPadClipsKeepIndependentGateIdentities() {
+        controller.loadArrangement(
+            Arrangement(
+                clips = listOf(
+                    PadClip(
+                        id = "first", trackIndex = 3, startTick = 0L,
+                        durationTicks = TICKS_PER_STEP.toLong() * 2, padIndex = 7,
+                        gateMode = PadGateMode.TIMELINE_GATE,
+                    ),
+                    PadClip(
+                        id = "second", trackIndex = 3, startTick = TICKS_PER_STEP.toLong(),
+                        durationTicks = TICKS_PER_STEP.toLong() * 2, padIndex = 7,
+                        gateMode = PadGateMode.TIMELINE_GATE,
+                    ),
+                ),
+            ),
+        )
+
+        controller.scheduleNextBlock()
+
+        assertEquals(2, fakeScheduler.padTriggers.size)
+        assertEquals(2, fakeScheduler.padReleases.size)
+        val triggerIds = fakeScheduler.padTriggers.map { it.triggerId }.toSet()
+        assertEquals(2, triggerIds.size)
+        assertEquals(triggerIds, fakeScheduler.padReleases.map { it.triggerId }.toSet())
+    }
+
+    @Test
+    fun scheduleNextBlock_legacyPadClipDoesNotForceRelease() {
+        controller.loadArrangement(
+            Arrangement(
+                clips = listOf(
+                    PadClip(
+                        id = "legacy-tail",
+                        trackIndex = 0,
+                        startTick = 0L,
+                        durationTicks = TICKS_PER_STEP.toLong(),
+                        padIndex = 0,
+                    ),
+                ),
+            ),
+        )
+
+        controller.scheduleNextBlock()
+
+        assertEquals(1, fakeScheduler.padTriggers.size)
+        assertTrue(fakeScheduler.padReleases.isEmpty())
+    }
+
+    @Test
+    fun swingDelaysOddSixteenthAndPreservesNoteDuration() {
+        controller.setSwing(0.5f)
+        val pattern =
+            Pattern(
+                id = 0,
+                lengthTicks = PPQ * 2L,
+                notes = listOf(NoteEvent(note = 60, velocity = 1f, startTick = 120L, durationTicks = 120L)),
+            )
+
+        controller.schedulePatternNotes(pattern, 0L, controller.tickToSample(960L, 120f), 120f)
+
+        assertEquals(controller.tickToSample(150L, 120f), fakeScheduler.noteOnEvents.single().targetSample)
+        assertEquals(controller.tickToSample(270L, 120f), fakeScheduler.noteOffEvents.single().targetSample)
+    }
+
+    @Test
+    fun swingLeavesOffGridNotesUnchanged() {
+        controller.setSwing(1f)
+        val pattern =
+            Pattern(
+                id = 0,
+                lengthTicks = PPQ * 2L,
+                notes = listOf(NoteEvent(note = 60, velocity = 1f, startTick = 121L, durationTicks = 120L)),
+            )
+
+        controller.schedulePatternNotes(pattern, 0L, controller.tickToSample(960L, 120f), 120f)
+
+        assertEquals(controller.tickToSample(121L, 120f), fakeScheduler.noteOnEvents.single().targetSample)
+    }
+
+    @Test
+    fun swingDelaysTimelinePadAndItsGateByTheSameAmount() {
+        controller.setSwing(0.5f)
+        controller.loadArrangement(
+            Arrangement(
+                clips = listOf(
+                    PadClip(
+                        id = "swung-pad",
+                        trackIndex = 2,
+                        startTick = 120L,
+                        durationTicks = 120L,
+                        padIndex = 9,
+                        gateMode = PadGateMode.TIMELINE_GATE,
+                    ),
+                ),
+            ),
+        )
+
+        controller.scheduleNextBlock()
+
+        assertEquals(controller.tickToSample(150L, 120f), fakeScheduler.padTriggers.single().targetSample)
+        assertEquals(controller.tickToSample(270L, 120f), fakeScheduler.padReleases.single().targetSample)
+    }
+
+    @Test
+    fun patternClipContentOffsetStartsAtTheExpectedPatternPhase() {
+        controller.loadPatterns(
+            listOf(
+                Pattern(
+                    id = 0,
+                    lengthTicks = 960L,
+                    notes = listOf(
+                        NoteEvent(note = 60, velocity = 1f, startTick = 0L, durationTicks = 120L),
+                        NoteEvent(note = 64, velocity = 1f, startTick = 480L, durationTicks = 120L),
+                    ),
+                ),
+            ),
+        )
+        val clip =
+            PatternClip(
+                id = "phase",
+                trackIndex = 3,
+                startTick = 1000L,
+                durationTicks = 480L,
+                patternId = 0,
+                contentOffsetTicks = 480L,
+            )
+
+        controller.schedulePatternClip(clip, 0L, controller.tickToSample(2000L, 120f), 120f)
+
+        assertEquals(1, fakeScheduler.noteOnEvents.size)
+        assertEquals(64, fakeScheduler.noteOnEvents.single().note)
+        assertEquals(controller.tickToSample(1000L, 120f), fakeScheduler.noteOnEvents.single().targetSample)
     }
 
     // ================================================================

@@ -30,17 +30,17 @@ void AudioEngine::init(double sampleRate) {
     }
     masterBus_.init(sampleRate);
 
-    // Channel 0 hosts the synth instrument.
+    // Instruments render into AudioEngine's fixed source buses. Keeping them
+    // detached from individual channels lets a timeline event route to any
+    // mixer row without processing the instrument more than once per sample.
     synthInstrument_ = std::make_unique<SynthInstrument>();
     synthInstrument_->init(sampleRate);
-    channels_[0].setInstrument(synthInstrument_.get());
 
     // Channel 1 hosts the sampler; pair it with the AudioEngine so
     // synth-pad mode can route to per-pad synths via the pool.
     sampler_ = std::make_unique<SamplerInstrument>();
     sampler_->init(sampleRate);
     sampler_->setAudioEngine(this);
-    channels_[1].setInstrument(sampler_.get());
 
     // Clear the per-pad synth pool; instances are created only when a pad
     // enters synth mode or receives a pad-synth parameter update.
@@ -101,11 +101,6 @@ int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
         }
     }
 
-    // Snapshot the active track count once per buffer to avoid data races
-    // with the scheduler thread that may modify it via startAudioClip.
-    // Using acquire order ensures we see the scheduler's release write.
-    int activeTracks = activeTrackCount_.load(std::memory_order_acquire);
-
     // Advance transport clock. If a loop wrap occurred, discard stale events
     // that were scheduled before the wrap.
     int64_t sampleBeforeAdvance = transport_.getCurrentSample();
@@ -115,6 +110,9 @@ int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
     }
     transport_.drainEvents(eventQueue_);
     transport_.firePendingEvents(*this, sampleBeforeAdvance, numFrames);
+
+    // Events can activate a previously unused row during this callback.
+    int activeTracks = activeTrackCount_.load(std::memory_order_acquire);
 
     // Apply per-block automation on the synth once per buffer.
     if (synthInstrument_) {
@@ -129,6 +127,14 @@ int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
     }
 
     for (int i = 0; i < numFrames; i++) {
+        instrumentSources_.fill(0.0f);
+        if (synthInstrument_) {
+            synthInstrument_->processToTracks(instrumentSources_.data(), activeTracks);
+        }
+        if (sampler_) {
+            sampler_->processToTracks(instrumentSources_.data(), activeTracks);
+        }
+
         // Determine if any channel is soloed
         bool anySolo = false;
         for (int t = 0; t < activeTracks; t++) {
@@ -146,7 +152,7 @@ int AudioEngine::processAudio(float* outputBuffer, int numFrames) {
         for (int t = 0; t < activeTracks; t++) {
             float sendA = 0.0f;
             float sendB = 0.0f;
-            float out = channels_[t].process(sendA, sendB);
+            float out = channels_[t].processInput(instrumentSources_[t], sendA, sendB);
 
             bool soloed = channels_[t].isSolo();
             bool muted = channels_[t].isMute();
@@ -245,6 +251,18 @@ void AudioEngine::pushMixerCommand(const MixerCommand& cmd) {
     }
 }
 
+void AudioEngine::ensureTrackActive(int trackIndex) {
+    if (trackIndex < 0 || trackIndex >= MAX_TRACKS) return;
+    int requiredCount = trackIndex + 1;
+    int current = activeTrackCount_.load(std::memory_order_relaxed);
+    while (current < requiredCount &&
+           !activeTrackCount_.compare_exchange_weak(
+               current, requiredCount,
+               std::memory_order_release,
+               std::memory_order_relaxed)) {
+    }
+}
+
 void AudioEngine::processMixerQueue() {
     while (true) {
         int head = mixerQueueHead_.load(std::memory_order_acquire);
@@ -325,10 +343,7 @@ bool AudioEngine::startAudioClip(const std::string& clipId, int trackIndex, int 
     // new value on its next acquire-load. A mixer command could also be
     // used for consistency with other mixer state, but a direct atomic
     // store is simpler and avoids multi-producer concerns on the queue.
-    int prevActive = activeTrackCount_.load(std::memory_order_relaxed);
-    if (trackIndex >= prevActive) {
-        activeTrackCount_.store(trackIndex + 1, std::memory_order_release);
-    }
+    ensureTrackActive(trackIndex);
     return true;
 }
 

@@ -1,6 +1,7 @@
 #include "SamplerInstrument.h"
 #include "AudioEngine.h"
 #include "SynthInstrument.h"
+#include <algorithm>
 #include <cmath>
 
 SamplerInstrument::SamplerInstrument() {
@@ -17,11 +18,22 @@ void SamplerInstrument::init(double sampleRate) {
 }
 
 float SamplerInstrument::process() {
+    std::array<float, AudioEngine::MAX_TRACKS> outputs{};
+    processToTracks(outputs.data(), static_cast<int>(outputs.size()));
     float sum = 0.0f;
+    for (float output : outputs) sum += output;
+    return sum;
+}
+
+void SamplerInstrument::processToTracks(float* outputs, int trackCount) {
+    if (outputs == nullptr || trackCount <= 0) return;
     int active = 0;
     for (auto& voice : voices_) {
         if (voice.isActive()) {
-            sum += voice.process();
+            float sample = voice.process() * masterVolume_;
+            if (voice.trackIndex >= 0 && voice.trackIndex < trackCount) {
+                outputs[voice.trackIndex] += sample;
+            }
             active++;
         }
     }
@@ -37,13 +49,16 @@ float SamplerInstrument::process() {
             // active voice; checking only isActive() left new synth-pad notes
             // permanently silent.
             if (padSynth && padSynth->needsProcessing()) {
-                sum += padSynth->process();
+                std::array<float, AudioEngine::MAX_TRACKS> padOutputs{};
+                padSynth->processToTracks(padOutputs.data(), trackCount);
+                for (int track = 0; track < trackCount; ++track) {
+                    outputs[track] += padOutputs[track] * masterVolume_;
+                }
                 active++;
             }
         }
     }
     activeVoiceCount_.store(active, std::memory_order_relaxed);
-    return sum * masterVolume_;
 }
 
 void SamplerInstrument::noteOn(int midiNote, int velocity) {
@@ -58,7 +73,7 @@ void SamplerInstrument::noteOn(int midiNote, int velocity) {
             auto* padSynth = audioEngine_->getPadSynth(padIndex);
             if (padSynth) {
                 int targetNote = pad.synthRootNote + (midiNote - padIndex);
-                padSynth->noteOn(targetNote, velocity);
+                padSynth->noteOnForTrack(targetNote, velocity, 1);
             }
         }
         return;
@@ -82,6 +97,7 @@ void SamplerInstrument::noteOn(int midiNote, int velocity) {
     voice.filter.setCutoff(static_cast<double>(pad.filterCutoff));
     voice.filter.setResonance(static_cast<double>(pad.filterResonance));
     voice.start(pad.buffer.get(), midiNote, velocity);
+    voice.trackIndex = 1;
 }
 
 void SamplerInstrument::noteOff(int midiNote) {
@@ -93,6 +109,15 @@ void SamplerInstrument::noteOff(int midiNote) {
 }
 
 void SamplerInstrument::releasePad(int padIndex) {
+    releasePadInternal(padIndex, 1, false);
+}
+
+void SamplerInstrument::releasePadFromAudioThread(int padIndex, int trackIndex, uint64_t triggerId) {
+    releasePadInternal(padIndex, trackIndex, true, triggerId);
+}
+
+void SamplerInstrument::releasePadInternal(int padIndex, int trackIndex, bool fromAudioThread,
+                                           uint64_t triggerId) {
     // Scheduler and project state use global pad indices. Keep the release
     // operation independent of whichever bank the UI currently displays.
     int globalPadIndex = padIndex;
@@ -100,10 +125,19 @@ void SamplerInstrument::releasePad(int padIndex) {
     int note = globalPadIndex;
     if (audioEngine_ && pads_[globalPadIndex].synthMode.load(std::memory_order_acquire)) {
         if (auto* padSynth = audioEngine_->getExistingPadSynth(globalPadIndex)) {
-            padSynth->panic();
+            if (fromAudioThread) {
+                padSynth->noteOffFromAudioThread(pads_[globalPadIndex].synthRootNote, trackIndex, triggerId);
+            } else {
+                padSynth->noteOffForTrack(pads_[globalPadIndex].synthRootNote, trackIndex);
+            }
         }
     }
-    noteOff(note);
+    for (auto& voice : voices_) {
+        if (voice.isActive() && voice.note == note && voice.trackIndex == trackIndex &&
+            (triggerId == 0 || voice.triggerId == triggerId)) {
+            voice.stop();
+        }
+    }
 }
 
 void SamplerInstrument::panic() {
@@ -193,24 +227,31 @@ void SamplerInstrument::setActiveBank(int bank) {
 }
 
 void SamplerInstrument::triggerPad(int padIndex, int velocity) {
-    triggerPadInternal(padIndex, velocity, false);
+    triggerPadInternal(padIndex, velocity, false, 1);
 }
 
 void SamplerInstrument::triggerPadFromAudioThread(int padIndex, int velocity) {
-    triggerPadInternal(padIndex, velocity, true);
+    triggerPadInternal(padIndex, velocity, true, 1);
 }
 
-void SamplerInstrument::triggerPadInternal(int padIndex, int velocity, bool fromAudioThread) {
+void SamplerInstrument::triggerPadFromAudioThread(int padIndex, int velocity, int trackIndex,
+                                                   uint64_t triggerId) {
+    triggerPadInternal(padIndex, velocity, true, trackIndex, triggerId);
+}
+
+void SamplerInstrument::triggerPadInternal(int padIndex, int velocity, bool fromAudioThread,
+                                           int trackIndex, uint64_t triggerId) {
     if (padIndex < 0 || padIndex >= NUM_PADS) return;
+    trackIndex = std::clamp(trackIndex, 0, AudioEngine::MAX_TRACKS - 1);
 
     const auto& pad = pads_[padIndex];
     if (pad.synthMode.load(std::memory_order_acquire)) {
         if (audioEngine_) {
             if (auto* padSynth = audioEngine_->getExistingPadSynth(padIndex)) {
                 if (fromAudioThread) {
-                    padSynth->noteOnFromAudioThread(pad.synthRootNote, velocity);
+                    padSynth->noteOnFromAudioThread(pad.synthRootNote, velocity, trackIndex, triggerId);
                 } else {
-                    padSynth->noteOn(pad.synthRootNote, velocity);
+                    padSynth->noteOnForTrack(pad.synthRootNote, velocity, trackIndex);
                 }
             }
         }
@@ -236,6 +277,8 @@ void SamplerInstrument::triggerPadInternal(int padIndex, int velocity, bool from
     // Keep the global pad index as the voice note so release/voice tracking
     // remains deterministic regardless of the currently selected UI bank.
     voice.start(pad.buffer.get(), padIndex, velocity);
+    voice.trackIndex = trackIndex;
+    voice.triggerId = triggerId;
 }
 
 int SamplerInstrument::allocateVoice() {

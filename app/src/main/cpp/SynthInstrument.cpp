@@ -36,6 +36,13 @@ void SynthInstrument::init(double sampleRate) {
 }
 
 float SynthInstrument::process() {
+    float output = 0.0f;
+    processToTracks(&output, 1);
+    return output;
+}
+
+void SynthInstrument::processToTracks(float* outputs, int trackCount) {
+    if (outputs == nullptr || trackCount <= 0) return;
     if (panicRequested_.exchange(false, std::memory_order_acq_rel)) {
         panic();
     }
@@ -43,7 +50,94 @@ float SynthInstrument::process() {
     // Apply a new preset before handling a queued note so the first hit uses
     // the state the UI just selected rather than the previous synth state.
     processNoteQueue();
-    return processSynthSample();
+
+    (void)sequencer_.process(1);
+
+    float lfo1Val = lfo1_.process();
+    float lfo2Val = lfo2_.process();
+
+    std::array<float, 6> modSources = {lfo1Val, lfo2Val, 0, 0, 0, 0};
+    for (int v = 0; v < MAX_VOICES; v++) {
+        if (voiceActive_[v]) {
+            float cutoffMod = modMatrix_.getModulation(1, modSources);
+            if (cutoffMod != 0.0f) {
+                float base = currentParams_.filter.cutoff;
+                voices_[v].setFilterCutoff(std::clamp(base + cutoffMod, 0.0f, 1.0f));
+            }
+            float resMod = modMatrix_.getModulation(2, modSources);
+            if (resMod != 0.0f) {
+                float base = currentParams_.filter.resonance;
+                voices_[v].setFilterResonance(std::clamp(base + resMod, 0.0f, 1.0f));
+            }
+            float pitchMod = modMatrix_.getModulation(0, modSources);
+            if (pitchMod != 0.0f) {
+                voices_[v].setPitchBend(pitchBend_ + pitchMod);
+            }
+            float ampMod = modMatrix_.getModulation(3, modSources);
+            if (ampMod != 0.0f) {
+                float base = currentParams_.oscillators.osc1.level;
+                float modded = std::clamp(base + ampMod, 0.0f, 1.0f);
+                voices_[v].setOsc1Level(modded);
+                voices_[v].setOsc2Level(modded);
+            }
+            float mixMod = modMatrix_.getModulation(4, modSources);
+            if (mixMod != 0.0f) {
+                float base = oscMix_;
+                voices_[v].setOscMix(std::clamp(base + mixMod, 0.0f, 1.0f));
+            }
+        }
+    }
+
+    const int usableTrackCount = std::min(trackCount, MAX_ROUTING_TRACKS);
+    std::array<float, MAX_ROUTING_TRACKS> dryOutputs{};
+    bool hasActiveVoice = false;
+    for (int v = 0; v < MAX_VOICES; v++) {
+        if (!voiceActive_[v]) continue;
+        float sample = voices_[v].process();
+        int track = voices_[v].trackIndex;
+        if (track >= 0 && track < usableTrackCount) {
+            dryOutputs[track] += sample;
+        }
+        hasActiveVoice = true;
+    }
+
+    noiseSmooth_ += (((noiseLevel_ > 0.001f && hasActiveVoice) ? noiseLevel_ : 0.0f)
+        - noiseSmooth_) * 0.02f;
+
+    int effectsTrack = std::clamp(lastEffectsTrack_, 0, std::max(usableTrackCount - 1, 0));
+    float largestDrySignal = 0.0f;
+    for (int track = 0; track < usableTrackCount; ++track) {
+        const float magnitude = std::fabs(dryOutputs[track]);
+        if (magnitude > largestDrySignal) {
+            largestDrySignal = magnitude;
+            effectsTrack = track;
+        }
+    }
+    lastEffectsTrack_ = effectsTrack;
+
+    // The synth owns one shared effects chain. Preserve that behavior while
+    // returning its wet signal to the timeline row producing the sound.
+    dryOutputs[effectsTrack] += generateNoise() * noiseSmooth_;
+    float drySum = 0.0f;
+    for (int track = 0; track < usableTrackCount; ++track) {
+        drySum += dryOutputs[track];
+    }
+
+    float effectedSum = drySum;
+    if (!currentParams_.effects.bypass) {
+        effectedSum = distortion_.process(effectedSum);
+        effectedSum = chorus_.process(effectedSum);
+        effectedSum = delay_.process(effectedSum);
+        effectedSum = reverb_.process(effectedSum);
+    }
+
+    const float masterGain = static_cast<float>(masterVolume_);
+    for (int track = 0; track < usableTrackCount; ++track) {
+        outputs[track] += dryOutputs[track] * masterGain;
+    }
+    if (usableTrackCount > 0) {
+        outputs[effectsTrack] += (effectedSum - drySum) * masterGain;
+    }
 }
 
 float SynthInstrument::processSynthSample() {
@@ -110,38 +204,48 @@ float SynthInstrument::processSynthSample() {
 }
 
 void SynthInstrument::noteOn(int midiNote, int velocity) {
+    noteOnForTrack(midiNote, velocity, 0);
+}
+
+void SynthInstrument::noteOnForTrack(int midiNote, int velocity, int trackIndex) {
     int tail = noteQueueTail_.load(std::memory_order_relaxed);
     int nextTail = (tail + 1) % NOTE_QUEUE_SIZE;
     if (nextTail != noteQueueHead_.load(std::memory_order_acquire)) {
-        noteQueue_[tail] = {NoteEvent::NoteOn, midiNote, velocity};
+        noteQueue_[tail] = {NoteEvent::NoteOn, midiNote, velocity, trackIndex};
         noteQueueTail_.store(nextTail, std::memory_order_release);
     }
 }
 
 void SynthInstrument::noteOff(int midiNote) {
+    noteOffForTrack(midiNote, 0);
+}
+
+void SynthInstrument::noteOffForTrack(int midiNote, int trackIndex) {
     int tail = noteQueueTail_.load(std::memory_order_relaxed);
     int nextTail = (tail + 1) % NOTE_QUEUE_SIZE;
     if (nextTail != noteQueueHead_.load(std::memory_order_acquire)) {
-        noteQueue_[tail] = {NoteEvent::NoteOff, midiNote, 0};
+        noteQueue_[tail] = {NoteEvent::NoteOff, midiNote, 0, trackIndex};
         noteQueueTail_.store(nextTail, std::memory_order_release);
     }
 }
 
-void SynthInstrument::noteOnFromAudioThread(int midiNote, int velocity) {
-    handleNoteOn(midiNote, velocity);
+void SynthInstrument::noteOnFromAudioThread(int midiNote, int velocity, int trackIndex, uint64_t triggerId) {
+    handleNoteOn(midiNote, velocity, trackIndex, triggerId);
 }
 
-void SynthInstrument::noteOffFromAudioThread(int midiNote) {
-    handleNoteOff(midiNote);
+void SynthInstrument::noteOffFromAudioThread(int midiNote, int trackIndex, uint64_t triggerId) {
+    handleNoteOff(midiNote, trackIndex, triggerId);
 }
 
 void SynthInstrument::requestPanic() {
     panicRequested_.store(true, std::memory_order_release);
 }
 
-void SynthInstrument::handleNoteOn(int midiNote, int velocity) {
+void SynthInstrument::handleNoteOn(int midiNote, int velocity, int trackIndex, uint64_t triggerId) {
+    trackIndex = std::max(0, trackIndex);
     for (int i = 0; i < MAX_VOICES; i++) {
-        if (voiceActive_[i] && voices_[i].getNote() == midiNote) {
+        if (triggerId == 0 && voiceActive_[i] && voices_[i].getNote() == midiNote &&
+            voices_[i].trackIndex == trackIndex) {
             voices_[i].stopImmediately();
             voiceActive_[i] = false;
             activeVoiceCount_.fetch_sub(1, std::memory_order_relaxed);
@@ -177,14 +281,18 @@ void SynthInstrument::handleNoteOn(int midiNote, int velocity) {
         voices_[voiceIdx].setPitchBend(pitchBend_);
 
         voices_[voiceIdx].noteOn(midiNote, velocity);
+        voices_[voiceIdx].trackIndex = trackIndex;
+        voices_[voiceIdx].triggerId = triggerId;
         voiceActive_[voiceIdx] = true;
         activeVoiceCount_.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
-void SynthInstrument::handleNoteOff(int midiNote) {
+void SynthInstrument::handleNoteOff(int midiNote, int trackIndex, uint64_t triggerId) {
     for (int i = 0; i < MAX_VOICES; i++) {
-        if (voiceActive_[i] && voices_[i].getNote() == midiNote) {
+        if (voiceActive_[i] && voices_[i].getNote() == midiNote &&
+            voices_[i].trackIndex == trackIndex &&
+            (triggerId == 0 || voices_[i].triggerId == triggerId)) {
             voices_[i].noteOff();
         }
     }
@@ -208,9 +316,9 @@ void SynthInstrument::processNoteQueue() {
 
         auto& event = noteQueue_[head];
         if (event.type == NoteEvent::NoteOn) {
-            handleNoteOn(event.note, event.velocity);
+            handleNoteOn(event.note, event.velocity, event.trackIndex);
         } else {
-            handleNoteOff(event.note);
+            handleNoteOff(event.note, event.trackIndex);
         }
         noteQueueHead_.store((head + 1) % NOTE_QUEUE_SIZE, std::memory_order_release);
     }

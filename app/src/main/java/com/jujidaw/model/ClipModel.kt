@@ -39,6 +39,15 @@ sealed class Clip {
 
 /** A direct one-shot pad hit on the arrangement timeline. */
 @Serializable
+enum class PadGateMode {
+    /** Existing projects retain their pad's own one-shot/tail behaviour. */
+    LEGACY_ONE_SHOT,
+
+    /** The timeline sends a release at the end of the clip's visible duration. */
+    TIMELINE_GATE,
+}
+
+@Serializable
 @SerialName("pad")
 data class PadClip(
     override val id: String,
@@ -48,6 +57,8 @@ data class PadClip(
     override val mute: Boolean = false,
     val padIndex: Int,
     val velocity: Float = 1.0f,
+    /** Missing in legacy project JSON, so old clips keep their original tail behaviour. */
+    val gateMode: PadGateMode = PadGateMode.LEGACY_ONE_SHOT,
 ) : Clip() {
     init {
         require(trackIndex in 0..15) { "Clip track index must be between 0 and 15" }
@@ -70,12 +81,15 @@ data class PatternClip(
     val patternId: Int,
     val transpose: Int = 0,
     val padIndex: Int = -1, // global pad to trigger (-1 = use note's padIndex, then legacy noteOn)
+    /** Position in the source pattern used at this clip's left edge. */
+    val contentOffsetTicks: Long = 0,
 ) : Clip() {
     init {
         require(trackIndex in 0..15) { "Track index must be between 0 and 15" }
         require(startTick >= 0) { "Clip start tick must be non-negative" }
         require(durationTicks > 0) { "Clip duration must be positive" }
         require(padIndex in -1..31) { "Pad index must be between -1 and 31" }
+        require(contentOffsetTicks >= 0) { "Pattern content offset must be non-negative" }
     }
 }
 

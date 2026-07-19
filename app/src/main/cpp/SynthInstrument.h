@@ -96,16 +96,25 @@ public:
     float process() override;
     void noteOn(int midiNote, int velocity) override;
     void noteOff(int midiNote) override;
+    /** Queue a UI-thread note for a specific destination mixer track. */
+    void noteOnForTrack(int midiNote, int velocity, int trackIndex);
+    /** Queue a UI-thread note-off for a specific destination mixer track. */
+    void noteOffForTrack(int midiNote, int trackIndex);
     /** Audio-callback-only path that avoids the UI-to-audio SPSC queue. */
-    void noteOnFromAudioThread(int midiNote, int velocity);
+    void noteOnFromAudioThread(int midiNote, int velocity, int trackIndex = 0, uint64_t triggerId = 0);
     /** Audio-callback-only path that avoids the UI-to-audio SPSC queue. */
-    void noteOffFromAudioThread(int midiNote);
+    void noteOffFromAudioThread(int midiNote, int trackIndex = 0, uint64_t triggerId = 0);
     /** Request a voice reset; the audio callback performs the mutation. */
     void requestPanic();
     void panic() override;
     bool isActive() const override;
     /** True when the audio callback must run this synth to consume queued notes. */
     bool needsProcessing() const;
+
+    // Render every active voice once and add it to its destination track.
+    // `outputs` is owned and cleared by the caller; no audio-thread storage
+    // is allocated by this method.
+    void processToTracks(float* outputs, int trackCount);
 
     // ---- Bulk / parameter setters (UI thread; atomic swap on audio thread) ----
     void setParams(const SynthParams& params);
@@ -212,6 +221,8 @@ public:
     void syncVoiceActiveStates();
 
 private:
+    static constexpr int MAX_ROUTING_TRACKS = 16;
+
     static constexpr int MAX_VOICES = 4;
     static constexpr int NOTE_QUEUE_SIZE = 64;
 
@@ -219,6 +230,8 @@ private:
         enum Type : uint8_t { NoteOn, NoteOff } type;
         int note = 0;
         int velocity = 0;
+        int trackIndex = 0;
+        uint64_t triggerId = 0;
     };
 
     double sampleRate_ = 44100.0;
@@ -260,6 +273,7 @@ private:
     float subOscLevel_ = 0.0f;
     float noiseLevel_ = 0.0f;
     float noiseSmooth_ = 0.0f;
+    int lastEffectsTrack_ = 0;
     float oscMix_ = 0.5f;
     bool oscSync_ = false;
     float masterVolume_ = 0.8f;
@@ -280,8 +294,8 @@ private:
     void applyModulationMatrix();
     float processSynthSample();
     void processNoteQueue();
-    void handleNoteOn(int midiNote, int velocity);
-    void handleNoteOff(int midiNote);
+    void handleNoteOn(int midiNote, int velocity, int trackIndex, uint64_t triggerId = 0);
+    void handleNoteOff(int midiNote, int trackIndex, uint64_t triggerId = 0);
 };
 
 #endif // JUJIDAW_SYNTH_INSTRUMENT_H

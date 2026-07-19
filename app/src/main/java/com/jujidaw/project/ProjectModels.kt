@@ -138,6 +138,8 @@ data class Project(
     val name: String,
     val bpm: Float = 120.0f,
     val timeSignature: TimeSignature = TimeSignature(),
+    /** Global 1/16-note swing amount. Zero preserves straight timing. */
+    val swing: Float = 0.0f,
     val patterns: List<Pattern> = emptyList(),
     val arrangement: Arrangement = Arrangement(),
     val mixerState: MixerState = MixerState(),

@@ -35,6 +35,7 @@ class ProjectSerializationTest {
             name = "autosave",
             bpm = 137f,
             timeSignature = TimeSignature(numerator = 6, denominator = 8),
+            swing = 0.35f,
             patterns =
                 listOf(
                     Pattern(
@@ -140,6 +141,7 @@ class ProjectSerializationTest {
         // 1. Transport settings (BPM + time signature).
         assertEquals(137f, decoded.bpm)
         assertEquals(TimeSignature(6, 8), decoded.timeSignature)
+        assertEquals(0.35f, decoded.swing)
 
         // 2. Patterns, including per-note pad routing.
         assertEquals(2, decoded.patterns.size)

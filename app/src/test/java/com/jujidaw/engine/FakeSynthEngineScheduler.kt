@@ -30,12 +30,14 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         val padIndex: Int,
         val velocity: Float,
         val targetSample: Long,
+        val triggerId: Long,
     )
 
     data class PadReleaseEvent(
         val trackIndex: Int,
         val padIndex: Int,
         val targetSample: Long,
+        val triggerId: Long,
     )
 
     data class AutomationEvent(
@@ -114,8 +116,9 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         padIndex: Int,
         velocity: Float,
         targetSample: Long,
+        triggerId: Long,
     ): Boolean {
-        padTriggers.add(PadTriggerEvent(trackIndex, padIndex, velocity, targetSample))
+        padTriggers.add(PadTriggerEvent(trackIndex, padIndex, velocity, targetSample, triggerId))
         return true
     }
 
@@ -123,8 +126,9 @@ class FakeSynthEngineScheduler : SynthEngineScheduler {
         trackIndex: Int,
         padIndex: Int,
         targetSample: Long,
+        triggerId: Long,
     ): Boolean {
-        padReleases.add(PadReleaseEvent(trackIndex, padIndex, targetSample))
+        padReleases.add(PadReleaseEvent(trackIndex, padIndex, targetSample, triggerId))
         return true
     }
 

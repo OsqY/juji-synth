@@ -41,6 +41,7 @@ struct ScheduledEvent {
         struct {
             int padIndex;
             float velocity;
+            uint64_t triggerId;
         } padTrigger;
         struct {
             int paramIndex;
@@ -89,13 +90,14 @@ struct ScheduledEvent {
 
     /** @param targetSample Absolute sample position, or -1 for ASAP (buffer boundary). */
     static ScheduledEvent makePadTrigger(int track, int padIndex, float velocity,
-                                          int64_t targetSample = -1) {
+                                          int64_t targetSample = -1, uint64_t triggerId = 0) {
         ScheduledEvent e;
         e.type = ScheduledEventType::PAD_TRIGGER;
         e.trackIndex = track;
         e.targetSample = targetSample;
         e.data.padTrigger.padIndex = padIndex;
         e.data.padTrigger.velocity = velocity;
+        e.data.padTrigger.triggerId = triggerId;
         return e;
     }
 
@@ -111,12 +113,13 @@ struct ScheduledEvent {
     }
 
     static ScheduledEvent makePadRelease(int track, int padIndex,
-                                         int64_t targetSample = -1) {
+                                         int64_t targetSample = -1, uint64_t triggerId = 0) {
         ScheduledEvent e;
         e.type = ScheduledEventType::PAD_RELEASE;
         e.trackIndex = track;
         e.targetSample = targetSample;
         e.data.padTrigger.padIndex = padIndex;
+        e.data.padTrigger.triggerId = triggerId;
         return e;
     }
 

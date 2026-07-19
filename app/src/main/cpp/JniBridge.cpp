@@ -633,11 +633,12 @@ Java_com_jujidaw_audio_SynthEngine_nativeScheduleNoteOff(JNIEnv* /*env*/, jclass
 JNIEXPORT jboolean JNICALL
 Java_com_jujidaw_audio_SynthEngine_nativeSchedulePadTrigger(JNIEnv* /*env*/, jclass /*clazz*/,
                                                               jint trackIndex, jint padIndex,
-                                                              jfloat velocity, jlong targetSample) {
+                                                              jfloat velocity, jlong targetSample, jlong triggerId) {
     if (trackIndex < 0 || trackIndex >= AudioEngine::MAX_TRACKS) return JNI_FALSE;
     if (padIndex < 0 || padIndex >= NUM_PADS) return JNI_FALSE;
     auto event = jujidaw::ScheduledEvent::makePadTrigger(trackIndex, padIndex, velocity,
-                                                          static_cast<int64_t>(targetSample));
+                                                          static_cast<int64_t>(targetSample),
+                                                          static_cast<uint64_t>(triggerId));
     return SynthEngine::getInstance().getAudioEngine().getEventQueue().push(event) ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -694,11 +695,12 @@ Java_com_jujidaw_audio_SynthEngine_nativeSetPlayheadSample(JNIEnv* /*env*/, jcla
 JNIEXPORT jboolean JNICALL
 Java_com_jujidaw_audio_SynthEngine_nativeSchedulePadRelease(JNIEnv* /*env*/, jclass /*clazz*/,
                                                               jint trackIndex, jint padIndex,
-                                                              jlong targetSample) {
+                                                              jlong targetSample, jlong triggerId) {
     if (trackIndex < 0 || trackIndex >= AudioEngine::MAX_TRACKS) return JNI_FALSE;
     if (padIndex < 0 || padIndex >= NUM_PADS) return JNI_FALSE;
     auto event = jujidaw::ScheduledEvent::makePadRelease(
-        trackIndex, padIndex, static_cast<int64_t>(targetSample));
+        trackIndex, padIndex, static_cast<int64_t>(targetSample),
+        static_cast<uint64_t>(triggerId));
     return SynthEngine::getInstance().getAudioEngine().getEventQueue().push(event)
         ? JNI_TRUE : JNI_FALSE;
 }

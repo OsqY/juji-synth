@@ -90,9 +90,7 @@ snap-to-grid editing, and an automation lane.
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  One-shot Pad (P1 … P16)    ← tap to drop a hit   │
-├──────────────────────────────────────────────────┤
-│  Sequencer Pattern (1–16)   ← choose Seq content  │
+│  Select | Pad A1 | Pattern 1  ← persistent tools  │
 ├──────────────────────────────────────────────────┤
 │  Transport Strip                                  │
 │  Row 1: Loop On/Off | Loop Start | Loop End       │
@@ -109,7 +107,7 @@ snap-to-grid editing, and an automation lane.
 └──────────────────────────────────────────────────┘
 ```
 
-- Each track lane (**T1–T16**) is a horizontal row where clips sit.
+- Each track lane (**T1–T16**) is a horizontal row where clips sit and its matching mixer channel.
 - **Pattern clips** appear in amber; **audio clips** appear in cyan.
 - Muted clips are dimmed.
 - The playhead (vertical line) shows the current playback position.
@@ -143,33 +141,28 @@ The **Timeline toolbar** (above the track lanes) adds these controls:
 | **● Punch In** | Sets the punch-in point to the current playhead position. |
 | **● Punch Out** | Sets the punch-out point to the current playhead position. |
 | **◀ / ▶** | Nudges the playhead backward or forward by one step (snap-dependent tick amount). |
-| **Snap** | Selects the grid snap resolution: **Bar**, **1/4**, **1/8**, or **1/16**. All clip placement and movement snaps to this grid. |
+| **Snap** | Selects **Free**, **Bar**, **1/4**, **1/8**, or **1/16**. The active resolution is drawn in the timeline; Free keeps the exact pointer position. |
+| **Swing** | Cycles the non-destructive global groove amount. It delays alternating 1/16 positions during playback without moving stored clips. |
 | **Zoom +/−** | Adjusts horizontal zoom (range: 0.2× to 5×). |
 
 ### How to Place a Pad on the Timeline
 
-1. Navigate to the **Timeline** tab.
-2. Select a **track lane** (T1–T16) by tapping the track header on the left.
-3. Optionally select a **pattern** (1–16) from the pattern selector strip.
-4. Tap one of the **pad buttons (P1–P16)** in the pad strip at the top of the timeline.
-5. A **one-shot pad clip** is created on the selected track at the current playhead position.
-   - The clip is a `PadClip` that triggers the selected global pad index once.
-   - It appears as a hit marker with a large touch target, not a repeating block.
-   - The hit snaps to the active grid resolution.
-6. You can also tap an **empty area** on a track lane to place a pattern clip at that tick position.
+1. Open **Pads** and select the sound source, or open **Seq** and select the pattern source.
+2. Open **Timeline** and activate **Pad** or **Pattern**. The toolbar always shows the selected source.
+3. Tap anywhere in a timeline row to place that source at that musical position.
+4. The row is the clip's mixer destination. Moving a clip to another row also changes its mixer routing.
+5. The tool stays active for repeated entry. Select **Select** when you want to edit rather than add clips.
 
-> **Note:** Pad-trigger clips (placed via the P1–P16 strip) carry a `padIndex` and route
-> through the sampler. Generic pattern clips (placed by tapping empty lane space) use the
-> selected pattern and route through the note scheduler.
+> **Note:** New pad clips use their timeline length as a gate, so their right edge controls when the sound releases. The next pad uses the last pad length you set.
 
 ### How to Move, Delete, Trim Clips
 
 | Action | Gesture |
 | -------- | --------- |
-| **Toggle mute** | **Tap** on a clip. Muted clips are dimmed and silent during playback. |
-| **Move** | **Long-press** on a clip, then drag. The clip snaps to the grid (tick + track) as you move it. Release to drop. |
-| **Trim** | Drag the **right-edge handle** (small white bar on the clip's right side) horizontally. Minimum duration is one step (`TICKS_PER_STEP`). |
-| **Delete** | Tap the **three-dot menu** (⋮) in the top-right corner of the clip, then select **🗑 Delete** from the dropdown menu. |
+| **Select** | Tap a clip, or long-press-drag an empty area to select every intersecting clip. |
+| **Move** | Long-press a selected clip, then drag. A group keeps its relative timing and rows. |
+| **Trim** | Drag the left or right edge handle. Snapped modes use one grid unit as the minimum; Free uses one tick. |
+| **Copy / duplicate / mute / delete** | Use the contextual selection toolbar. Paste anchors the copied group at the playhead and selected row. |
 
 Clip colors:
 
@@ -199,15 +192,11 @@ Clip colors:
 5. Press **▶ Play** — recording is active only between the punch-in and punch-out points. Outside that range, playback plays back existing clips without recording.
 6. The punch range is pushed to the engine as a sample range via `setPunchRange()`.
 
-### Pattern Selector
+### Draw Sources and Recording
 
-The Sequencer Pattern strip sits between the pad strip and the track lanes. It shows buttons
-for **patterns 1–16** created in the Seq screen.
-
-- Tap a pattern number to select it as the **active sequencer pattern**.
-- Tapping an empty timeline lane places a pattern clip that references this pattern.
-- Pattern data is managed by the Sequencer screen — each pattern holds a 16×16 step grid (or piano roll notes). Pattern 1 is not automatically Pad 1; it plays the pads and notes programmed inside Pattern 1.
-- One-shot Pad markers do not reference the selected pattern.
+- Pad selection comes from **Pads** and pattern selection comes from **Seq**. Pattern 1 is not Pad 1; it plays the content programmed in Pattern 1.
+- While recording, live pad hits are captured to the single armed mixer row. If no row is armed, recording uses the last timeline row you touched.
+- Recorded events quantize to the active grid, or retain their exact timing in Free mode. Swing remains non-destructive and is applied at playback.
 
 ---
 
@@ -232,12 +221,12 @@ Here is a step-by-step example of building a simple beat:
 - Each active step will trigger Pad 1's kick sample when the sequencer plays through it.
 - Use the **pattern selector** (1–16) to choose which pattern you're editing.
 
-### 3. Go to Timeline, Tap Pad 1 Button to Drop a Clip
+### 3. Go to Timeline and Draw Pad 1
 
 - Switch to the **Timeline** tab.
-- Select a track lane (e.g. **T1**) by tapping its header.
-- Tap **P1** in the pad strip at the top.
-- A pad-trigger clip appears on T1 at the playhead position, defaulting to 1 bar (4 beats).
+- Activate the **Pad A1** tool; it reflects the pad selected on Pads.
+- Tap the row where you want the kick routed, for example **T1**.
+- A pad-trigger clip appears at the tapped grid position, using the current pad length.
 - This clip will play Pad 1's kick when the timeline reaches it.
 
 ### 4. Adjust BPM by Tapping the BPM Display

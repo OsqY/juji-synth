@@ -82,6 +82,7 @@ object ProjectAutosave {
             name = name,
             bpm = tc.transportState.tempoBpm,
             timeSignature = tc.transportState.timeSignature,
+            swing = tc.transportState.swing,
             patterns = tc.patterns,
             arrangement = tc.arrangement,
             mixerState = captureMixerState(),
@@ -98,6 +99,7 @@ object ProjectAutosave {
         context: Context,
     ) {
         tc.setTempo(project.bpm)
+        tc.setSwing(project.swing)
         tc.loadPatterns(project.patterns)
         tc.loadArrangement(project.arrangement)
         val loopStartSample = tickToSample(project.arrangement.loopStartTick, project.bpm)

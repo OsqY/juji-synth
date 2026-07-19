@@ -42,6 +42,8 @@ public:
     void noteOn(int midiNote, int velocity) override;
     void noteOff(int midiNote) override;
     void releasePad(int padIndex);
+    /** Release only voices belonging to one mixer row. */
+    void releasePadFromAudioThread(int padIndex, int trackIndex, uint64_t triggerId = 0);
     void panic() override;
     bool isActive() const override;
 
@@ -72,6 +74,12 @@ public:
     void triggerPad(int padIndex, int velocity);
     /** Trigger from the audio callback without writing to the UI SPSC queue. */
     void triggerPadFromAudioThread(int padIndex, int velocity);
+    /** Audio-callback trigger whose output is routed to `trackIndex`. */
+    void triggerPadFromAudioThread(int padIndex, int velocity, int trackIndex, uint64_t triggerId = 0);
+
+    // Add all active sampler and synth-pad voices to their destination rows.
+    // The caller owns and clears `outputs`; this performs no allocation.
+    void processToTracks(float* outputs, int trackCount);
 
 private:
     double sampleRate_ = 48000.0;
@@ -85,7 +93,8 @@ private:
 
     int allocateVoice();
     int padIndexFromNote(int midiNote) const;
-    void triggerPadInternal(int padIndex, int velocity, bool fromAudioThread);
+    void triggerPadInternal(int padIndex, int velocity, bool fromAudioThread, int trackIndex, uint64_t triggerId = 0);
+    void releasePadInternal(int padIndex, int trackIndex, bool fromAudioThread, uint64_t triggerId = 0);
 };
 
 #endif // JUJIDAW_SAMPLER_INSTRUMENT_H

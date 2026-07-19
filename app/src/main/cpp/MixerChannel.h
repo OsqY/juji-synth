@@ -46,8 +46,15 @@ public:
     // Apply a queued command atomically on the audio thread.
     void applyCommand(const MixerCommand& cmd);
 
-    // Render one sample. Returns the channel's output and optionally writes send levels.
+    // Render one sample from the channel's owned instrument/clip sources. This
+    // remains for legacy callers; the engine normally routes sources explicitly.
     float process(float& sendA, float& sendB);
+
+    // Render one already-mixed source sample through this channel's clip,
+    // inserts, fader, pan, and sends. The AudioEngine uses this to keep a
+    // timeline event on its requested mixer row without re-rendering an
+    // instrument once per row.
+    float processInput(float input, float& sendA, float& sendB);
 
     // Insert reorder: swap two insert slots
     void reorderInserts(int fromSlot, int toSlot);

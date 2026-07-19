@@ -4,6 +4,7 @@ import com.jujidaw.model.Arrangement
 import com.jujidaw.model.AudioClip
 import com.jujidaw.model.Clip
 import com.jujidaw.model.NoteEvent
+import com.jujidaw.model.PadGateMode
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
@@ -109,12 +110,14 @@ class TransportController(
             override val startSample: Long,
             val track: Int,
             val padIndex: Int,
+            val sourceId: String,
         ) : ScheduledEventKey
 
         data class PadRelease(
             override val startSample: Long,
             val track: Int,
             val padIndex: Int,
+            val sourceId: String,
         ) : ScheduledEventKey
     }
 
@@ -200,6 +203,15 @@ class TransportController(
         if (transportState.playing) {
             scheduler.setTransport(true, transportState.recording, bpm)
         }
+    }
+
+    /**
+     * Set global 1/16-note swing. The value delays only events that start
+     * exactly on an odd 1/16 division; free/off-grid events remain untouched.
+     */
+    fun setSwing(amount: Float) {
+        require(amount in 0f..1f) { "Swing must be between 0 and 1" }
+        transportState = transportState.copy(swing = amount)
     }
 
     /**
@@ -410,15 +422,22 @@ class TransportController(
         windowEnd: Long,
         bpm: Float,
     ) {
-        val startSample = tickToSample(clip.startTick, bpm)
+        val swingOffsetTicks = swingOffsetTicks(clip.startTick)
+        val startSample = tickToSample(clip.startTick + swingOffsetTicks, bpm)
         val endSample = startSample + tickToSampleDelta(clip.durationTicks, bpm)
-        if (startSample > windowEnd || endSample < currentSample) return
-        val key = ScheduledEventKey.Pad(startSample, clip.trackIndex, clip.padIndex)
+        // Arrangement pad clips are trigger events, not audio regions. Do
+        // not retrigger one when it is inserted during live recording after
+        // its onset has already passed.
+        if (startSample < currentSample || startSample > windowEnd) return
+        val key = ScheduledEventKey.Pad(startSample, clip.trackIndex, clip.padIndex, clip.id)
         if (!scheduledEventKeys.add(key)) return
-        schedulePadTrigger(clip.trackIndex, clip.padIndex, clip.velocity, startSample)
-        val releaseKey = ScheduledEventKey.PadRelease(endSample, clip.trackIndex, clip.padIndex)
-        if (scheduledEventKeys.add(releaseKey)) {
-            schedulePadRelease(clip.trackIndex, clip.padIndex, endSample)
+        val triggerId = timelineTriggerId(clip.id, startSample)
+        schedulePadTrigger(clip.trackIndex, clip.padIndex, clip.velocity, startSample, triggerId)
+        if (clip.gateMode == PadGateMode.TIMELINE_GATE) {
+            val releaseKey = ScheduledEventKey.PadRelease(endSample, clip.trackIndex, clip.padIndex, clip.id)
+            if (scheduledEventKeys.add(releaseKey)) {
+                schedulePadRelease(clip.trackIndex, clip.padIndex, endSample, triggerId)
+            }
         }
     }
 
@@ -433,53 +452,30 @@ class TransportController(
         val clipEndSample = clipStartSample + tickToSampleDelta(clip.durationTicks, bpm)
         if (clipEndSample <= currentSample || clipStartSample > windowEnd) return
 
-        val fullReps = (clip.durationTicks / pattern.lengthTicks).toInt()
-        val remainderTicks = (clip.durationTicks % pattern.lengthTicks)
-
-        // schedulePatternNotes treats patternStartTickOffset as an ABSOLUTE
-        // song tick (it converts note ticks to samples via tickToSample),
-        // so the clip's start tick must be folded in here. Without
-        // clip.startTick, notes for any clip placed past tick 0 resolve to
-        // samples near 0 and get dropped by the lookahead window check
-        // (noteEndSample < currentSample), producing no sound.
-        val clipStartTick = clip.startTick
-        for (rep in 0 until fullReps) {
-            val repOffsetTicks = rep * pattern.lengthTicks
-            val repStartSample = clipStartSample + tickToSampleDelta(repOffsetTicks, bpm)
-            if (repStartSample > windowEnd) break
-
-            val repEndSample = repStartSample + tickToSampleDelta(pattern.lengthTicks, bpm)
-            if (repEndSample <= currentSample) continue
+        // A resized pattern clip may begin partway through the source pattern.
+        // Treat its content offset as a virtual pattern cycle that started
+        // before the clip, then only emit notes inside the visible window.
+        val patternLength = pattern.lengthTicks.coerceAtLeast(TICKS_PER_STEP.toLong())
+        val contentOffset = clip.contentOffsetTicks % patternLength
+        val clipEndTick = clip.startTick + clip.durationTicks
+        var cycleStartTick = clip.startTick - contentOffset
+        while (cycleStartTick < clipEndTick) {
+            val cycleEndTick = cycleStartTick + patternLength
+            if (tickToSample(cycleStartTick, bpm) > windowEnd) break
 
             schedulePatternNotes(
                 pattern = pattern,
                 currentSample = currentSample,
                 windowEnd = windowEnd,
                 bpm = bpm,
-                patternStartTickOffset = clipStartTick + repOffsetTicks,
+                patternStartTickOffset = cycleStartTick,
                 trackIndex = clip.trackIndex,
                 transpose = clip.transpose,
                 padIndex = clip.padIndex,
-                maxEndTick = clipStartTick + repOffsetTicks + pattern.lengthTicks,
+                minStartTick = clip.startTick,
+                maxEndTick = minOf(cycleEndTick, clipEndTick),
             )
-        }
-
-        if (remainderTicks > 0L) {
-            val repOffsetTicks = fullReps * pattern.lengthTicks
-            val repStartSample = clipStartSample + tickToSampleDelta(repOffsetTicks, bpm)
-            if (repStartSample <= windowEnd && repStartSample < clipEndSample) {
-                schedulePatternNotes(
-                    pattern = pattern,
-                    currentSample = currentSample,
-                    windowEnd = windowEnd,
-                    bpm = bpm,
-                    patternStartTickOffset = clipStartTick + repOffsetTicks,
-                    trackIndex = clip.trackIndex,
-                    transpose = clip.transpose,
-                    padIndex = clip.padIndex,
-                    maxEndTick = clipStartTick + repOffsetTicks + remainderTicks,
-                )
-            }
+            cycleStartTick = cycleEndTick
         }
     }
 
@@ -492,18 +488,23 @@ class TransportController(
         trackIndex: Int = pattern.trackIndex,
         transpose: Int = 0,
         padIndex: Int = -1,
+        minStartTick: Long = Long.MIN_VALUE,
         maxEndTick: Long = Long.MAX_VALUE,
     ) {
         val track = trackIndex.coerceIn(0, 15)
 
-        for (note in pattern.notes) {
+        for ((noteIndex, note) in pattern.notes.withIndex()) {
             val noteStartTick = patternStartTickOffset + note.startTick
+            if (noteStartTick < minStartTick) continue
             val rawEndTick = noteStartTick + note.durationTicks
             val noteEndTick = minOf(rawEndTick, maxEndTick)
             if (noteEndTick <= noteStartTick) continue
 
-            val noteStartSample = tickToSample(noteStartTick, bpm)
-            val noteEndSample = tickToSample(noteEndTick, bpm)
+            // Move an entire note by the same amount so swing changes onset
+            // without shortening or lengthening its gate.
+            val swingOffsetTicks = swingOffsetTicks(noteStartTick)
+            val noteStartSample = tickToSample(noteStartTick + swingOffsetTicks, bpm)
+            val noteEndSample = tickToSample(noteEndTick + swingOffsetTicks, bpm)
 
             if (noteEndSample < currentSample || noteStartSample > windowEnd) continue
 
@@ -517,14 +518,16 @@ class TransportController(
             if (effectivePadIndex >= 0) {
                 // De-duplicate: a pad trigger whose start sample was already
                 // pushed in a previous scheduler tick must not fire again.
+                val sourceId = "${pattern.id}:$patternStartTickOffset:$noteIndex"
                 val padKey =
-                    ScheduledEventKey.Pad(noteStartSample, track, effectivePadIndex)
+                    ScheduledEventKey.Pad(noteStartSample, track, effectivePadIndex, sourceId)
                 if (padKey in scheduledEventKeys) continue
                 scheduledEventKeys.add(padKey)
-                schedulePadTrigger(track, effectivePadIndex, note.velocity, noteStartSample)
-                val releaseKey = ScheduledEventKey.PadRelease(noteEndSample, track, effectivePadIndex)
+                val triggerId = timelineTriggerId(sourceId, noteStartSample)
+                schedulePadTrigger(track, effectivePadIndex, note.velocity, noteStartSample, triggerId)
+                val releaseKey = ScheduledEventKey.PadRelease(noteEndSample, track, effectivePadIndex, sourceId)
                 if (scheduledEventKeys.add(releaseKey)) {
-                    schedulePadRelease(track, effectivePadIndex, noteEndSample)
+                    schedulePadRelease(track, effectivePadIndex, noteEndSample, triggerId)
                 }
             } else {
                 val finalNote = (note.note + transpose).coerceIn(0, 127)
@@ -633,16 +636,26 @@ class TransportController(
         padIndex: Int,
         velocity: Float,
         targetSample: Long = -1L,
+        triggerId: Long = 0L,
     ) {
-        scheduler.schedulePadTrigger(track, padIndex, velocity, targetSample)
+        scheduler.schedulePadTrigger(track, padIndex, velocity, targetSample, triggerId)
     }
 
     internal fun schedulePadRelease(
         track: Int,
         padIndex: Int,
         targetSample: Long = -1L,
+        triggerId: Long = 0L,
     ) {
-        scheduler.schedulePadRelease(track, padIndex, targetSample)
+        scheduler.schedulePadRelease(track, padIndex, targetSample, triggerId)
+    }
+
+    private fun timelineTriggerId(sourceId: String, startSample: Long): Long {
+        var hash = -0x340d631b7bdddcdbL // FNV-1a offset basis
+        sourceId.forEach { char ->
+            hash = (hash xor char.code.toLong()) * 0x100000001b3L
+        }
+        return (hash xor startSample) and Long.MAX_VALUE
     }
 
     internal fun stopAllNotesOnTrack(track: Int) {
@@ -677,5 +690,12 @@ class TransportController(
     private fun samplesPerBeat(bpm: Float): Double {
         require(bpm > 0f) { "BPM must be positive" }
         return (60.0 / bpm) * sampleRate
+    }
+
+    private fun swingOffsetTicks(tick: Long): Long {
+        if (transportState.swing == 0f || tick % TICKS_PER_STEP != 0L) return 0L
+        val sixteenthIndex = tick / TICKS_PER_STEP
+        if (sixteenthIndex % 2L == 0L) return 0L
+        return (TICKS_PER_STEP * 0.5f * transportState.swing).roundToLong()
     }
 }

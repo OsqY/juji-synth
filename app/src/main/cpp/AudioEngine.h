@@ -152,6 +152,8 @@ public:
     TimeStretchWorker& getTimeStretchWorker() { return timeStretchWorker_; }
     jujidaw::Transport& getTransport() { return transport_; }
     jujidaw::EventQueue& getEventQueue() { return eventQueue_; }
+    /** Mark a timeline destination row active before its next mix pass. */
+    void ensureTrackActive(int trackIndex);
 
     // ---- Mixer state getters (thread-safe for UI polling) ----
     float getChannelFaderDb(int track) const;
@@ -211,6 +213,9 @@ private:
     std::unordered_map<std::string, std::shared_ptr<SampleBuffer>> audioClips_;
     std::array<std::unique_ptr<AudioClipPlayer>, MAX_TRACKS> audioClipPlayers_;
     std::atomic<int> activeTrackCount_{2}; // Channel 0 synth, channel 1 sampler
+    // Reused per-sample source buses. Instruments render once into these;
+    // channels then apply their own mixer/effect state to the requested row.
+    std::array<float, MAX_TRACKS> instrumentSources_{};
 
     // Lock-free mixer command queue
     static constexpr int MIXER_QUEUE_SIZE = 256;

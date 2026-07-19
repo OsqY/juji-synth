@@ -12,6 +12,7 @@ import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TimeSignature
 import com.jujidaw.model.TransportPosition
 import com.jujidaw.project.AutomationPoint
+import com.jujidaw.project.PatternSelectionStore
 import com.jujidaw.project.ProjectAutosave
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -120,7 +121,11 @@ class SequencerViewModel(
             transportController.patterns.firstOrNull { it.id == id }?.toSequencerPattern()
                 ?: SequencerPattern(id = id)
         }
-        _uiState.value = _uiState.value.copy(patterns = hydrated)
+        _uiState.value =
+            _uiState.value.copy(
+                patterns = hydrated,
+                selectedPatternId = PatternSelectionStore.selectedPattern.value,
+            )
 
         // Load initial patterns into the transport controller.
         syncActivePatternToTransport()
@@ -155,6 +160,7 @@ class SequencerViewModel(
     fun selectPattern(id: Int) {
         if (id !in 0..15) return
         _uiState.value = _uiState.value.copy(selectedPatternId = id)
+        PatternSelectionStore.select(id)
         syncActivePatternToTransport()
         // Queue the pattern so the transport can switch on the next bar boundary.
         transportController.queuePattern(id)

@@ -43,6 +43,7 @@ void SamplerVoice::reset() {
     active = false;
     buffer = nullptr;
     position = 0.0f;
+    trackIndex = 1;
     envelope.reset();
 }
 
