@@ -49,7 +49,9 @@ class TimelineViewModel(
     private val _zoom = MutableStateFlow(1f)
     val zoom: StateFlow<Float> = _zoom.asStateFlow()
 
-    private val _snap = MutableStateFlow(Snap.QUARTER)
+    // A sixteenth is the most useful starting unit for drum programming and
+    // keeps newly placed pads adjacent by default.
+    private val _snap = MutableStateFlow(Snap.SIXTEENTH)
     val snap: StateFlow<Snap> = _snap.asStateFlow()
 
     private val _tool = MutableStateFlow(TimelineTool.SELECT)
@@ -59,7 +61,7 @@ class TimelineViewModel(
     val selectedClipIds: StateFlow<Set<String>> = _selectedClipIds.asStateFlow()
 
     /** Reused by the draw tools so repeated entry does not require a resize every time. */
-    private var lastPadDurationTicks: Long = PPQ.toLong()
+    private var lastPadDurationTicks: Long = TICKS_PER_STEP.toLong()
     private var lastPatternDurationTicks: Long? = null
     private var clipboard: List<Clip> = emptyList()
     private val recordedPadStarts = mutableMapOf<Int, RecordedPadStart>()
@@ -312,6 +314,10 @@ class TimelineViewModel(
 
     fun selectPattern(id: Int) {
         PatternSelectionStore.select(id)
+    }
+
+    fun selectPad(index: Int) {
+        PadSelectionStore.select(index)
     }
 
     fun toggleMuteTrack(index: Int) {
@@ -783,16 +789,13 @@ class TimelineViewModel(
 
     fun snapTick(tick: Long): Long {
         if (_snap.value == Snap.FREE) return tick.coerceAtLeast(0)
-        val res = _snap.value.ticks
-        return ((tick + res / 2) / res) * res
+        return snapTimelineTick(tick, _snap.value.ticks)
     }
 
     private fun minimumDuration(): Long = if (_snap.value == Snap.FREE) 1L else _snap.value.ticks
 
     private fun normalizeDuration(duration: Long): Long {
-        val minimum = minimumDuration()
-        if (_snap.value == Snap.FREE) return duration.coerceAtLeast(minimum)
-        return ((duration.coerceAtLeast(minimum) + minimum / 2) / minimum) * minimum
+        return normalizeTimelineDuration(duration, _snap.value.ticks, _snap.value == Snap.FREE)
     }
 
     private fun moveClipValue(clip: Clip, start: Long, track: Int): Clip =

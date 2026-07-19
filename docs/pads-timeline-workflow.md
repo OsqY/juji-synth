@@ -90,7 +90,7 @@ snap-to-grid editing, and an automation lane.
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  Select | Pad A1 | Pattern 1  ← persistent tools  │
+│  Select | Pads A1…B16 | Patterns P1…P16           │
 ├──────────────────────────────────────────────────┤
 │  Transport Strip                                  │
 │  Row 1: Loop On/Off | Loop Start | Loop End       │
@@ -143,24 +143,24 @@ The **Timeline toolbar** (above the track lanes) adds these controls:
 | **◀ / ▶** | Nudges the playhead backward or forward by one step (snap-dependent tick amount). |
 | **Snap** | Selects **Free**, **Bar**, **1/4**, **1/8**, or **1/16**. The active resolution is drawn in the timeline; Free keeps the exact pointer position. |
 | **Swing** | Cycles the non-destructive global groove amount. It delays alternating 1/16 positions during playback without moving stored clips. |
-| **Zoom +/−** | Adjusts horizontal zoom (range: 0.2× to 5×). |
+| **Zoom +/− / pinch** | Adjusts horizontal zoom (range: 0.2× to 5×); two-finger pinch keeps the tick under the gesture anchored. |
 
 ### How to Place a Pad on the Timeline
 
-1. Open **Pads** and select the sound source, or open **Seq** and select the pattern source.
-2. Open **Timeline** and activate **Pad** or **Pattern**. The toolbar always shows the selected source.
+1. Open **Timeline** and choose **Pads** or **Patterns** in the horizontal source strip.
+2. Tap a pad (`A1–A16`, `B1–B16`) or pattern (`P1–P16`); the choice also becomes the active draw tool.
 3. Tap anywhere in a timeline row to place that source at that musical position.
 4. The row is the clip's mixer destination. Moving a clip to another row also changes its mixer routing.
 5. The tool stays active for repeated entry. Select **Select** when you want to edit rather than add clips.
 
-> **Note:** New pad clips use their timeline length as a gate, so their right edge controls when the sound releases. The next pad uses the last pad length you set.
+> **Note:** Timeline starts with a 1/16 snap and new pads use one grid cell as their gate. After you resize a pad, subsequent pads reuse that duration for the current Timeline session.
 
 ### How to Move, Delete, Trim Clips
 
 | Action | Gesture |
 | -------- | --------- |
-| **Select** | Tap a clip, or long-press-drag an empty area to select every intersecting clip. |
-| **Move** | Long-press a selected clip, then drag. A group keeps its relative timing and rows. |
+| **Select** | Tap a clip within its exact musical bounds. Long-press-drag an empty area still selects an intersecting range. |
+| **Move** | Select a clip, then drag its body. A group keeps its relative timing and rows. |
 | **Trim** | Drag the left or right edge handle. Snapped modes use one grid unit as the minimum; Free uses one tick. |
 | **Copy / duplicate / mute / delete** | Use the contextual selection toolbar. Paste anchors the copied group at the playhead and selected row. |
 
