@@ -60,6 +60,12 @@ class TimelineViewModel(
     private val _selectedClipIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedClipIds: StateFlow<Set<String>> = _selectedClipIds.asStateFlow()
 
+    private val editHistory = TimelineEditHistory<TimelineSnapshot>(capacity = 100)
+    private val _canUndo = MutableStateFlow(false)
+    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
+    private val _canRedo = MutableStateFlow(false)
+    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
+
     /** Reused by the draw tools so repeated entry does not require a resize every time. */
     private var lastPadDurationTicks: Long = TICKS_PER_STEP.toLong()
     private var lastPatternDurationTicks: Long? = null
@@ -87,6 +93,12 @@ class TimelineViewModel(
     data class UiAutomationPoint(
         val id: Long,
         val point: AutomationPoint,
+    )
+
+    private data class TimelineSnapshot(
+        val arrangement: Arrangement,
+        val deletedClips: List<Clip>,
+        val selectedClipIds: Set<String>,
     )
 
     private val _automationPoints = MutableStateFlow<List<UiAutomationPoint>>(emptyList())
@@ -121,7 +133,15 @@ class TimelineViewModel(
                         controllerState.copy(
                             position = TransportPosition.fromTicks(tick, controllerState.timeSignature),
                         )
-                    _arrangement.value = transportController.arrangement
+                    val controllerArrangement = transportController.arrangement
+                    if (_arrangement.value != controllerArrangement) {
+                        _arrangement.value = controllerArrangement
+                        _deletedClips.value = emptyList()
+                        _selectedClipIds.value = emptySet()
+                        editHistory.clear()
+                        updateHistoryAvailability()
+                        refreshAutomationPoints()
+                    }
                     _patterns.value = transportController.patterns
                     if (SynthEngine.isLoaded) {
                         _trackStates.value =
@@ -306,6 +326,18 @@ class TimelineViewModel(
         if (tool != TimelineTool.SELECT) _selectedClipIds.value = emptySet()
     }
 
+    fun undo() {
+        val previous = editHistory.undo(timelineSnapshot()) ?: return
+        applyTimelineSnapshot(previous)
+        updateHistoryAvailability()
+    }
+
+    fun redo() {
+        val next = editHistory.redo(timelineSnapshot()) ?: return
+        applyTimelineSnapshot(next)
+        updateHistoryAvailability()
+    }
+
     // ---- Tracks ----
 
     fun selectTrack(index: Int) {
@@ -472,6 +504,7 @@ class TimelineViewModel(
             TimelineTool.DRAW_PAD -> addPadClip(trackIndex, startTick, PadSelectionStore.selectedPad.value)
             TimelineTool.DRAW_PATTERN -> addPatternClip(trackIndex, startTick, PatternSelectionStore.selectedPattern.value)
             TimelineTool.SELECT -> selectTrack(trackIndex)
+            TimelineTool.DELETE -> Unit
         }
     }
 
@@ -643,10 +676,18 @@ class TimelineViewModel(
     fun deleteSelectedClips() {
         val selected = _selectedClipIds.value
         if (selected.isEmpty()) return
-        _arrangement.value.clips.filter { it.id in selected }.forEach { if (it is AudioClip) SynthEngine.unloadAudioClip(it.id) }
-        _deletedClips.value = _deletedClips.value + _arrangement.value.clips.filter { it.id in selected }
-        updateClips(_arrangement.value.clips.filter { it.id !in selected })
-        _selectedClipIds.value = emptySet()
+        deleteClips(selected)
+    }
+
+    fun deleteClips(clipIds: Set<String>) {
+        if (clipIds.isEmpty()) return
+        val removed = _arrangement.value.clips.filter { it.id in clipIds }
+        if (removed.isEmpty()) return
+        val before = timelineSnapshot()
+        removed.filterIsInstance<AudioClip>().forEach { SynthEngine.unloadAudioClip(it.id) }
+        _deletedClips.value = _deletedClips.value + removed
+        updateClips(_arrangement.value.clips.filterNot { it.id in clipIds }, before)
+        _selectedClipIds.value = _selectedClipIds.value - clipIds
     }
 
     fun toggleMuteSelectedClips() {
@@ -674,29 +715,81 @@ class TimelineViewModel(
     }
 
     fun deleteClip(clipId: String) {
-        val clip = _arrangement.value.clips.find { it.id == clipId }
-        if (clip != null) _deletedClips.value = _deletedClips.value + clip
-        if (clip is AudioClip) SynthEngine.unloadAudioClip(clip.id)
-        updateClips(_arrangement.value.clips.filter { it.id != clipId })
-        _selectedClipIds.value = _selectedClipIds.value - clipId
+        deleteClips(setOf(clipId))
     }
 
     fun restoreLastDeletedClip() {
         val clip = _deletedClips.value.lastOrNull() ?: return
+        val before = timelineSnapshot()
         _deletedClips.value = _deletedClips.value.dropLast(1)
-        updateClips(_arrangement.value.clips + clip)
+        updateClips(_arrangement.value.clips + clip, before)
         if (clip is AudioClip) SynthEngine.loadAudioClip(clip.id, clip.audioFilePath)
     }
 
-    private fun updateClips(newClips: List<Clip>) {
+    private fun updateClips(
+        newClips: List<Clip>,
+        historyBefore: TimelineSnapshot = timelineSnapshot(),
+    ) {
         val newArr = _arrangement.value.copy(clips = newClips)
-        updateArrangement(newArr)
+        updateArrangement(newArr, historyBefore)
     }
 
-    private fun updateArrangement(newArr: Arrangement) {
-        _arrangement.value = newArr
+    private fun updateArrangement(
+        newArr: Arrangement,
+        historyBefore: TimelineSnapshot = timelineSnapshot(),
+    ) {
+        if (newArr == _arrangement.value && historyBefore == timelineSnapshot()) return
+        editHistory.record(historyBefore)
+        updateHistoryAvailability()
         transportController.loadArrangement(newArr)
+        _arrangement.value = transportController.arrangement
+        _transportState.value = transportController.transportState
+        refreshAutomationPoints()
         scheduleAutosave()
+    }
+
+    private fun timelineSnapshot(): TimelineSnapshot =
+        TimelineSnapshot(
+            arrangement = _arrangement.value,
+            deletedClips = _deletedClips.value,
+            selectedClipIds = _selectedClipIds.value,
+        )
+
+    private fun applyTimelineSnapshot(snapshot: TimelineSnapshot) {
+        reconcileAudioClips(_arrangement.value.clips, snapshot.arrangement.clips)
+        _deletedClips.value = snapshot.deletedClips
+        _selectedClipIds.value = snapshot.selectedClipIds
+        transportController.loadArrangement(snapshot.arrangement)
+        _arrangement.value = transportController.arrangement
+        _transportState.value = transportController.transportState
+        val bpm = _transportState.value.tempoBpm
+        SynthEngine.setLoop(
+            snapshot.arrangement.loopEnabled,
+            transportController.tickToSample(snapshot.arrangement.loopStartTick, bpm),
+            transportController.tickToSample(snapshot.arrangement.loopEndTick, bpm),
+        )
+        transportController.setRecording(_transportState.value.recording)
+        refreshAutomationPoints()
+        scheduleAutosave()
+    }
+
+    private fun reconcileAudioClips(
+        previousClips: List<Clip>,
+        nextClips: List<Clip>,
+    ) {
+        val previous = previousClips.filterIsInstance<AudioClip>().associateBy { it.id }
+        val next = nextClips.filterIsInstance<AudioClip>().associateBy { it.id }
+        previous.values
+            .filter { old -> next[old.id]?.audioFilePath != old.audioFilePath }
+            .forEach { SynthEngine.unloadAudioClip(it.id) }
+        next.values
+            .filter { new -> previous[new.id]?.audioFilePath != new.audioFilePath }
+            .forEach { SynthEngine.loadAudioClip(it.id, it.audioFilePath) }
+    }
+
+    private fun updateHistoryAvailability() {
+        _canUndo.value = editHistory.canUndo
+        _canRedo.value = editHistory.canRedo
     }
 
     /**
@@ -852,6 +945,7 @@ class TimelineViewModel(
 
 enum class TimelineTool {
     SELECT,
+    DELETE,
     DRAW_PAD,
     DRAW_PATTERN,
 }

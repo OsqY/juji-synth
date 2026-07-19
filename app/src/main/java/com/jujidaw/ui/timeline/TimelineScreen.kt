@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -13,10 +14,15 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Redo
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
@@ -34,6 +40,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
@@ -41,9 +54,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.model.AudioClip
@@ -83,7 +99,7 @@ fun TimelineScreen(
     val transport = viewModel.transportState.collectAsState().value
     val arrangement = viewModel.arrangement.collectAsState().value
     val patterns = viewModel.patterns.collectAsState().value
-    val zoom = viewModel.zoom.collectAsState().value
+    val persistedZoom = viewModel.zoom.collectAsState().value
     val snap = viewModel.snap.collectAsState().value
     val selectedTrack = viewModel.selectedTrack.collectAsState().value
     val selectedParam = viewModel.selectedAutomationParam.collectAsState().value
@@ -94,11 +110,24 @@ fun TimelineScreen(
     val tool = viewModel.tool.collectAsState().value
     val selectedClipIds = viewModel.selectedClipIds.collectAsState().value
     val deletedClipCount = viewModel.deletedClips.collectAsState().value.size
+    val canUndo = viewModel.canUndo.collectAsState().value
+    val canRedo = viewModel.canRedo.collectAsState().value
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     var followPlayhead by remember { mutableStateOf(true) }
     var showControls by rememberSaveable { mutableStateOf(true) }
     var showAutomation by rememberSaveable { mutableStateOf(false) }
+    var zoom by remember { mutableFloatStateOf(persistedZoom) }
+    var pinchActive by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(persistedZoom) {
+        if (!pinchActive) zoom = persistedZoom
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
 
     // Timeline mode disables the internal step sequencer
     DisposableEffect(Unit) {
@@ -130,6 +159,25 @@ fun TimelineScreen(
     val currentViewportWidthPx by rememberUpdatedState(viewportWidthPx)
     val currentTickWidthPx by rememberUpdatedState(tickWidthPx)
     val currentSnap by rememberUpdatedState(snap)
+    val currentClips by rememberUpdatedState(arrangement.clips)
+
+    val setZoomAtAnchor: (Float, Float) -> Unit = { requestedZoom, anchorViewportX ->
+        val nextZoom = requestedZoom.coerceIn(0.2f, 5f)
+        val nextTickWidth = nextZoom * baseBarWidthPx / (PPQ * 4f)
+        val nextTotalWidth = totalBars * baseBarWidthPx * nextZoom
+        scrollX =
+            timelineZoomScroll(
+                anchorViewportX = anchorViewportX,
+                scrollX = scrollX,
+                oldTickWidthPx = tickWidthPx,
+                newTickWidthPx = nextTickWidth,
+                panX = 0f,
+                maxScrollX = timelineMaxScroll(nextTotalWidth, viewportWidthPx),
+            )
+        zoom = nextZoom
+        viewModel.setZoom(nextZoom)
+        followPlayhead = false
+    }
 
     val playheadPx = transport.position.toTicks() * tickWidthPx
     LaunchedEffect(playheadPx, transport.playing, followPlayhead) {
@@ -145,9 +193,57 @@ fun TimelineScreen(
 
     var draggedClipId by remember { mutableStateOf<String?>(null) }
     var draggedClipOffset by remember { mutableStateOf(Offset.Zero) }
+    var resizePreview by remember { mutableStateOf<ClipResizePreview?>(null) }
+    var pendingDeleteClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val currentDraggedClipId by rememberUpdatedState(draggedClipId)
+    val viewportMeasured = measuredViewportWidthPx > 0f
+    val firstVisibleBar = if (viewportMeasured) (scrollX / barWidthPx).toInt().coerceIn(0, totalBars) else 0
+    val lastVisibleBar =
+        if (viewportMeasured) {
+            kotlin.math.ceil(((scrollX + viewportWidthPx) / barWidthPx).toDouble()).toInt().coerceIn(firstVisibleBar, totalBars)
+        } else {
+            totalBars
+        }
+    val firstVisibleTick = if (viewportMeasured) (scrollX / tickWidthPx).toLong().coerceAtLeast(0L) else 0L
+    val lastVisibleTick =
+        if (viewportMeasured) {
+            ((scrollX + viewportWidthPx) / tickWidthPx).toLong().coerceAtLeast(firstVisibleTick)
+        } else {
+            Long.MAX_VALUE
+        }
+    val visibleClips =
+        arrangement.clips.filter { clip ->
+            clip.id == draggedClipId || clip.id == resizePreview?.clipId ||
+                (clip.startTick < lastVisibleTick && clip.startTick + clip.durationTicks > firstVisibleTick)
+        }
 
-    Column(modifier = modifier.fillMaxSize().background(Bg0).statusBarsPadding()) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Bg0)
+                .statusBarsPadding()
+                .focusRequester(focusRequester)
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) return@onPreviewKeyEvent false
+                    when {
+                        event.key == Key.Z && event.isShiftPressed -> {
+                            viewModel.redo()
+                            true
+                        }
+                        event.key == Key.Z -> {
+                            viewModel.undo()
+                            true
+                        }
+                        event.key == Key.Y -> {
+                            viewModel.redo()
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                .focusable(),
+    ) {
         SectionVisibilityBar(
             showControls = showControls && showTransportControls,
             allowControls = showTransportControls,
@@ -173,7 +269,7 @@ fun TimelineScreen(
             onSwingChange = viewModel::setSwing,
             onNudge = { viewModel.nudgePlayhead(it) },
             onSnapChange = { viewModel.setSnap(it) },
-            onZoomChange = { viewModel.setZoom(it) },
+            onZoomChange = { setZoomAtAnchor(it, viewportWidthPx / 2f) },
             onRestoreDeleted = { viewModel.restoreLastDeletedClip() },
         )
 
@@ -183,9 +279,13 @@ fun TimelineScreen(
             tool = tool,
             padIndex = selectedPad,
             patternId = selectedPatternId,
+            canUndo = canUndo,
+            canRedo = canRedo,
             onToolChange = viewModel::setTool,
             onPadSelect = { viewModel.selectPad(it); viewModel.setTool(TimelineTool.DRAW_PAD) },
             onPatternSelect = { viewModel.selectPattern(it); viewModel.setTool(TimelineTool.DRAW_PATTERN) },
+            onUndo = viewModel::undo,
+            onRedo = viewModel::redo,
         )
         if (selectedClipIds.isNotEmpty()) {
             TimelineSelectionToolbar(
@@ -243,23 +343,32 @@ fun TimelineScreen(
                         .clip(RoundedCornerShape(RadiusLg))
                         .background(Bg1)
                         .pointerInput(Unit) {
-                            detectTwoFingerTransformGestures { centroid, panX, zoomChange ->
-                                val oldTickWidth = currentZoom * baseBarWidthPx / (PPQ * 4f)
-                                val nextZoom = (currentZoom * zoomChange).coerceIn(0.2f, 5f)
-                                val nextTickWidth = nextZoom * baseBarWidthPx / (PPQ * 4f)
-                                val nextTotalWidth = totalBars * baseBarWidthPx * nextZoom
-                                val nextMaxScroll = timelineMaxScroll(nextTotalWidth, currentViewportWidthPx)
-                                scrollX = timelineZoomScroll(
-                                    anchorViewportX = centroid.x,
-                                    scrollX = currentScrollX,
-                                    oldTickWidthPx = oldTickWidth,
-                                    newTickWidthPx = nextTickWidth,
-                                    panX = panX,
-                                    maxScrollX = nextMaxScroll,
-                                )
-                                viewModel.setZoom(nextZoom)
-                                followPlayhead = false
-                            }
+                            var gestureStartZoom = currentZoom
+                            var gestureZoom = currentZoom
+                            var anchorTick = 0f
+                            detectTwoFingerTransformGestures(
+                                onGestureStart = { centroid ->
+                                    pinchActive = true
+                                    gestureStartZoom = currentZoom
+                                    gestureZoom = gestureStartZoom
+                                    val startTickWidth = gestureStartZoom * baseBarWidthPx / (PPQ * 4f)
+                                    anchorTick = timelineContentX(centroid.x, currentScrollX) / startTickWidth
+                                    followPlayhead = false
+                                },
+                                onGesture = { centroid, absoluteScale ->
+                                    val nextZoom = (gestureStartZoom * absoluteScale).coerceIn(0.2f, 5f)
+                                    gestureZoom = nextZoom
+                                    val nextTickWidth = nextZoom * baseBarWidthPx / (PPQ * 4f)
+                                    val nextTotalWidth = totalBars * baseBarWidthPx * nextZoom
+                                    val nextMaxScroll = timelineMaxScroll(nextTotalWidth, currentViewportWidthPx)
+                                    scrollX = (anchorTick * nextTickWidth - centroid.x).coerceIn(0f, nextMaxScroll)
+                                    zoom = nextZoom
+                                },
+                                onGestureEnd = {
+                                    viewModel.setZoom(gestureZoom)
+                                    pinchActive = false
+                                },
+                            )
                         }
                         .pointerInput(Unit) {
                             var gestureScrollX = 0f
@@ -280,12 +389,13 @@ fun TimelineScreen(
             ) {
                 var marqueeStart by remember { mutableStateOf<Offset?>(null) }
                 var marqueeEnd by remember { mutableStateOf<Offset?>(null) }
-                Box(modifier = Modifier.offset { IntOffset(-scrollX.toInt(), 0) }) {
+                // Render in viewport coordinates. Keeping this layer viewport-sized
+                // avoids asking Compose to measure the entire zoomed timeline.
+                Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier =
                             Modifier
-                                .width(with(density) { totalWidthPx.toDp() })
-                                .fillMaxHeight()
+                                .fillMaxSize()
                                 .pointerInput(tool) {
                                     if (tool == TimelineTool.SELECT) {
                                         detectDragGesturesAfterLongPress(
@@ -304,8 +414,8 @@ fun TimelineScreen(
                                                     val firstTrack = ((start.y - rulerPx - scrubPx) / trackHeightPx).toInt().coerceIn(0, 15)
                                                     val lastTrack = ((end.y - rulerPx - scrubPx) / trackHeightPx).toInt().coerceIn(0, 15)
                                                     viewModel.selectClipsInRange(
-                                                        (start.x / tickWidthPx).toLong(),
-                                                        (end.x / tickWidthPx).toLong(),
+                                                        ((start.x + scrollX) / tickWidthPx).toLong(),
+                                                        ((end.x + scrollX) / tickWidthPx).toLong(),
                                                         firstTrack,
                                                         lastTrack,
                                                     )
@@ -319,8 +429,8 @@ fun TimelineScreen(
                     ) {
                         // Grid + track dividers
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            for (b in 0..totalBars) {
-                                val x = b * barWidthPx
+                            for (b in firstVisibleBar..lastVisibleBar) {
+                                val x = b * barWidthPx - scrollX
                                 drawLine(
                                     color = OutlineVariant.copy(alpha = 0.25f),
                                     start = Offset(x, 0f),
@@ -340,9 +450,10 @@ fun TimelineScreen(
                             if (snap != TimelineViewModel.Snap.FREE) {
                                 val stepPx = snap.ticks * tickWidthPx
                                 if (stepPx >= 5f) {
-                                    val count = (totalWidthPx / stepPx).toInt()
-                                    for (step in 0..count) {
-                                        val x = step * stepPx
+                                    val firstStep = (scrollX / stepPx).toInt().coerceAtLeast(0)
+                                    val lastStep = kotlin.math.ceil(((scrollX + viewportWidthPx) / stepPx).toDouble()).toInt()
+                                    for (step in firstStep..lastStep) {
+                                        val x = step * stepPx - scrollX
                                         drawLine(
                                             color = Primary.copy(alpha = 0.18f),
                                             start = Offset(x, 0f),
@@ -388,24 +499,31 @@ fun TimelineScreen(
                         // Bar ruler
                         TimelineRuler(
                             barWidthPx = barWidthPx,
-                            totalBars = totalBars,
+                            scrollX = scrollX,
+                            firstVisibleBar = firstVisibleBar,
+                            lastVisibleBar = lastVisibleBar,
                             modifier = Modifier.height(rulerHeight).fillMaxWidth(),
                         )
 
-                        Box(
-                            modifier = Modifier
-                                .offset { IntOffset(0, rulerPx.toInt()) }
-                                .width(with(density) { totalWidthPx.toDp() })
-                                .height(scrubHeight)
-                                .background(Primary.copy(alpha = 0.08f)),
-                        )
-
                         // Clips
-                        for (clip in arrangement.clips) {
+                        for (clip in visibleClips) {
+                            if (clip.id in pendingDeleteClipIds) continue
                             key(clip.id) {
                                 val top = rulerPx + scrubPx + clip.trackIndex * trackHeightPx
-                                val left = clip.startTick * tickWidthPx
-                                val width = clip.durationTicks * tickWidthPx
+                                val baseLeft = clip.startTick * tickWidthPx
+                                val baseWidth = clip.durationTicks * tickWidthPx
+                                val preview = resizePreview?.takeIf { it.clipId == clip.id }
+                                val minimumWidth = (if (snap == TimelineViewModel.Snap.FREE) 1L else snap.ticks) * tickWidthPx
+                                val resizeGeometry =
+                                    timelineResizeGeometry(
+                                        baseLeftPx = baseLeft,
+                                        baseWidthPx = baseWidth,
+                                        minimumWidthPx = minimumWidth,
+                                        edge = preview?.edge,
+                                        requestedDeltaPx = preview?.deltaPx ?: 0f,
+                                    )
+                                val left = resizeGeometry.leftPx - scrollX
+                                val width = resizeGeometry.widthPx
                                 // Keep the visual width musical. Enlarging pad
                                 // clips here made adjacent sixteenth hits cover
                                 // one another; selected clips get dedicated
@@ -418,10 +536,9 @@ fun TimelineScreen(
                                             (clip as? PatternClip)?.let { pc ->
                                                 patterns.find { it.id == pc.patternId }
                                             },
-                                        tickWidthPx = tickWidthPx,
-                                        showInlineDelete = renderedWidth >= with(density) { 36.dp.toPx() },
                                         modifier =
                                             Modifier
+                                                .zIndex(if (clip.id in selectedClipIds || preview != null) 1f else 0f)
                                                 .offset {
                                                     IntOffset(
                                                         (left + if (isDragging) draggedClipOffset.x else 0f).toInt(),
@@ -455,12 +572,68 @@ fun TimelineScreen(
                                             draggedClipId = null
                                             draggedClipOffset = Offset.Zero
                                         },
-                                        onDelete = { viewModel.deleteClip(clip.id) },
-                                        onTrim = { newDuration ->
-                                            viewModel.trimClip(clip.id, newDuration)
+                                        onResizeStart = { edge ->
+                                            resizePreview = ClipResizePreview(clip.id, edge, 0f)
                                         },
-                                        onTrimLeft = { newStart -> viewModel.trimClipFromLeft(clip.id, newStart) },
+                                        onResize = { delta ->
+                                            resizePreview = resizePreview?.let { current ->
+                                                if (current.clipId == clip.id) current.copy(deltaPx = current.deltaPx + delta) else current
+                                            }
+                                        },
+                                        onResizeEnd = {
+                                            val finished = resizePreview?.takeIf { it.clipId == clip.id }
+                                            if (finished != null) {
+                                                val finishedGeometry =
+                                                    timelineResizeGeometry(
+                                                        baseLeftPx = baseLeft,
+                                                        baseWidthPx = baseWidth,
+                                                        minimumWidthPx = minimumWidth,
+                                                        edge = finished.edge,
+                                                        requestedDeltaPx = finished.deltaPx,
+                                                    )
+                                                when (finished.edge) {
+                                                    ClipResizeEdge.LEFT ->
+                                                        viewModel.trimClipFromLeft(
+                                                            clip.id,
+                                                            (finishedGeometry.leftPx / tickWidthPx).toLong(),
+                                                        )
+                                                    ClipResizeEdge.RIGHT ->
+                                                        viewModel.trimClip(
+                                                            clip.id,
+                                                            (finishedGeometry.widthPx / tickWidthPx).toLong(),
+                                                        )
+                                                }
+                                            }
+                                            resizePreview = null
+                                        },
+                                        onResizeCancel = { resizePreview = null },
                                     )
+                            }
+                        }
+
+                        resizePreview?.let { activeResize ->
+                            arrangement.clips.firstOrNull { it.id == activeResize.clipId }?.let { clip ->
+                                val baseLeft = clip.startTick * tickWidthPx
+                                val baseWidth = clip.durationTicks * tickWidthPx
+                                val minimumWidth = (if (snap == TimelineViewModel.Snap.FREE) 1L else snap.ticks) * tickWidthPx
+                                val geometry =
+                                    timelineResizeGeometry(baseLeft, baseWidth, minimumWidth, activeResize.edge, activeResize.deltaPx)
+                                val rawEdgePx =
+                                    if (activeResize.edge == ClipResizeEdge.LEFT) geometry.leftPx else geometry.leftPx + geometry.widthPx
+                                val snappedEdgePx = viewModel.snapTick((rawEdgePx / tickWidthPx).toLong()) * tickWidthPx
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .offset {
+                                                IntOffset(
+                                                        (snappedEdgePx - scrollX).toInt(),
+                                                    (rulerPx + scrubPx + clip.trackIndex * trackHeightPx).toInt(),
+                                                )
+                                            }
+                                            .width(2.dp)
+                                            .height(with(density) { trackHeightPx.toDp() })
+                                            .background(Secondary),
+                                )
                             }
                         }
 
@@ -470,7 +643,7 @@ fun TimelineScreen(
                                 Modifier
                                     .offset {
                                         IntOffset(
-                                            playheadPx.toInt(),
+                                            (playheadPx - scrollX).toInt(),
                                             with(density) { (rulerHeight + scrubHeight).toPx().toInt() },
                                         )
                                     }.width(2.dp)
@@ -479,6 +652,15 @@ fun TimelineScreen(
                         )
                     }
                 }
+
+                Box(
+                    modifier =
+                        Modifier
+                            .offset { IntOffset(0, rulerPx.toInt()) }
+                            .fillMaxWidth()
+                            .height(scrubHeight)
+                            .background(Primary.copy(alpha = 0.08f)),
+                )
 
                 // Ruler scrub and source placement live in viewport space. This
                 // keeps their x-coordinate conversion independent of the
@@ -515,7 +697,7 @@ fun TimelineScreen(
                             },
                 )
 
-                if (tool != TimelineTool.SELECT) {
+                if (tool == TimelineTool.DRAW_PAD || tool == TimelineTool.DRAW_PATTERN) {
                     Box(
                         modifier =
                             Modifier
@@ -533,6 +715,31 @@ fun TimelineScreen(
                                         )
                                         viewModel.placeSelectedSource(track, tick)
                                     }
+                                },
+                        )
+                }
+
+                if (tool == TimelineTool.DELETE) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .offset { IntOffset(0, (rulerPx + scrubPx).toInt()) }
+                                .fillMaxWidth()
+                                .height(with(density) { (trackHeightPx * 16f).toDp() })
+                                .pointerInput(tool) {
+                                    detectTimelineEraseGestures(
+                                        resolveClipIds = { offset ->
+                                            val track = (offset.y / trackHeightPx).toInt().coerceIn(0, 15)
+                                            val tick = timelineRawTickAtViewportX(offset.x, currentScrollX, currentTickWidthPx)
+                                            timelineClipIdsAtPoint(currentClips, track, tick)
+                                        },
+                                        onPreview = { pendingDeleteClipIds = it },
+                                        onCommit = {
+                                            viewModel.deleteClips(it)
+                                            pendingDeleteClipIds = emptySet()
+                                        },
+                                        onCancel = { pendingDeleteClipIds = emptySet() },
+                                    )
                                 },
                     )
                 }
@@ -635,13 +842,14 @@ private fun clipBaseHue(clip: Clip): Color =
  * left untouched so the sibling horizontal-scroll detector can handle it.
  */
 private suspend fun PointerInputScope.detectTwoFingerTransformGestures(
-    onGesture: (centroid: Offset, panX: Float, zoomChange: Float) -> Unit,
+    onGestureStart: (centroid: Offset) -> Unit,
+    onGesture: (centroid: Offset, absoluteScale: Float) -> Unit,
+    onGestureEnd: () -> Unit,
 ) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        var previousCentroid: Offset? = null
-        var previousDistance = 0f
-        var active = false
+        var startDistance = 0f
+        var transforming = false
         do {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val pressed = event.changes.filter { it.pressed }
@@ -652,30 +860,54 @@ private suspend fun PointerInputScope.detectTwoFingerTransformGestures(
                 val dx = first.x - second.x
                 val dy = first.y - second.y
                 val distance = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
-                val previous = previousCentroid
-                if (!active || previous == null || previousDistance <= 0f) {
-                    active = true
-                    previousCentroid = centroid
-                    previousDistance = distance
+                if (!transforming || startDistance <= 0f) {
+                    transforming = true
+                    startDistance = distance.coerceAtLeast(0.001f)
+                    onGestureStart(centroid)
                 } else {
-                    onGesture(
-                        centroid,
-                        centroid.x - previous.x,
-                        (distance / previousDistance).coerceIn(0.8f, 1.25f),
-                    )
-                    event.changes.forEach { it.consume() }
-                    previousCentroid = centroid
-                    previousDistance = distance
+                    onGesture(centroid, (distance / startDistance).coerceIn(0.05f, 20f))
                 }
-            } else if (!event.changes.any { it.pressed }) {
-                break
-            } else {
-                // If one finger lifts while another remains, establish a new
-                // baseline before resuming so the zoom cannot jump.
-                previousCentroid = null
-                previousDistance = 0f
+                event.changes.forEach { it.consume() }
+            } else if (transforming) {
+                transforming = false
+                onGestureEnd()
             }
         } while (event.changes.any { it.pressed })
+        if (transforming) onGestureEnd()
+    }
+}
+
+/** One-finger eraser stroke; a second finger cancels it so pinch zoom remains available. */
+private suspend fun PointerInputScope.detectTimelineEraseGestures(
+    resolveClipIds: (Offset) -> Set<String>,
+    onPreview: (Set<String>) -> Unit,
+    onCommit: (Set<String>) -> Unit,
+    onCancel: () -> Unit,
+) {
+    try {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val erased = linkedSetOf<String>()
+            erased += resolveClipIds(down.position)
+            onPreview(erased.toSet())
+            down.consume()
+            var cancelled = false
+            do {
+                val event = awaitPointerEvent()
+                val pressed = event.changes.filter { it.pressed }
+                if (pressed.size >= 2) {
+                    if (!cancelled) onCancel()
+                    cancelled = true
+                } else if (!cancelled && pressed.size == 1) {
+                    erased += resolveClipIds(pressed.first().position)
+                    onPreview(erased.toSet())
+                    pressed.first().consume()
+                }
+            } while (event.changes.any { it.pressed })
+            if (!cancelled) onCommit(erased)
+        }
+    } finally {
+        onCancel()
     }
 }
 
@@ -735,59 +967,90 @@ private fun TimelineEditorToolbar(
     tool: TimelineTool,
     padIndex: Int,
     patternId: Int,
+    canUndo: Boolean,
+    canRedo: Boolean,
     onToolChange: (TimelineTool) -> Unit,
     onPadSelect: (Int) -> Unit,
     onPatternSelect: (Int) -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
 ) {
-    var sourceMode by rememberSaveable { mutableStateOf(TimelineTool.DRAW_PAD) }
-    Row(
+    var sourceMode by rememberSaveable {
+        mutableStateOf(if (tool == TimelineTool.DRAW_PATTERN) TimelineTool.DRAW_PATTERN else TimelineTool.DRAW_PAD)
+    }
+    val sourceListState = rememberLazyListState()
+    val selectedSourceIndex = if (sourceMode == TimelineTool.DRAW_PAD) padIndex else patternId
+
+    LaunchedEffect(tool) {
+        if (tool == TimelineTool.DRAW_PAD || tool == TimelineTool.DRAW_PATTERN) sourceMode = tool
+    }
+    LaunchedEffect(sourceMode, selectedSourceIndex) {
+        sourceListState.animateScrollToItem((selectedSourceIndex - 2).coerceAtLeast(0))
+    }
+
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(48.dp)
                 .background(SurfaceContainer)
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
-        Text("DRAW", color = OnSurfaceVariant, style = CaptionSmall)
-        TimelineToolButton("Select", tool == TimelineTool.SELECT, Primary) { onToolChange(TimelineTool.SELECT) }
-        TimelineToolButton("Pads", sourceMode == TimelineTool.DRAW_PAD, Secondary) {
-            sourceMode = TimelineTool.DRAW_PAD
-            onToolChange(TimelineTool.DRAW_PAD)
-        }
-        TimelineToolButton("Patterns", sourceMode == TimelineTool.DRAW_PATTERN, Primary) {
-            sourceMode = TimelineTool.DRAW_PATTERN
-            onToolChange(TimelineTool.DRAW_PATTERN)
-        }
-        if (sourceMode == TimelineTool.DRAW_PAD) {
-            for (index in 0 until 32) {
-                SourceChip(
-                    label = if (index < 16) "A${index + 1}" else "B${index - 15}",
-                    selected = padIndex == index && tool == TimelineTool.DRAW_PAD,
-                    accent = Secondary,
-                ) { onPadSelect(index) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
+            TimelineToolButton("Select", tool == TimelineTool.SELECT, Primary) { onToolChange(TimelineTool.SELECT) }
+            TimelineToolButton("Delete", tool == TimelineTool.DELETE, StateRecording) { onToolChange(TimelineTool.DELETE) }
+            TimelineToolButton("Pads", sourceMode == TimelineTool.DRAW_PAD && tool == TimelineTool.DRAW_PAD, Secondary) {
+                sourceMode = TimelineTool.DRAW_PAD
+                onToolChange(TimelineTool.DRAW_PAD)
             }
-        } else {
-            for (id in 0 until 16) {
-                SourceChip(
-                    label = "P${id + 1}",
-                    selected = patternId == id && tool == TimelineTool.DRAW_PATTERN,
-                    accent = Primary,
-                ) { onPatternSelect(id) }
+            TimelineToolButton("Patterns", sourceMode == TimelineTool.DRAW_PATTERN && tool == TimelineTool.DRAW_PATTERN, Primary) {
+                sourceMode = TimelineTool.DRAW_PATTERN
+                onToolChange(TimelineTool.DRAW_PATTERN)
+            }
+            Spacer(Modifier.weight(1f))
+            HistoryButton(Icons.AutoMirrored.Outlined.Undo, "Undo (Ctrl+Z)", canUndo, onUndo)
+            HistoryButton(Icons.AutoMirrored.Outlined.Redo, "Redo (Ctrl+Y)", canRedo, onRedo)
+        }
+
+        BoxWithConstraints(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(RadiusSm))
+                    .background(SurfaceContainerLow)
+                    .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                    .padding(horizontal = Spacing.xs, vertical = 2.dp),
+        ) {
+            val itemWidth = (maxWidth - Spacing.xs * 4) / 5
+            val sourceIndexes = if (sourceMode == TimelineTool.DRAW_PAD) (0 until 32).toList() else (0 until 16).toList()
+            LazyRow(
+                modifier = Modifier.fillMaxSize(),
+                state = sourceListState,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            ) {
+                items(sourceIndexes, key = { it }) { index ->
+                    val isPad = sourceMode == TimelineTool.DRAW_PAD
+                    SourceChip(
+                        label = if (isPad) if (index < 16) "A${index + 1}" else "B${index - 15}" else "P${index + 1}",
+                        selected =
+                            if (isPad) {
+                                padIndex == index && tool == TimelineTool.DRAW_PAD
+                            } else {
+                                patternId == index && tool == TimelineTool.DRAW_PATTERN
+                            },
+                        accent = if (isPad) Secondary else Primary,
+                        modifier = Modifier.width(itemWidth),
+                    ) {
+                        if (isPad) onPadSelect(index) else onPatternSelect(index)
+                    }
+                }
             }
         }
-        Text(
-            when (tool) {
-                TimelineTool.SELECT -> "tap clips or long-press-drag an area"
-                TimelineTool.DRAW_PAD -> "tap a row to place the selected pad"
-                TimelineTool.DRAW_PATTERN -> "tap a row to place the selected pattern"
-            },
-            color = OnSurfaceVariant,
-            style = CaptionSmall,
-            modifier = Modifier.padding(start = Spacing.xs),
-        )
     }
 }
 
@@ -810,6 +1073,32 @@ private fun TimelineToolButton(
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = if (selected) accent else OnSurface, style = LabelSmall)
+    }
+}
+
+@Composable
+private fun HistoryButton(
+    icon: ImageVector,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainerLow)
+                .border(1.dp, if (enabled) OutlineVariant else OutlineVariant.copy(alpha = 0.45f), RoundedCornerShape(RadiusSm))
+                .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (enabled) OnSurface else OnSurfaceVariant.copy(alpha = 0.45f),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -1018,11 +1307,12 @@ private fun SourceChip(
     label: String,
     selected: Boolean,
     accent: Color,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .height(34.dp)
+        modifier = modifier
+            .fillMaxHeight()
             .clip(RoundedCornerShape(RadiusSm))
             .background(if (selected) accent.copy(alpha = 0.2f) else SurfaceContainerLow)
             .border(1.dp, if (selected) accent else OutlineVariant, RoundedCornerShape(RadiusSm))
@@ -1303,19 +1593,21 @@ private fun TrackButton(
 @Composable
 private fun TimelineRuler(
     barWidthPx: Float,
-    totalBars: Int,
+    scrollX: Float,
+    firstVisibleBar: Int,
+    lastVisibleBar: Int,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     Box(modifier = modifier) {
-        for (b in 0 until totalBars) {
+        for (b in firstVisibleBar until lastVisibleBar) {
             Text(
                 text = "${b + 1}",
                 color = OnSurfaceVariant,
                 style = CaptionSmall,
                 modifier =
                     Modifier
-                        .offset(x = with(density) { (b * barWidthPx).toDp() })
+                        .offset(x = with(density) { ((b * barWidthPx) - scrollX).toDp() })
                         .padding(start = Spacing.xs, top = Spacing.sm),
             )
         }
@@ -1332,26 +1624,32 @@ private enum class ClipDragMode {
     RESIZE_RIGHT,
 }
 
+private data class ClipResizePreview(
+    val clipId: String,
+    val edge: ClipResizeEdge,
+    val deltaPx: Float,
+)
+
 @Composable
 private fun ClipItem(
     clip: Clip,
     pattern: Pattern?,
-    tickWidthPx: Float,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     isSelected: Boolean,
     isDragging: Boolean,
-    showInlineDelete: Boolean,
     onDragStart: () -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
-    onTrim: (newDurationTicks: Long) -> Unit,
-    onTrimLeft: (newStartTick: Long) -> Unit,
-    onDelete: () -> Unit = {},
+    onResizeStart: (ClipResizeEdge) -> Unit,
+    onResize: (deltaPx: Float) -> Unit,
+    onResizeEnd: () -> Unit,
+    onResizeCancel: () -> Unit,
 ) {
     val density = LocalDensity.current
     val edgeTouchPx = with(density) { 20.dp.toPx() }
+    val handleBandPx = with(density) { 24.dp.toPx() }
     val currentSelected by rememberUpdatedState(isSelected)
     val hue = clipBaseHue(clip)
     val bg = if (clip.mute) hue.copy(alpha = 0.5f) else hue.copy(alpha = if (isDragging) 0.9f else 0.6f)
@@ -1364,27 +1662,32 @@ private fun ClipItem(
             else -> hue
         }
     var dragMode by remember(clip.id) { mutableStateOf(ClipDragMode.MOVE) }
-    var trimDeltaPx by remember(clip.id) { mutableStateOf(0f) }
-    Box {
-        Box(
-            modifier =
-                modifier
-                    .clip(RoundedCornerShape(RadiusSm))
-                    .background(bg)
-                    .border(1.dp, edge, RoundedCornerShape(RadiusSm))
-                    .pointerInput(clip.id) {
+    Box(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(bg)
+                .border(1.dp, edge, RoundedCornerShape(RadiusSm))
+                .pointerInput(clip.id) {
                         detectDragGestures(
                             onDragStart = { offset ->
                                 onTap()
-                                trimDeltaPx = 0f
-                                val handleHitPx = minOf(edgeTouchPx, size.width / 3f)
+                                val inHandleBand = offset.y <= handleBandPx
+                                val nearLeft = offset.x <= edgeTouchPx
+                                val nearRight = offset.x >= size.width - edgeTouchPx
                                 dragMode = when {
                                     !currentSelected || clip.mute -> ClipDragMode.MOVE
-                                    offset.x <= handleHitPx -> ClipDragMode.RESIZE_LEFT
-                                    offset.x >= size.width - handleHitPx -> ClipDragMode.RESIZE_RIGHT
+                                    inHandleBand && nearLeft && nearRight && offset.x <= size.width / 2f -> ClipDragMode.RESIZE_LEFT
+                                    inHandleBand && nearLeft && nearRight -> ClipDragMode.RESIZE_RIGHT
+                                    inHandleBand && nearLeft -> ClipDragMode.RESIZE_LEFT
+                                    inHandleBand && nearRight -> ClipDragMode.RESIZE_RIGHT
                                     else -> ClipDragMode.MOVE
                                 }
-                                if (dragMode == ClipDragMode.MOVE) onDragStart()
+                                when (dragMode) {
+                                    ClipDragMode.MOVE -> onDragStart()
+                                    ClipDragMode.RESIZE_LEFT -> onResizeStart(ClipResizeEdge.LEFT)
+                                    ClipDragMode.RESIZE_RIGHT -> onResizeStart(ClipResizeEdge.RIGHT)
+                                }
                             },
                             onDrag = { change, amount ->
                                 change.consume()
@@ -1392,31 +1695,26 @@ private fun ClipItem(
                                     ClipDragMode.MOVE -> onDrag(amount)
                                     ClipDragMode.RESIZE_LEFT,
                                     ClipDragMode.RESIZE_RIGHT,
-                                    -> trimDeltaPx += amount.x
+                                    -> onResize(amount.x)
                                 }
                             },
                             onDragEnd = {
                                 when (dragMode) {
                                     ClipDragMode.MOVE -> onDragEnd()
-                                    ClipDragMode.RESIZE_LEFT -> {
-                                        onTrimLeft(clip.startTick + (trimDeltaPx / tickWidthPx).toLong())
-                                    }
-                                    ClipDragMode.RESIZE_RIGHT -> {
-                                        onTrim(clip.durationTicks + (trimDeltaPx / tickWidthPx).toLong())
-                                    }
+                                    ClipDragMode.RESIZE_LEFT,
+                                    ClipDragMode.RESIZE_RIGHT,
+                                    -> onResizeEnd()
                                 }
-                                trimDeltaPx = 0f
                                 dragMode = ClipDragMode.MOVE
                             },
                             onDragCancel = {
                                 val cancelledMode = dragMode
-                                trimDeltaPx = 0f
                                 dragMode = ClipDragMode.MOVE
-                                if (cancelledMode == ClipDragMode.MOVE) onDragCancel()
+                                if (cancelledMode == ClipDragMode.MOVE) onDragCancel() else onResizeCancel()
                             },
                         )
-                    }.clickable(onClick = onTap),
-        ) {
+                }.clickable(onClick = onTap),
+    ) {
             if (clip is PadClip) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val markerX = 8.dp.toPx()
@@ -1468,45 +1766,19 @@ private fun ClipItem(
                 Box(
                     modifier =
                         Modifier
-                            .align(Alignment.CenterStart)
-                            .width(3.dp)
-                            .fillMaxHeight()
+                            .align(Alignment.TopStart)
+                            .size(width = 10.dp, height = 20.dp)
                             .background(OnSurface.copy(alpha = 0.6f)),
-                ) {
-                }
+                )
 
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.CenterEnd)
-                            .width(3.dp)
-                            .fillMaxHeight()
-                            .background(OnSurface.copy(alpha = 0.6f)),
-                ) {
-                }
-            }
-
-            // Direct delete avoids a popup being positioned outside the
-            // horizontally translated timeline. Deleted clips remain
-            // recoverable from the timeline trash control.
-            if (showInlineDelete) {
                 Box(
                     modifier =
                         Modifier
                             .align(Alignment.TopEnd)
-                            .size(36.dp)
-                            .clickable(onClick = onDelete),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Delete,
-                        contentDescription = "Move clip to trash",
-                        tint = OnSurface,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
+                            .size(width = 10.dp, height = 20.dp)
+                            .background(OnSurface.copy(alpha = 0.6f)),
+                )
             }
-        }
     }
 }
 

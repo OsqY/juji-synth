@@ -1,5 +1,6 @@
 package com.jujidaw.ui.timeline
 
+import com.jujidaw.model.PadClip
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -50,5 +51,32 @@ class TimelineEditingMathTest {
     fun maxScrollUsesMeasuredViewport() {
         assertEquals(700f, timelineMaxScroll(1000f, 300f), 0.001f)
         assertEquals(0f, timelineMaxScroll(1000f, 1200f), 0.001f)
+    }
+
+    @Test
+    fun rawTickAndDeleteHitTestingUseMusicalBounds() {
+        val clips =
+            listOf(
+                PadClip(id = "first", trackIndex = 2, startTick = 120L, durationTicks = 120L, padIndex = 0),
+                PadClip(id = "second", trackIndex = 2, startTick = 240L, durationTicks = 120L, padIndex = 1),
+            )
+
+        assertEquals(240L, timelineRawTickAtViewportX(20f, 220f, 1f))
+        assertEquals(setOf("second"), timelineClipIdsAtPoint(clips, trackIndex = 2, tick = 240L))
+        assertEquals(emptySet<String>(), timelineClipIdsAtPoint(clips, trackIndex = 1, tick = 240L))
+    }
+
+    @Test
+    fun resizeGeometryPreviewsEdgesAndHonorsMinimumWidth() {
+        val left = timelineResizeGeometry(100f, 80f, 20f, ClipResizeEdge.LEFT, 25f)
+        assertEquals(125f, left.leftPx, 0.001f)
+        assertEquals(55f, left.widthPx, 0.001f)
+
+        val leftClamped = timelineResizeGeometry(10f, 80f, 20f, ClipResizeEdge.LEFT, -50f)
+        assertEquals(0f, leftClamped.leftPx, 0.001f)
+        assertEquals(90f, leftClamped.widthPx, 0.001f)
+
+        val rightClamped = timelineResizeGeometry(100f, 80f, 20f, ClipResizeEdge.RIGHT, -200f)
+        assertEquals(20f, rightClamped.widthPx, 0.001f)
     }
 }

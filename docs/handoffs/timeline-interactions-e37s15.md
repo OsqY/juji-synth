@@ -10,6 +10,11 @@
 - [x] Preserve existing copy, duplicate, mute, delete/trash, autosave, scroll, and zoom-button flows.
 - [x] Keep one-finger horizontal scrolling independent from two-finger pinch zoom.
 - [x] Resolve ruler, scrub, and placement taps from the measured viewport plus scroll offset.
+- [x] Keep the yellow scrub row viewport-wide while musical content uses its required width.
+- [x] Preview resize continuously from explicit upper-edge handles.
+- [x] Delete short clips with a tap-or-scrub Delete tool.
+- [x] Undo and redo timeline edits from touch controls or keyboard shortcuts.
+- [x] Show exactly five larger pad/pattern choices inside an independently scrolling source box.
 
 ## Workflow handoff
 

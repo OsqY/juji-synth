@@ -1,5 +1,7 @@
 package com.jujidaw.ui.timeline
 
+import com.jujidaw.model.Clip
+
 /** Pure timeline math kept separate so gesture behaviour can be tested without Compose. */
 internal fun snapTimelineTick(tick: Long, resolution: Long): Long {
     val safeResolution = resolution.coerceAtLeast(1L)
@@ -32,6 +34,59 @@ internal fun timelineTickAtViewportX(
 ): Long {
     if (tickWidthPx <= 0f) return 0L
     return snapTimelineTick((timelineContentX(viewportX, scrollX) / tickWidthPx).toLong(), resolution)
+}
+
+internal fun timelineRawTickAtViewportX(
+    viewportX: Float,
+    scrollX: Float,
+    tickWidthPx: Float,
+): Long {
+    if (tickWidthPx <= 0f) return 0L
+    return (timelineContentX(viewportX, scrollX) / tickWidthPx).toLong().coerceAtLeast(0L)
+}
+
+internal fun timelineClipIdsAtPoint(
+    clips: List<Clip>,
+    trackIndex: Int,
+    tick: Long,
+): Set<String> =
+    clips
+        .asSequence()
+        .filter { it.trackIndex == trackIndex && tick >= it.startTick && tick < it.startTick + it.durationTicks }
+        .mapTo(linkedSetOf()) { it.id }
+
+internal enum class ClipResizeEdge {
+    LEFT,
+    RIGHT,
+}
+
+internal data class TimelineResizeGeometry(
+    val leftPx: Float,
+    val widthPx: Float,
+    val appliedDeltaPx: Float,
+)
+
+internal fun timelineResizeGeometry(
+    baseLeftPx: Float,
+    baseWidthPx: Float,
+    minimumWidthPx: Float,
+    edge: ClipResizeEdge?,
+    requestedDeltaPx: Float,
+): TimelineResizeGeometry {
+    val safeLeft = baseLeftPx.coerceAtLeast(0f)
+    val safeMinimum = minimumWidthPx.coerceAtLeast(0f)
+    val safeWidth = baseWidthPx.coerceAtLeast(safeMinimum)
+    val delta =
+        when (edge) {
+            ClipResizeEdge.LEFT -> requestedDeltaPx.coerceIn(-safeLeft, (safeWidth - safeMinimum).coerceAtLeast(0f))
+            ClipResizeEdge.RIGHT -> requestedDeltaPx.coerceAtLeast(safeMinimum - safeWidth)
+            null -> 0f
+        }
+    return when (edge) {
+        ClipResizeEdge.LEFT -> TimelineResizeGeometry(safeLeft + delta, safeWidth - delta, delta)
+        ClipResizeEdge.RIGHT -> TimelineResizeGeometry(safeLeft, safeWidth + delta, delta)
+        null -> TimelineResizeGeometry(safeLeft, safeWidth, 0f)
+    }
 }
 
 internal fun timelineMaxScroll(
