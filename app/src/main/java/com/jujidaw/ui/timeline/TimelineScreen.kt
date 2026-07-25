@@ -541,21 +541,21 @@ fun TimelineScreen(
                             if (clip.id in pendingDeleteClipIds) continue
                             key(clip.id) {
                                 val top = rulerPx + scrubPx + clip.trackIndex * trackHeightPx
-                                val baseLeft = timelineTransform.tickToContentPx(clip.startTick)
-                                val baseWidth = timelineTransform.durationToPx(clip.durationTicks)
                                 val preview = resizePreview?.takeIf { it.clipId == clip.id }
-                                val minimumWidth =
-                                    timelineTransform.durationToPx(if (snap == TimelineViewModel.Snap.FREE) 1L else snap.ticks)
-                                val resizeGeometry =
-                                    timelineResizeGeometry(
-                                        baseLeftPx = baseLeft,
-                                        baseWidthPx = baseWidth,
-                                        minimumWidthPx = minimumWidth,
-                                        edge = preview?.edge,
-                                        requestedDeltaPx = preview?.deltaPx ?: 0f,
+                                val previewTicks = preview?.let {
+                                    timelineResizeTicks(
+                                        baseStartTick = clip.startTick,
+                                        baseDurationTicks = clip.durationTicks,
+                                        edge = it.edge,
+                                        requestedDeltaTicks = timelineTransform.pxDeltaToTicks(it.deltaPx),
+                                        snapResolution = snap.ticks,
+                                        free = snap == TimelineViewModel.Snap.FREE,
                                     )
-                                val left = resizeGeometry.leftPx - timelineTransform.horizontalScrollPx
-                                val width = resizeGeometry.widthPx
+                                }
+                                val renderedStartTick = previewTicks?.startTick ?: clip.startTick
+                                val renderedDurationTicks = previewTicks?.durationTicks ?: clip.durationTicks
+                                val left = timelineTransform.tickToViewportPx(renderedStartTick)
+                                val width = timelineTransform.durationToPx(renderedDurationTicks)
                                 // Keep the visual width musical. Enlarging pad
                                 // clips here made adjacent sixteenth hits cover
                                 // one another; selected clips get dedicated
@@ -639,24 +639,24 @@ fun TimelineScreen(
                                         onResizeEnd = {
                                             val finished = resizePreview?.takeIf { it.clipId == clip.id }
                                             if (finished != null) {
-                                                val finishedGeometry =
-                                                    timelineResizeGeometry(
-                                                        baseLeftPx = baseLeft,
-                                                        baseWidthPx = baseWidth,
-                                                        minimumWidthPx = minimumWidth,
-                                                        edge = finished.edge,
-                                                        requestedDeltaPx = finished.deltaPx,
-                                                    )
+                                                val finishedTicks = timelineResizeTicks(
+                                                    baseStartTick = clip.startTick,
+                                                    baseDurationTicks = clip.durationTicks,
+                                                    edge = finished.edge,
+                                                    requestedDeltaTicks = currentTimelineTransform.pxDeltaToTicks(finished.deltaPx),
+                                                    snapResolution = currentSnap.ticks,
+                                                    free = currentSnap == TimelineViewModel.Snap.FREE,
+                                                )
                                                 when (finished.edge) {
                                                     ClipResizeEdge.LEFT ->
                                                         viewModel.trimClipFromLeft(
                                                             clip.id,
-                                                            timelineTransform.contentPxToTick(finishedGeometry.leftPx),
+                                                            finishedTicks.startTick,
                                                         )
                                                     ClipResizeEdge.RIGHT ->
                                                         viewModel.trimClip(
                                                             clip.id,
-                                                            timelineTransform.pxToDuration(finishedGeometry.widthPx),
+                                                            finishedTicks.durationTicks,
                                                         )
                                                 }
                                             }
@@ -677,23 +677,23 @@ fun TimelineScreen(
 
                         resizePreview?.let { activeResize ->
                             arrangement.clips.firstOrNull { it.id == activeResize.clipId }?.let { clip ->
-                                val baseLeft = timelineTransform.tickToContentPx(clip.startTick)
-                                val baseWidth = timelineTransform.durationToPx(clip.durationTicks)
-                                val minimumWidth =
-                                    timelineTransform.durationToPx(if (snap == TimelineViewModel.Snap.FREE) 1L else snap.ticks)
-                                val geometry =
-                                    timelineResizeGeometry(baseLeft, baseWidth, minimumWidth, activeResize.edge, activeResize.deltaPx)
-                                val rawEdgePx =
-                                    if (activeResize.edge == ClipResizeEdge.LEFT) geometry.leftPx else geometry.leftPx + geometry.widthPx
-                                val snappedEdgePx = timelineTransform.tickToViewportPx(
-                                    viewModel.snapTick(timelineTransform.contentPxToTick(rawEdgePx)),
+                                val previewTicks = timelineResizeTicks(
+                                    baseStartTick = clip.startTick,
+                                    baseDurationTicks = clip.durationTicks,
+                                    edge = activeResize.edge,
+                                    requestedDeltaTicks = timelineTransform.pxDeltaToTicks(activeResize.deltaPx),
+                                    snapResolution = snap.ticks,
+                                    free = snap == TimelineViewModel.Snap.FREE,
                                 )
+                                val previewEdgeTick =
+                                    if (activeResize.edge == ClipResizeEdge.LEFT) previewTicks.startTick else previewTicks.endTick
+                                val previewEdgePx = timelineTransform.tickToViewportPx(previewEdgeTick)
                                 Box(
                                     modifier =
                                         Modifier
                                             .offset {
                                                 IntOffset(
-                                                        snappedEdgePx.toInt(),
+                                                        previewEdgePx.toInt(),
                                                     (rulerPx + scrubPx + clip.trackIndex * trackHeightPx).toInt(),
                                                 )
                                             }
@@ -702,6 +702,38 @@ fun TimelineScreen(
                                             .height(with(density) { trackHeightPx.toDp() })
                                             .background(Secondary),
                                 )
+                                val feedbackWidthPx = with(density) { 168.dp.toPx() }
+                                val feedbackHeightPx = with(density) { 32.dp.toPx() }
+                                val feedbackX =
+                                    (previewEdgePx + if (activeResize.edge == ClipResizeEdge.LEFT) 8f else -feedbackWidthPx - 8f)
+                                        .coerceIn(4f, (viewportWidthPx - feedbackWidthPx - 4f).coerceAtLeast(4f))
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .offset {
+                                                IntOffset(
+                                                    feedbackX.toInt(),
+                                                    (rulerPx + scrubPx + clip.trackIndex * trackHeightPx - feedbackHeightPx - 4f)
+                                                        .toInt()
+                                                        .coerceAtLeast(0),
+                                                )
+                                            }
+                                            .width(168.dp)
+                                            .height(32.dp)
+                                            .background(SurfaceContainerHighest, RoundedCornerShape(RadiusSm))
+                                            .padding(horizontal = Spacing.xs, vertical = 2.dp)
+                                            .testTag("timeline-clip-resize-feedback-${clip.id}"),
+                                ) {
+                                    Text(
+                                        text =
+                                            "Start ${formatTimelinePosition(previewTicks.startTick)} • " +
+                                                "End ${formatTimelinePosition(previewTicks.endTick)}\n" +
+                                                "Duration ${formatTimelineDuration(previewTicks.durationTicks)}",
+                                        color = OnSurface,
+                                        style = CaptionSmall,
+                                        maxLines = 2,
+                                    )
+                                }
                             }
                         }
 
@@ -1726,6 +1758,30 @@ private data class ClipResizePreview(
     val deltaPx: Float,
 )
 
+private fun formatTimelinePosition(tick: Long): String {
+    val ticksPerBar = PPQ * 4L
+    val bar = tick.coerceAtLeast(0L) / ticksPerBar + 1L
+    val beat = (tick.coerceAtLeast(0L) % ticksPerBar) / PPQ + 1L
+    return "$bar:$beat"
+}
+
+private fun formatTimelineDuration(durationTicks: Long): String {
+    val duration = durationTicks.coerceAtLeast(1L)
+    val ticksPerBar = PPQ * 4L
+    return when {
+        duration % ticksPerBar == 0L -> {
+            val bars = duration / ticksPerBar
+            "$bars ${if (bars == 1L) "bar" else "bars"}"
+        }
+        duration % PPQ == 0L -> {
+            val beats = duration / PPQ
+            "$beats ${if (beats == 1L) "beat" else "beats"}"
+        }
+        duration == TICKS_PER_STEP.toLong() -> "1/16"
+        else -> "$duration ticks"
+    }
+}
+
 @Composable
 private fun ClipItem(
     clip: Clip,
@@ -1860,24 +1916,49 @@ private fun ClipItem(
             }
 
             if (!clip.mute && isSelected) {
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .size(width = 10.dp, height = 20.dp)
-                            .testTag("timeline-clip-start-handle-${clip.id}")
-                            .background(OnSurface.copy(alpha = 0.6f)),
+                TimelineResizeHandle(
+                    edge = ClipResizeEdge.LEFT,
+                    clipId = clip.id,
+                    color = edge,
                 )
-
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .size(width = 10.dp, height = 20.dp)
-                            .testTag("timeline-clip-end-handle-${clip.id}")
-                            .background(OnSurface.copy(alpha = 0.6f)),
+                TimelineResizeHandle(
+                    edge = ClipResizeEdge.RIGHT,
+                    clipId = clip.id,
+                    color = edge,
                 )
             }
+    }
+}
+
+@Composable
+private fun BoxScope.TimelineResizeHandle(
+    edge: ClipResizeEdge,
+    clipId: String,
+    color: Color,
+) {
+    Box(
+        modifier =
+            Modifier
+                .align(if (edge == ClipResizeEdge.LEFT) Alignment.TopStart else Alignment.TopEnd)
+                .size(width = 12.dp, height = 24.dp)
+                .testTag(
+                    if (edge == ClipResizeEdge.LEFT) {
+                        "timeline-clip-start-handle-$clipId"
+                    } else {
+                        "timeline-clip-end-handle-$clipId"
+                    },
+                )
+                .background(color.copy(alpha = 0.85f), RoundedCornerShape(RadiusSm)),
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val centerX = size.width / 2f
+            drawLine(
+                color = OnSurface,
+                start = Offset(centerX, 5.dp.toPx()),
+                end = Offset(centerX, size.height - 5.dp.toPx()),
+                strokeWidth = 1.5.dp.toPx(),
+            )
+        }
     }
 }
 

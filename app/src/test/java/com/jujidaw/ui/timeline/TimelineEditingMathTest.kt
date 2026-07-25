@@ -2,6 +2,7 @@ package com.jujidaw.ui.timeline
 
 import com.jujidaw.model.PadClip
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimelineEditingMathTest {
@@ -78,5 +79,64 @@ class TimelineEditingMathTest {
 
         val rightClamped = timelineResizeGeometry(100f, 80f, 20f, ClipResizeEdge.RIGHT, -200f)
         assertEquals(20f, rightClamped.widthPx, 0.001f)
+    }
+
+    @Test
+    fun resizePreviewUsesMusicalTicksAndKeepsOppositeEdgeStable() {
+        val left = timelineResizeTicks(
+            baseStartTick = 240L,
+            baseDurationTicks = 480L,
+            edge = ClipResizeEdge.LEFT,
+            requestedDeltaTicks = -70L,
+            snapResolution = 120L,
+            free = false,
+        )
+        assertEquals(120L, left.startTick)
+        assertEquals(600L, left.durationTicks)
+        assertEquals(720L, left.endTick)
+
+        val right = timelineResizeTicks(
+            baseStartTick = 240L,
+            baseDurationTicks = 480L,
+            edge = ClipResizeEdge.RIGHT,
+            requestedDeltaTicks = 70L,
+            snapResolution = 120L,
+            free = false,
+        )
+        assertEquals(240L, right.startTick)
+        assertEquals(600L, right.durationTicks)
+        assertEquals(840L, right.endTick)
+    }
+
+    @Test
+    fun resizePreviewHonorsMinimumDurationAndFreeMode() {
+        val clamped = timelineResizeTicks(
+            baseStartTick = 240L,
+            baseDurationTicks = 120L,
+            edge = ClipResizeEdge.RIGHT,
+            requestedDeltaTicks = -400L,
+            snapResolution = 120L,
+            free = false,
+        )
+        assertEquals(240L, clamped.startTick)
+        assertEquals(120L, clamped.durationTicks)
+
+        val free = timelineResizeTicks(
+            baseStartTick = 240L,
+            baseDurationTicks = 120L,
+            edge = ClipResizeEdge.RIGHT,
+            requestedDeltaTicks = 37L,
+            snapResolution = 120L,
+            free = true,
+        )
+        assertEquals(240L, free.startTick)
+        assertEquals(157L, free.durationTicks)
+    }
+
+    @Test
+    fun snappingLargeTicksDoesNotOverflow() {
+        val snapped = snapTimelineTick(Long.MAX_VALUE, 120L)
+        assertTrue(snapped in 0L..Long.MAX_VALUE)
+        assertTrue(snapped <= Long.MAX_VALUE)
     }
 }

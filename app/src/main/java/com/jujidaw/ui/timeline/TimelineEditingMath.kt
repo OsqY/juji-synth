@@ -104,7 +104,14 @@ internal data class TimelineTransform(
 /** Pure timeline math kept separate so gesture behaviour can be tested without Compose. */
 internal fun snapTimelineTick(tick: Long, resolution: Long): Long {
     val safeResolution = resolution.coerceAtLeast(1L)
-    return ((tick.coerceAtLeast(0L) + safeResolution / 2L) / safeResolution) * safeResolution
+    val safeTick = tick.coerceAtLeast(0L)
+    val quotient = safeTick / safeResolution
+    val remainder = safeTick % safeResolution
+    val half = safeResolution / 2L
+    val roundUp = remainder > half || (safeResolution % 2L == 0L && remainder == half)
+    val roundedQuotient =
+        if (roundUp && quotient < Long.MAX_VALUE / safeResolution) quotient + 1L else quotient
+    return roundedQuotient * safeResolution
 }
 
 internal fun normalizeTimelineDuration(
@@ -167,6 +174,47 @@ internal data class TimelineResizeGeometry(
     val appliedDeltaPx: Float,
 )
 
+/** Musical preview for a resize gesture. Pixel deltas are converted before this is calculated. */
+internal data class TimelineResizeTicks(
+    val startTick: Long,
+    val durationTicks: Long,
+) {
+    val endTick: Long
+        get() = saturatingAdd(startTick, durationTicks)
+}
+
+internal fun timelineResizeTicks(
+    baseStartTick: Long,
+    baseDurationTicks: Long,
+    edge: ClipResizeEdge,
+    requestedDeltaTicks: Long,
+    snapResolution: Long,
+    free: Boolean,
+): TimelineResizeTicks {
+    val minimumDuration = if (free) 1L else snapResolution.coerceAtLeast(1L)
+    val safeStart = baseStartTick.coerceAtLeast(0L)
+    val safeDuration = baseDurationTicks.coerceAtLeast(minimumDuration)
+    val safeEnd = saturatingAdd(safeStart, safeDuration)
+    val maximumStart = (safeEnd - minimumDuration).coerceAtLeast(0L)
+
+    return when (edge) {
+        ClipResizeEdge.LEFT -> {
+            val requestedStart = saturatingAdd(safeStart, requestedDeltaTicks)
+            val snappedStart =
+                if (free || requestedDeltaTicks == 0L) requestedStart else snapTimelineTick(requestedStart, snapResolution)
+            val start = snappedStart.coerceIn(0L, maximumStart)
+            TimelineResizeTicks(startTick = start, durationTicks = (safeEnd - start).coerceAtLeast(minimumDuration))
+        }
+        ClipResizeEdge.RIGHT -> {
+            val requestedEnd = saturatingAdd(safeEnd, requestedDeltaTicks)
+            val snappedEnd =
+                if (free || requestedDeltaTicks == 0L) requestedEnd else snapTimelineTick(requestedEnd, snapResolution)
+            val end = snappedEnd.coerceAtLeast(saturatingAdd(safeStart, minimumDuration))
+            TimelineResizeTicks(startTick = safeStart, durationTicks = (end - safeStart).coerceAtLeast(minimumDuration))
+        }
+    }
+}
+
 internal fun timelineResizeGeometry(
     baseLeftPx: Float,
     baseWidthPx: Float,
@@ -189,6 +237,13 @@ internal fun timelineResizeGeometry(
         null -> TimelineResizeGeometry(safeLeft, safeWidth, 0f)
     }
 }
+
+private fun saturatingAdd(left: Long, right: Long): Long =
+    when {
+        right > 0L && left > Long.MAX_VALUE - right -> Long.MAX_VALUE
+        right < 0L && (right == Long.MIN_VALUE || left < Long.MIN_VALUE - right) -> Long.MIN_VALUE
+        else -> left + right
+    }
 
 internal fun timelineMaxScroll(
     totalWidthPx: Float,
