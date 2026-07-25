@@ -195,7 +195,13 @@ fun TimelineScreen(
     var draggedClipOffset by remember { mutableStateOf(Offset.Zero) }
     var resizePreview by remember { mutableStateOf<ClipResizePreview?>(null) }
     var pendingDeleteClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val gestureStateHolder = remember { mutableStateOf<TimelineGestureState>(TimelineGestureState.Idle) }
     val currentDraggedClipId by rememberUpdatedState(draggedClipId)
+    fun transitionGesture(event: TimelineGestureEvent): TimelineGestureState {
+        val nextState = reduceTimelineGestureState(gestureStateHolder.value, event)
+        gestureStateHolder.value = nextState
+        return nextState
+    }
     val viewportMeasured = measuredViewportWidthPx > 0f
     val visibleTicks = timelineTransform.visibleTickRange()
     val ticksPerBar = (PPQ * 4).toLong()
@@ -352,6 +358,7 @@ fun TimelineScreen(
                             var anchorTick = 0f
                             detectTwoFingerTransformGestures(
                                 onGestureStart = { centroid ->
+                                    transitionGesture(TimelineGestureEvent.BeginPinch)
                                     pinchActive = true
                                     gestureStartZoom = currentZoom
                                     gestureZoom = gestureStartZoom
@@ -362,6 +369,7 @@ fun TimelineScreen(
                                     followPlayhead = false
                                 },
                                 onGesture = { centroid, absoluteScale ->
+                                    if (gestureStateHolder.value != TimelineGestureState.Pinching) return@detectTwoFingerTransformGestures
                                     val nextZoom = (gestureStartZoom * absoluteScale).coerceIn(0.2f, 5f)
                                     gestureZoom = nextZoom
                                     val nextTransform = currentTimelineTransform.copy(
@@ -374,6 +382,9 @@ fun TimelineScreen(
                                     zoom = nextZoom
                                 },
                                 onGestureEnd = {
+                                    if (gestureStateHolder.value == TimelineGestureState.Pinching) {
+                                        transitionGesture(TimelineGestureEvent.Finish)
+                                    }
                                     viewModel.setZoom(gestureZoom)
                                     pinchActive = false
                                 },
@@ -383,14 +394,25 @@ fun TimelineScreen(
                             var gestureScrollX = 0f
                             detectHorizontalDragGestures(
                                 onDragStart = {
+                                    transitionGesture(TimelineGestureEvent.BeginScroll)
                                     gestureScrollX = currentScrollX
                                     followPlayhead = false
                                 },
                                 onHorizontalDrag = { change, dragAmount ->
-                                    if (currentDraggedClipId == null) {
+                                    if (gestureStateHolder.value == TimelineGestureState.Scrolling && currentDraggedClipId == null) {
                                         gestureScrollX = (gestureScrollX - dragAmount).coerceIn(0f, currentMaxScrollX)
                                         scrollX = gestureScrollX
                                         change.consume()
+                                    }
+                                },
+                                onDragEnd = {
+                                    if (gestureStateHolder.value == TimelineGestureState.Scrolling) {
+                                        transitionGesture(TimelineGestureEvent.Finish)
+                                    }
+                                },
+                                onDragCancel = {
+                                    if (gestureStateHolder.value == TimelineGestureState.Scrolling) {
+                                        transitionGesture(TimelineGestureEvent.Cancel)
                                     }
                                 },
                             )
@@ -561,8 +583,13 @@ fun TimelineScreen(
                                         isSelected = clip.id in selectedClipIds,
                                         isDragging = isDragging,
                                         onDragStart = {
-                                            draggedClipId = clip.id
-                                            draggedClipOffset = Offset.Zero
+                                            val nextState = transitionGesture(
+                                                TimelineGestureEvent.BeginMove(selectedClipIds + clip.id),
+                                            )
+                                            if (nextState == TimelineGestureState.MovingClip(selectedClipIds + clip.id)) {
+                                                draggedClipId = clip.id
+                                                draggedClipOffset = Offset.Zero
+                                            }
                                         },
                                         onDrag = { delta ->
                                             if (draggedClipId == clip.id) draggedClipOffset += delta
@@ -575,15 +602,34 @@ fun TimelineScreen(
                                                 val newTrack = (clip.trackIndex + (draggedClipOffset.y / trackHeightPx).toInt()).coerceIn(0, 15)
                                                 viewModel.moveSelectedClips(clip.id, newTick, newTrack)
                                             }
-                                            draggedClipId = null
-                                            draggedClipOffset = Offset.Zero
+                                            if (draggedClipId == clip.id) {
+                                                transitionGesture(TimelineGestureEvent.Finish)
+                                                draggedClipId = null
+                                                draggedClipOffset = Offset.Zero
+                                            }
                                         },
                                         onDragCancel = {
-                                            draggedClipId = null
-                                            draggedClipOffset = Offset.Zero
+                                            if (draggedClipId == clip.id) {
+                                                transitionGesture(TimelineGestureEvent.Cancel)
+                                                draggedClipId = null
+                                                draggedClipOffset = Offset.Zero
+                                            }
                                         },
                                         onResizeStart = { edge ->
-                                            resizePreview = ClipResizePreview(clip.id, edge, 0f)
+                                            val nextState = transitionGesture(
+                                                when (edge) {
+                                                    ClipResizeEdge.LEFT -> TimelineGestureEvent.BeginResizeStart(clip.id)
+                                                    ClipResizeEdge.RIGHT -> TimelineGestureEvent.BeginResizeEnd(clip.id)
+                                                },
+                                            )
+                                            if (
+                                                nextState == when (edge) {
+                                                    ClipResizeEdge.LEFT -> TimelineGestureState.ResizingStart(clip.id)
+                                                    ClipResizeEdge.RIGHT -> TimelineGestureState.ResizingEnd(clip.id)
+                                                }
+                                            ) {
+                                                resizePreview = ClipResizePreview(clip.id, edge, 0f)
+                                            }
                                         },
                                         onResize = { delta ->
                                             resizePreview = resizePreview?.let { current ->
@@ -614,9 +660,17 @@ fun TimelineScreen(
                                                         )
                                                 }
                                             }
+                                            if (finished != null) {
+                                                transitionGesture(TimelineGestureEvent.Finish)
+                                            }
                                             resizePreview = null
                                         },
-                                        onResizeCancel = { resizePreview = null },
+                                        onResizeCancel = {
+                                            if (resizePreview?.clipId == clip.id) {
+                                                transitionGesture(TimelineGestureEvent.Cancel)
+                                                resizePreview = null
+                                            }
+                                        },
                                     )
                             }
                         }
@@ -687,26 +741,45 @@ fun TimelineScreen(
                             .fillMaxWidth()
                             .height(scrubHeight)
                             .pointerInput(Unit) {
-                                detectTapGestures {
-                                    viewModel.seekToTick(
-                                        currentTimelineTransform.viewportPxToSnappedTick(it.x, currentSnap.ticks),
-                                    )
-                                    followPlayhead = false
-                                }
+                                    detectTapGestures {
+                                        val nextState = transitionGesture(TimelineGestureEvent.BeginScrub)
+                                        if (nextState == TimelineGestureState.Scrubbing) {
+                                            viewModel.seekToTick(
+                                                currentTimelineTransform.viewportPxToSnappedTick(it.x, currentSnap.ticks),
+                                            )
+                                            followPlayhead = false
+                                            transitionGesture(TimelineGestureEvent.Finish)
+                                        }
+                                    }
                             }
                             .pointerInput(Unit) {
                                 detectHorizontalDragGestures(
                                     onDragStart = { offset ->
-                                        viewModel.seekToTick(
-                                            currentTimelineTransform.viewportPxToSnappedTick(offset.x, currentSnap.ticks),
-                                        )
-                                        followPlayhead = false
+                                        val nextState = transitionGesture(TimelineGestureEvent.BeginScrub)
+                                        if (nextState == TimelineGestureState.Scrubbing) {
+                                            viewModel.seekToTick(
+                                                currentTimelineTransform.viewportPxToSnappedTick(offset.x, currentSnap.ticks),
+                                            )
+                                            followPlayhead = false
+                                        }
                                     },
                                     onHorizontalDrag = { change, _ ->
-                                        viewModel.seekToTick(
-                                            currentTimelineTransform.viewportPxToSnappedTick(change.position.x, currentSnap.ticks),
-                                        )
-                                        change.consume()
+                                        if (gestureStateHolder.value == TimelineGestureState.Scrubbing) {
+                                            viewModel.seekToTick(
+                                                currentTimelineTransform.viewportPxToSnappedTick(change.position.x, currentSnap.ticks),
+                                            )
+                                            change.consume()
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        if (gestureStateHolder.value == TimelineGestureState.Scrubbing) {
+                                            transitionGesture(TimelineGestureEvent.Finish)
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        if (gestureStateHolder.value == TimelineGestureState.Scrubbing) {
+                                            transitionGesture(TimelineGestureEvent.Cancel)
+                                        }
                                     },
                                 )
                             },
@@ -743,12 +816,19 @@ fun TimelineScreen(
                                             val tick = currentTimelineTransform.viewportPxToTick(offset.x)
                                             timelineClipIdsAtPoint(currentClips, track, tick)
                                         },
-                                        onPreview = { pendingDeleteClipIds = it },
+                                        onPreview = {
+                                            transitionGesture(TimelineGestureEvent.BeginDelete(it))
+                                            pendingDeleteClipIds = it
+                                        },
                                         onCommit = {
                                             viewModel.deleteClips(it)
                                             pendingDeleteClipIds = emptySet()
+                                            transitionGesture(TimelineGestureEvent.Finish)
                                         },
-                                        onCancel = { pendingDeleteClipIds = emptySet() },
+                                        onCancel = {
+                                            pendingDeleteClipIds = emptySet()
+                                            transitionGesture(TimelineGestureEvent.Cancel)
+                                        },
                                     )
                                 }
                                 .testTag("timeline-delete-tool"),
