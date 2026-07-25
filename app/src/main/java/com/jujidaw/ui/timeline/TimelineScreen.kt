@@ -52,6 +52,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.focus.FocusRequester
@@ -342,6 +343,7 @@ fun TimelineScreen(
                         .weight(1f)
                         .height(timelineContentHeight)
                         .onSizeChanged { measuredViewportWidthPx = it.width.toFloat() }
+                        .testTag("timeline-viewport")
                         .clip(RoundedCornerShape(RadiusLg))
                         .background(Bg1)
                         .pointerInput(Unit) {
@@ -401,9 +403,10 @@ fun TimelineScreen(
                 Box(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .pointerInput(tool) {
+                                Modifier
+                                    .fillMaxSize()
+                                    .testTag("timeline-grid")
+                                    .pointerInput(tool) {
                                     if (tool == TimelineTool.SELECT) {
                                         detectDragGesturesAfterLongPress(
                                             onDragStart = {
@@ -508,7 +511,7 @@ fun TimelineScreen(
                             transform = timelineTransform,
                             firstVisibleBar = firstVisibleBar,
                             lastVisibleBar = lastVisibleBar,
-                            modifier = Modifier.height(rulerHeight).fillMaxWidth(),
+                            modifier = Modifier.height(rulerHeight).fillMaxWidth().testTag("timeline-ruler"),
                         )
 
                         // Clips
@@ -640,6 +643,7 @@ fun TimelineScreen(
                                                     (rulerPx + scrubPx + clip.trackIndex * trackHeightPx).toInt(),
                                                 )
                                             }
+                                            .testTag("timeline-clip-resize-preview-${clip.id}")
                                             .width(2.dp)
                                             .height(with(density) { trackHeightPx.toDp() })
                                             .background(Secondary),
@@ -658,7 +662,8 @@ fun TimelineScreen(
                                         )
                                     }.width(2.dp)
                                     .fillMaxHeight()
-                                    .background(Primary),
+                                    .background(Primary)
+                                    .testTag("timeline-playhead"),
                         )
                     }
                 }
@@ -745,7 +750,8 @@ fun TimelineScreen(
                                         },
                                         onCancel = { pendingDeleteClipIds = emptySet() },
                                     )
-                                },
+                                }
+                                .testTag("timeline-delete-tool"),
                     )
                 }
             }
@@ -1028,6 +1034,7 @@ private fun TimelineEditorToolbar(
                     .clip(RoundedCornerShape(RadiusSm))
                     .background(SurfaceContainerLow)
                     .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                    .testTag(if (sourceMode == TimelineTool.DRAW_PAD) "timeline-pad-selector" else "timeline-pattern-selector")
                     .padding(horizontal = Spacing.xs, vertical = 2.dp),
         ) {
             val itemWidth = (maxWidth - Spacing.xs * 4) / 5
@@ -1205,7 +1212,12 @@ private fun TransportStrip(
                 SnapButton(snap, onSnapChange)
                 SwingButton(transport.swing, onSwingChange)
                 ZoomStepButton(Icons.Outlined.ZoomOut) { onZoomChange(zoom - 0.2f) }
-                Text("${(zoom * 100).toInt()}%", color = OnSurfaceVariant, style = CaptionSmall)
+                Text(
+                    "${(zoom * 100).toInt()}%",
+                    color = OnSurfaceVariant,
+                    style = CaptionSmall,
+                    modifier = Modifier.testTag("timeline-zoom-indicator"),
+                )
                 ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
                 RestoreTrashButton(deletedClipCount, onRestoreDeleted)
             }
@@ -1264,7 +1276,7 @@ private fun TransportStrip(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
-                Text("Zoom", color = OnSurfaceVariant, style = CaptionSmall)
+                Text("Zoom", color = OnSurfaceVariant, style = CaptionSmall, modifier = Modifier.testTag("timeline-zoom-indicator"))
                 ZoomStepButton(Icons.Outlined.ZoomOut) { onZoomChange(zoom - 0.2f) }
                 ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
             }
@@ -1340,6 +1352,7 @@ private fun SnapButton(
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(Primary.copy(alpha = 0.08f))
                 .border(1.dp, Primary.copy(alpha = 0.55f), RoundedCornerShape(RadiusSm))
+                .testTag("timeline-snap-indicator")
                 .clickable {
                     val values = TimelineViewModel.Snap.values()
                     onSnapChange(values[(snap.ordinal + 1) % values.size])
@@ -1671,6 +1684,7 @@ private fun ClipItem(
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(bg)
                 .border(1.dp, edge, RoundedCornerShape(RadiusSm))
+                .testTag("timeline-clip-${clip.id}")
                 .pointerInput(clip.id) {
                         detectDragGestures(
                             onDragStart = { offset ->
@@ -1771,6 +1785,7 @@ private fun ClipItem(
                         Modifier
                             .align(Alignment.TopStart)
                             .size(width = 10.dp, height = 20.dp)
+                            .testTag("timeline-clip-start-handle-${clip.id}")
                             .background(OnSurface.copy(alpha = 0.6f)),
                 )
 
@@ -1779,6 +1794,7 @@ private fun ClipItem(
                         Modifier
                             .align(Alignment.TopEnd)
                             .size(width = 10.dp, height = 20.dp)
+                            .testTag("timeline-clip-end-handle-${clip.id}")
                             .background(OnSurface.copy(alpha = 0.6f)),
                 )
             }
