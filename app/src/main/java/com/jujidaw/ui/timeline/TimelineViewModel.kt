@@ -327,14 +327,14 @@ class TimelineViewModel(
     }
 
     fun undo() {
-        val previous = editHistory.undo(timelineSnapshot()) ?: return
-        applyTimelineSnapshot(previous)
+        val command = editHistory.undo() ?: return
+        applyTimelineSnapshot(command.before)
         updateHistoryAvailability()
     }
 
     fun redo() {
-        val next = editHistory.redo(timelineSnapshot()) ?: return
-        applyTimelineSnapshot(next)
+        val command = editHistory.redo() ?: return
+        applyTimelineSnapshot(command.after)
         updateHistoryAvailability()
     }
 
@@ -412,8 +412,13 @@ class TimelineViewModel(
                 durationTicks = duration,
                 patternId = patternId,
             )
-        updateClips(_arrangement.value.clips + newClip)
+        val before = timelineSnapshot()
         _selectedClipIds.value = setOf(newClip.id)
+        updateClips(
+            _arrangement.value.clips + newClip,
+            historyBefore = before,
+            commandFactory = { previous, after -> AddClipCommand(setOf(newClip.id), previous, after) },
+        )
     }
 
     fun addAudioClip(
@@ -431,7 +436,10 @@ class TimelineViewModel(
                 durationTicks = durationTicks.coerceAtLeast(TICKS_PER_STEP.toLong()),
                 audioFilePath = path,
             )
-        updateClips(_arrangement.value.clips + newClip)
+        updateClips(
+            _arrangement.value.clips + newClip,
+            commandFactory = { previous, after -> AddClipCommand(setOf(newClip.id), previous, after) },
+        )
         SynthEngine.loadAudioClip(newClip.id, path)
     }
 
@@ -452,8 +460,13 @@ class TimelineViewModel(
                 padIndex = padIndex,
                 gateMode = PadGateMode.TIMELINE_GATE,
             )
-        updateClips(_arrangement.value.clips + newClip)
+        val before = timelineSnapshot()
         _selectedClipIds.value = setOf(newClip.id)
+        updateClips(
+            _arrangement.value.clips + newClip,
+            historyBefore = before,
+            commandFactory = { previous, after -> AddClipCommand(setOf(newClip.id), previous, after) },
+        )
     }
 
     private fun recordPadPerformanceEvent(event: PadPerformanceEvent) {
@@ -489,8 +502,13 @@ class TimelineViewModel(
                         velocity = started.velocity,
                         gateMode = PadGateMode.TIMELINE_GATE,
                     )
-                updateClips(_arrangement.value.clips + newClip)
+                val before = timelineSnapshot()
                 _selectedClipIds.value = setOf(newClip.id)
+                updateClips(
+                    _arrangement.value.clips + newClip,
+                    historyBefore = before,
+                    commandFactory = { previous, after -> AddClipCommand(setOf(newClip.id), previous, after) },
+                )
             }
         }
     }
@@ -551,6 +569,7 @@ class TimelineViewModel(
     ) {
         val snapped = snapTick(newStartTick.coerceAtLeast(0))
         val track = newTrackIndex.coerceIn(0, 15)
+        if (_arrangement.value.clips.none { it.id == clipId }) return
         updateClips(
             _arrangement.value.clips.map {
                 when (it) {
@@ -558,6 +577,9 @@ class TimelineViewModel(
                     is PadClip -> if (it.id == clipId) it.copy(startTick = snapped, trackIndex = track) else it
                     is AudioClip -> if (it.id == clipId) it.copy(startTick = snapped, trackIndex = track) else it
                 }
+            },
+            commandFactory = { previous, after ->
+                MoveClipsCommand(setOf(clipId), previous, after)
             },
         )
     }
@@ -579,6 +601,7 @@ class TimelineViewModel(
                 if (clip.id !in selected) return@map clip
                 moveClipValue(clip, clip.startTick + deltaTick, clip.trackIndex + deltaTrack)
             },
+            commandFactory = { previous, after -> MoveClipsCommand(selected, previous, after) },
         )
     }
 
@@ -588,6 +611,7 @@ class TimelineViewModel(
     ) {
         val d = normalizeDuration(newDurationTicks)
         val changed = _arrangement.value.clips.find { it.id == clipId }
+        if (changed == null) return
         if (changed is PadClip) lastPadDurationTicks = d
         if (changed is PatternClip) lastPatternDurationTicks = d
         updateClips(
@@ -597,6 +621,17 @@ class TimelineViewModel(
                     is PadClip -> if (it.id == clipId) it.copy(durationTicks = d) else it
                     is AudioClip -> if (it.id == clipId) it.copy(durationTicks = d) else it
                 }
+            },
+            commandFactory = { previous, after ->
+                ResizeClipCommand(
+                    clipId = clipId,
+                    previousStart = changed.startTick,
+                    previousDuration = changed.durationTicks,
+                    newStart = changed.startTick,
+                    newDuration = d,
+                    before = previous,
+                    after = after,
+                )
             },
         )
     }
@@ -613,6 +648,17 @@ class TimelineViewModel(
         updateClips(
             _arrangement.value.clips.map {
                 if (it.id != clipId) it else resizeClipValue(it, start, duration)
+            },
+            commandFactory = { previous, after ->
+                ResizeClipCommand(
+                    clipId = clipId,
+                    previousStart = clip.startTick,
+                    previousDuration = clip.durationTicks,
+                    newStart = start,
+                    newDuration = duration,
+                    before = previous,
+                    after = after,
+                )
             },
         )
     }
@@ -658,8 +704,13 @@ class TimelineViewModel(
         val trackOffset = anchorTrack.coerceIn(0, 15 - (maxTrack - minTrack)) - minTrack
         val tickOffset = snapTick(anchorTick.coerceAtLeast(0)) - minTick
         val pasted = clipboard.map { clip -> copyClipWithNewId(clip, clip.startTick + tickOffset, clip.trackIndex + trackOffset) }
-        updateClips(_arrangement.value.clips + pasted)
+        val before = timelineSnapshot()
         _selectedClipIds.value = pasted.mapTo(linkedSetOf()) { it.id }
+        updateClips(
+            _arrangement.value.clips + pasted,
+            historyBefore = before,
+            commandFactory = { previous, after -> PasteClipsCommand(pasted.mapTo(linkedSetOf()) { it.id }, previous, after) },
+        )
     }
 
     fun duplicateSelectedClips() {
@@ -669,8 +720,13 @@ class TimelineViewModel(
         val maxEnd = selected.maxOf { it.startTick + it.durationTicks }
         val offset = normalizeDuration(maxEnd - minTick)
         val duplicated = selected.map { copyClipWithNewId(it, it.startTick + offset, it.trackIndex) }
-        updateClips(_arrangement.value.clips + duplicated)
+        val before = timelineSnapshot()
         _selectedClipIds.value = duplicated.mapTo(linkedSetOf()) { it.id }
+        updateClips(
+            _arrangement.value.clips + duplicated,
+            historyBefore = before,
+            commandFactory = { previous, after -> DuplicateClipsCommand(duplicated.mapTo(linkedSetOf()) { it.id }, previous, after) },
+        )
     }
 
     fun deleteSelectedClips() {
@@ -686,8 +742,12 @@ class TimelineViewModel(
         val before = timelineSnapshot()
         removed.filterIsInstance<AudioClip>().forEach { SynthEngine.unloadAudioClip(it.id) }
         _deletedClips.value = _deletedClips.value + removed
-        updateClips(_arrangement.value.clips.filterNot { it.id in clipIds }, before)
         _selectedClipIds.value = _selectedClipIds.value - clipIds
+        updateClips(
+            _arrangement.value.clips.filterNot { it.id in clipIds },
+            historyBefore = before,
+            commandFactory = { previous, after -> DeleteClipsCommand(removed.mapTo(linkedSetOf()) { it.id }, previous, after) },
+        )
     }
 
     fun toggleMuteSelectedClips() {
@@ -698,10 +758,12 @@ class TimelineViewModel(
             _arrangement.value.clips.map { clip ->
                 if (clip.id !in selected) clip else copyClipWithMute(clip, mute)
             },
+            commandFactory = { previous, after -> MuteClipsCommand(selected, previous, after) },
         )
     }
 
     fun toggleMuteClip(clipId: String) {
+        if (_arrangement.value.clips.none { it.id == clipId }) return
         updateClips(
             _arrangement.value.clips.map {
                 val mute = if (it.id == clipId) !it.mute else it.mute
@@ -711,6 +773,7 @@ class TimelineViewModel(
                     is AudioClip -> it.copy(mute = mute)
                 }
             },
+            commandFactory = { previous, after -> MuteClipsCommand(setOf(clipId), previous, after) },
         )
     }
 
@@ -722,29 +785,39 @@ class TimelineViewModel(
         val clip = _deletedClips.value.lastOrNull() ?: return
         val before = timelineSnapshot()
         _deletedClips.value = _deletedClips.value.dropLast(1)
-        updateClips(_arrangement.value.clips + clip, before)
+        updateClips(
+            _arrangement.value.clips + clip,
+            historyBefore = before,
+            commandFactory = { previous, after -> RestoreTrashClipCommand(clip.id, previous, after) },
+        )
         if (clip is AudioClip) SynthEngine.loadAudioClip(clip.id, clip.audioFilePath)
     }
 
     private fun updateClips(
         newClips: List<Clip>,
         historyBefore: TimelineSnapshot = timelineSnapshot(),
+        commandFactory: (TimelineSnapshot, TimelineSnapshot) -> TimelineEditCommand<TimelineSnapshot> =
+            { before, after -> ArrangementEditCommand("clips", before, after) },
     ) {
         val newArr = _arrangement.value.copy(clips = newClips)
-        updateArrangement(newArr, historyBefore)
+        updateArrangement(newArr, historyBefore, commandFactory)
     }
 
     private fun updateArrangement(
         newArr: Arrangement,
         historyBefore: TimelineSnapshot = timelineSnapshot(),
+        commandFactory: (TimelineSnapshot, TimelineSnapshot) -> TimelineEditCommand<TimelineSnapshot> =
+            { before, after -> ArrangementEditCommand("arrangement", before, after) },
     ) {
         if (newArr == _arrangement.value && historyBefore == timelineSnapshot()) return
-        editHistory.record(historyBefore)
-        updateHistoryAvailability()
         transportController.loadArrangement(newArr)
         _arrangement.value = transportController.arrangement
         _transportState.value = transportController.transportState
         refreshAutomationPoints()
+        val after = timelineSnapshot()
+        if (historyBefore == after) return
+        editHistory.record(commandFactory(historyBefore, after))
+        updateHistoryAvailability()
         scheduleAutosave()
     }
 
