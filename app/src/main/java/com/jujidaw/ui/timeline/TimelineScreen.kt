@@ -137,10 +137,8 @@ fun TimelineScreen(
 
     val density = LocalDensity.current
     val baseBarWidthPx = with(density) { 96.dp.toPx() }
-    val barWidthPx = baseBarWidthPx * zoom
-    val tickWidthPx = barWidthPx / (PPQ * 4f)
     val totalBars = 200
-    val totalWidthPx = totalBars * barWidthPx
+    val totalDurationTicks = (totalBars * PPQ * 4).toLong()
     val trackHeightPx = with(density) { 56.dp.toPx() }
     val headerWidth = 72.dp
     val rulerHeight = 24.dp
@@ -152,37 +150,38 @@ fun TimelineScreen(
     var scrollX by remember { mutableStateOf(0f) }
     var measuredViewportWidthPx by remember { mutableFloatStateOf(0f) }
     val viewportWidthPx = measuredViewportWidthPx.coerceAtLeast(1f)
-    val maxScrollX = timelineMaxScroll(totalWidthPx, viewportWidthPx)
+    val timelineTransform =
+        TimelineTransform(
+            viewportWidthPx = viewportWidthPx,
+            horizontalScrollPx = scrollX,
+            pixelsPerBeat = baseBarWidthPx / 4f,
+            zoom = zoom,
+            density = density.density,
+        )
+    val barWidthPx = timelineTransform.barWidthPx
+    val maxScrollX = timelineTransform.maxScroll(totalDurationTicks)
     val currentZoom by rememberUpdatedState(zoom)
     val currentScrollX by rememberUpdatedState(scrollX)
     val currentMaxScrollX by rememberUpdatedState(maxScrollX)
-    val currentViewportWidthPx by rememberUpdatedState(viewportWidthPx)
-    val currentTickWidthPx by rememberUpdatedState(tickWidthPx)
+    val currentTimelineTransform by rememberUpdatedState(timelineTransform)
     val currentSnap by rememberUpdatedState(snap)
     val currentClips by rememberUpdatedState(arrangement.clips)
 
     val setZoomAtAnchor: (Float, Float) -> Unit = { requestedZoom, anchorViewportX ->
         val nextZoom = requestedZoom.coerceIn(0.2f, 5f)
-        val nextTickWidth = nextZoom * baseBarWidthPx / (PPQ * 4f)
-        val nextTotalWidth = totalBars * baseBarWidthPx * nextZoom
-        scrollX =
-            timelineZoomScroll(
-                anchorViewportX = anchorViewportX,
-                scrollX = scrollX,
-                oldTickWidthPx = tickWidthPx,
-                newTickWidthPx = nextTickWidth,
-                panX = 0f,
-                maxScrollX = timelineMaxScroll(nextTotalWidth, viewportWidthPx),
-            )
+        scrollX = timelineTransform
+            .zoomAroundAnchor(anchorViewportX, zoom, nextZoom, totalDurationTicks)
+            .horizontalScrollPx
         zoom = nextZoom
         viewModel.setZoom(nextZoom)
         followPlayhead = false
     }
 
-    val playheadPx = transport.position.toTicks() * tickWidthPx
+    val playheadContentPx = timelineTransform.tickToContentPx(transport.position.toTicks())
+    val playheadPx = timelineTransform.tickToViewportPx(transport.position.toTicks())
     LaunchedEffect(playheadPx, transport.playing, followPlayhead) {
         if (transport.playing && followPlayhead) {
-            val target = (playheadPx - viewportWidthPx * 0.3f).coerceIn(0f, maxScrollX)
+            val target = (playheadContentPx - viewportWidthPx * 0.3f).coerceIn(0f, maxScrollX)
             scrollX = target
         }
     }
@@ -197,17 +196,20 @@ fun TimelineScreen(
     var pendingDeleteClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val currentDraggedClipId by rememberUpdatedState(draggedClipId)
     val viewportMeasured = measuredViewportWidthPx > 0f
-    val firstVisibleBar = if (viewportMeasured) (scrollX / barWidthPx).toInt().coerceIn(0, totalBars) else 0
+    val visibleTicks = timelineTransform.visibleTickRange()
+    val ticksPerBar = (PPQ * 4).toLong()
+    val firstVisibleBar =
+        if (viewportMeasured) (visibleTicks.first / ticksPerBar).toInt().coerceIn(0, totalBars) else 0
     val lastVisibleBar =
         if (viewportMeasured) {
-            kotlin.math.ceil(((scrollX + viewportWidthPx) / barWidthPx).toDouble()).toInt().coerceIn(firstVisibleBar, totalBars)
+            ((visibleTicks.last / ticksPerBar) + 1L).toInt().coerceIn(firstVisibleBar, totalBars)
         } else {
             totalBars
         }
-    val firstVisibleTick = if (viewportMeasured) (scrollX / tickWidthPx).toLong().coerceAtLeast(0L) else 0L
+    val firstVisibleTick = if (viewportMeasured) visibleTicks.first else 0L
     val lastVisibleTick =
         if (viewportMeasured) {
-            ((scrollX + viewportWidthPx) / tickWidthPx).toLong().coerceAtLeast(firstVisibleTick)
+            (visibleTicks.last + 1L).coerceAtLeast(firstVisibleTick)
         } else {
             Long.MAX_VALUE
         }
@@ -351,17 +353,22 @@ fun TimelineScreen(
                                     pinchActive = true
                                     gestureStartZoom = currentZoom
                                     gestureZoom = gestureStartZoom
-                                    val startTickWidth = gestureStartZoom * baseBarWidthPx / (PPQ * 4f)
-                                    anchorTick = timelineContentX(centroid.x, currentScrollX) / startTickWidth
+                                    val gestureTransform = currentTimelineTransform.copy(zoom = gestureStartZoom)
+                                    anchorTick =
+                                        (centroid.x + gestureTransform.horizontalScrollPx) /
+                                            gestureTransform.pixelsPerTick
                                     followPlayhead = false
                                 },
                                 onGesture = { centroid, absoluteScale ->
                                     val nextZoom = (gestureStartZoom * absoluteScale).coerceIn(0.2f, 5f)
                                     gestureZoom = nextZoom
-                                    val nextTickWidth = nextZoom * baseBarWidthPx / (PPQ * 4f)
-                                    val nextTotalWidth = totalBars * baseBarWidthPx * nextZoom
-                                    val nextMaxScroll = timelineMaxScroll(nextTotalWidth, currentViewportWidthPx)
-                                    scrollX = (anchorTick * nextTickWidth - centroid.x).coerceIn(0f, nextMaxScroll)
+                                    val nextTransform = currentTimelineTransform.copy(
+                                        zoom = nextZoom,
+                                        horizontalScrollPx = currentScrollX,
+                                    )
+                                    scrollX =
+                                        (anchorTick * nextTransform.pixelsPerTick - centroid.x)
+                                            .coerceIn(0f, nextTransform.maxScroll(totalDurationTicks))
                                     zoom = nextZoom
                                 },
                                 onGestureEnd = {
@@ -414,8 +421,8 @@ fun TimelineScreen(
                                                     val firstTrack = ((start.y - rulerPx - scrubPx) / trackHeightPx).toInt().coerceIn(0, 15)
                                                     val lastTrack = ((end.y - rulerPx - scrubPx) / trackHeightPx).toInt().coerceIn(0, 15)
                                                     viewModel.selectClipsInRange(
-                                                        ((start.x + scrollX) / tickWidthPx).toLong(),
-                                                        ((end.x + scrollX) / tickWidthPx).toLong(),
+                                                        currentTimelineTransform.viewportPxToTick(start.x),
+                                                        currentTimelineTransform.viewportPxToTick(end.x),
                                                         firstTrack,
                                                         lastTrack,
                                                     )
@@ -430,7 +437,7 @@ fun TimelineScreen(
                         // Grid + track dividers
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             for (b in firstVisibleBar..lastVisibleBar) {
-                                val x = b * barWidthPx - scrollX
+                                val x = timelineTransform.tickToViewportPx(b * ticksPerBar)
                                 drawLine(
                                     color = OutlineVariant.copy(alpha = 0.25f),
                                     start = Offset(x, 0f),
@@ -448,12 +455,12 @@ fun TimelineScreen(
                                 }
                             }
                             if (snap != TimelineViewModel.Snap.FREE) {
-                                val stepPx = snap.ticks * tickWidthPx
+                                val stepPx = timelineTransform.durationToPx(snap.ticks)
                                 if (stepPx >= 5f) {
                                     val firstStep = (scrollX / stepPx).toInt().coerceAtLeast(0)
                                     val lastStep = kotlin.math.ceil(((scrollX + viewportWidthPx) / stepPx).toDouble()).toInt()
                                     for (step in firstStep..lastStep) {
-                                        val x = step * stepPx - scrollX
+                                        val x = step * stepPx - timelineTransform.horizontalScrollPx
                                         drawLine(
                                             color = Primary.copy(alpha = 0.18f),
                                             start = Offset(x, 0f),
@@ -498,8 +505,7 @@ fun TimelineScreen(
 
                         // Bar ruler
                         TimelineRuler(
-                            barWidthPx = barWidthPx,
-                            scrollX = scrollX,
+                            transform = timelineTransform,
                             firstVisibleBar = firstVisibleBar,
                             lastVisibleBar = lastVisibleBar,
                             modifier = Modifier.height(rulerHeight).fillMaxWidth(),
@@ -510,10 +516,11 @@ fun TimelineScreen(
                             if (clip.id in pendingDeleteClipIds) continue
                             key(clip.id) {
                                 val top = rulerPx + scrubPx + clip.trackIndex * trackHeightPx
-                                val baseLeft = clip.startTick * tickWidthPx
-                                val baseWidth = clip.durationTicks * tickWidthPx
+                                val baseLeft = timelineTransform.tickToContentPx(clip.startTick)
+                                val baseWidth = timelineTransform.durationToPx(clip.durationTicks)
                                 val preview = resizePreview?.takeIf { it.clipId == clip.id }
-                                val minimumWidth = (if (snap == TimelineViewModel.Snap.FREE) 1L else snap.ticks) * tickWidthPx
+                                val minimumWidth =
+                                    timelineTransform.durationToPx(if (snap == TimelineViewModel.Snap.FREE) 1L else snap.ticks)
                                 val resizeGeometry =
                                     timelineResizeGeometry(
                                         baseLeftPx = baseLeft,
@@ -522,7 +529,7 @@ fun TimelineScreen(
                                         edge = preview?.edge,
                                         requestedDeltaPx = preview?.deltaPx ?: 0f,
                                     )
-                                val left = resizeGeometry.leftPx - scrollX
+                                val left = resizeGeometry.leftPx - timelineTransform.horizontalScrollPx
                                 val width = resizeGeometry.widthPx
                                 // Keep the visual width musical. Enlarging pad
                                 // clips here made adjacent sixteenth hits cover
@@ -560,7 +567,7 @@ fun TimelineScreen(
                                         onDragEnd = {
                                             if (draggedClipId == clip.id) {
                                                 val newTick = viewModel.snapTick(
-                                                    (clip.startTick + (draggedClipOffset.x / tickWidthPx).toLong()).coerceAtLeast(0),
+                                                    (clip.startTick + timelineTransform.pxDeltaToTicks(draggedClipOffset.x)).coerceAtLeast(0),
                                                 )
                                                 val newTrack = (clip.trackIndex + (draggedClipOffset.y / trackHeightPx).toInt()).coerceIn(0, 15)
                                                 viewModel.moveSelectedClips(clip.id, newTick, newTrack)
@@ -595,12 +602,12 @@ fun TimelineScreen(
                                                     ClipResizeEdge.LEFT ->
                                                         viewModel.trimClipFromLeft(
                                                             clip.id,
-                                                            (finishedGeometry.leftPx / tickWidthPx).toLong(),
+                                                            timelineTransform.contentPxToTick(finishedGeometry.leftPx),
                                                         )
                                                     ClipResizeEdge.RIGHT ->
                                                         viewModel.trimClip(
                                                             clip.id,
-                                                            (finishedGeometry.widthPx / tickWidthPx).toLong(),
+                                                            timelineTransform.pxToDuration(finishedGeometry.widthPx),
                                                         )
                                                 }
                                             }
@@ -613,20 +620,23 @@ fun TimelineScreen(
 
                         resizePreview?.let { activeResize ->
                             arrangement.clips.firstOrNull { it.id == activeResize.clipId }?.let { clip ->
-                                val baseLeft = clip.startTick * tickWidthPx
-                                val baseWidth = clip.durationTicks * tickWidthPx
-                                val minimumWidth = (if (snap == TimelineViewModel.Snap.FREE) 1L else snap.ticks) * tickWidthPx
+                                val baseLeft = timelineTransform.tickToContentPx(clip.startTick)
+                                val baseWidth = timelineTransform.durationToPx(clip.durationTicks)
+                                val minimumWidth =
+                                    timelineTransform.durationToPx(if (snap == TimelineViewModel.Snap.FREE) 1L else snap.ticks)
                                 val geometry =
                                     timelineResizeGeometry(baseLeft, baseWidth, minimumWidth, activeResize.edge, activeResize.deltaPx)
                                 val rawEdgePx =
                                     if (activeResize.edge == ClipResizeEdge.LEFT) geometry.leftPx else geometry.leftPx + geometry.widthPx
-                                val snappedEdgePx = viewModel.snapTick((rawEdgePx / tickWidthPx).toLong()) * tickWidthPx
+                                val snappedEdgePx = timelineTransform.tickToViewportPx(
+                                    viewModel.snapTick(timelineTransform.contentPxToTick(rawEdgePx)),
+                                )
                                 Box(
                                     modifier =
                                         Modifier
                                             .offset {
                                                 IntOffset(
-                                                        (snappedEdgePx - scrollX).toInt(),
+                                                        snappedEdgePx.toInt(),
                                                     (rulerPx + scrubPx + clip.trackIndex * trackHeightPx).toInt(),
                                                 )
                                             }
@@ -643,7 +653,7 @@ fun TimelineScreen(
                                 Modifier
                                     .offset {
                                         IntOffset(
-                                            (playheadPx - scrollX).toInt(),
+                                            playheadPx.toInt(),
                                             with(density) { (rulerHeight + scrubHeight).toPx().toInt() },
                                         )
                                     }.width(2.dp)
@@ -674,7 +684,7 @@ fun TimelineScreen(
                             .pointerInput(Unit) {
                                 detectTapGestures {
                                     viewModel.seekToTick(
-                                        timelineTickAtViewportX(it.x, currentScrollX, currentTickWidthPx, currentSnap.ticks),
+                                        currentTimelineTransform.viewportPxToSnappedTick(it.x, currentSnap.ticks),
                                     )
                                     followPlayhead = false
                                 }
@@ -683,13 +693,13 @@ fun TimelineScreen(
                                 detectHorizontalDragGestures(
                                     onDragStart = { offset ->
                                         viewModel.seekToTick(
-                                            timelineTickAtViewportX(offset.x, currentScrollX, currentTickWidthPx, currentSnap.ticks),
+                                            currentTimelineTransform.viewportPxToSnappedTick(offset.x, currentSnap.ticks),
                                         )
                                         followPlayhead = false
                                     },
                                     onHorizontalDrag = { change, _ ->
                                         viewModel.seekToTick(
-                                            timelineTickAtViewportX(change.position.x, currentScrollX, currentTickWidthPx, currentSnap.ticks),
+                                            currentTimelineTransform.viewportPxToSnappedTick(change.position.x, currentSnap.ticks),
                                         )
                                         change.consume()
                                     },
@@ -707,12 +717,7 @@ fun TimelineScreen(
                                 .pointerInput(tool) {
                                     detectTapGestures { offset ->
                                         val track = (offset.y / trackHeightPx).toInt().coerceIn(0, 15)
-                                        val tick = timelineTickAtViewportX(
-                                            offset.x,
-                                            currentScrollX,
-                                            currentTickWidthPx,
-                                            currentSnap.ticks,
-                                        )
+                                        val tick = currentTimelineTransform.viewportPxToSnappedTick(offset.x, currentSnap.ticks)
                                         viewModel.placeSelectedSource(track, tick)
                                     }
                                 },
@@ -730,7 +735,7 @@ fun TimelineScreen(
                                     detectTimelineEraseGestures(
                                         resolveClipIds = { offset ->
                                             val track = (offset.y / trackHeightPx).toInt().coerceIn(0, 15)
-                                            val tick = timelineRawTickAtViewportX(offset.x, currentScrollX, currentTickWidthPx)
+                                            val tick = currentTimelineTransform.viewportPxToTick(offset.x)
                                             timelineClipIdsAtPoint(currentClips, track, tick)
                                         },
                                         onPreview = { pendingDeleteClipIds = it },
@@ -752,8 +757,7 @@ fun TimelineScreen(
             AutomationLane(
                 paramId = param,
                 points = automationPoints,
-                barWidthPx = barWidthPx,
-                tickWidthPx = tickWidthPx,
+                transform = timelineTransform,
                 totalBars = totalBars,
                 onAddPoint = { tick, value ->
                     viewModel.addAutomationPoint(param, tick, value)
@@ -1592,8 +1596,7 @@ private fun TrackButton(
 
 @Composable
 private fun TimelineRuler(
-    barWidthPx: Float,
-    scrollX: Float,
+    transform: TimelineTransform,
     firstVisibleBar: Int,
     lastVisibleBar: Int,
     modifier: Modifier = Modifier,
@@ -1607,7 +1610,7 @@ private fun TimelineRuler(
                 style = CaptionSmall,
                 modifier =
                     Modifier
-                        .offset(x = with(density) { ((b * barWidthPx) - scrollX).toDp() })
+                        .offset(x = with(density) { transform.tickToViewportPx(b * (PPQ * 4L)).toDp() })
                         .padding(start = Spacing.xs, top = Spacing.sm),
             )
         }
@@ -1833,8 +1836,7 @@ private fun ClipContent(
 private fun AutomationLane(
     paramId: String,
     points: List<TimelineViewModel.UiAutomationPoint>,
-    barWidthPx: Float,
-    tickWidthPx: Float,
+    transform: TimelineTransform,
     totalBars: Int,
     onAddPoint: (Long, Float) -> Unit,
     onMovePoint: (Long, Long, Float) -> Unit,
@@ -1874,10 +1876,14 @@ private fun AutomationLane(
         ) {
             val density = LocalDensity.current
             val hPx = with(density) { maxHeight.toPx() }
+            val ticksPerBar = (PPQ * 4).toLong()
+            val visibleTicks = transform.visibleTickRange()
+            val firstVisibleBar = (visibleTicks.first / ticksPerBar).toInt().coerceIn(0, totalBars)
+            val lastVisibleBar = ((visibleTicks.last / ticksPerBar) + 1L).toInt().coerceIn(firstVisibleBar, totalBars)
 
             Canvas(modifier = Modifier.fillMaxSize()) {
-                for (b in 0..totalBars) {
-                    val x = b * barWidthPx
+                for (b in firstVisibleBar..lastVisibleBar) {
+                    val x = transform.tickToViewportPx(b * ticksPerBar)
                     drawLine(
                         OutlineVariant.copy(alpha = 0.15f),
                         Offset(x, 0f),
@@ -1890,15 +1896,15 @@ private fun AutomationLane(
                     for (i in 0 until sorted.size - 1) {
                         val p1 = sorted[i]
                         val p2 = sorted[i + 1]
-                        val x1 = p1.point.tick * tickWidthPx
+                        val x1 = transform.tickToViewportPx(p1.point.tick)
                         val y1 = (1f - p1.point.value) * size.height
-                        val x2 = p2.point.tick * tickWidthPx
+                        val x2 = transform.tickToViewportPx(p2.point.tick)
                         val y2 = (1f - p2.point.value) * size.height
                         drawLine(Primary, Offset(x1, y1), Offset(x2, y2), strokeWidth = 2f)
                     }
                 }
                 for (p in sorted) {
-                    val x = p.point.tick * tickWidthPx
+                    val x = transform.tickToViewportPx(p.point.tick)
                     val y = (1f - p.point.value) * size.height
                     drawCircle(Primary, radius = 5f, center = Offset(x, y))
                     drawCircle(OnSurface, radius = 2.5f, center = Offset(x, y))
@@ -1912,7 +1918,7 @@ private fun AutomationLane(
                         .fillMaxSize()
                         .pointerInput(paramId) {
                             detectTapGestures { offset ->
-                                val tick = (offset.x / tickWidthPx).toLong().coerceAtLeast(0)
+                                val tick = transform.viewportPxToTick(offset.x)
                                 val value = 1f - (offset.y / hPx).coerceIn(0f, 1f)
                                 onAddPoint(tick, value.coerceIn(0f, 1f))
                             }
@@ -1921,7 +1927,7 @@ private fun AutomationLane(
 
             // Draggable point overlays
             for (p in points) {
-                val xDp = with(density) { (p.point.tick * tickWidthPx).toDp() } - 12.dp
+                val xDp = with(density) { transform.tickToViewportPx(p.point.tick).toDp() } - 12.dp
                 val yDp = with(density) { ((1f - p.point.value) * hPx).toDp() } - 12.dp
                 var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -1940,9 +1946,9 @@ private fun AutomationLane(
                                     },
                                     onDragEnd = {
                                         val newTick =
-                                            ((p.point.tick * tickWidthPx + dragOffset.x) / tickWidthPx)
-                                                .toLong()
-                                                .coerceAtLeast(0)
+                                            transform.viewportPxToTick(
+                                                transform.tickToViewportPx(p.point.tick) + dragOffset.x,
+                                            )
                                         val newValue =
                                             1f -
                                                 ((p.point.value * hPx + dragOffset.y) / hPx)
