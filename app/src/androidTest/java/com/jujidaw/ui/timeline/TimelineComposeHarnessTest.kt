@@ -1,9 +1,13 @@
 package com.jujidaw.ui.timeline
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.jujidaw.ui.theme.JujiDawTheme
 import org.junit.Before
@@ -20,11 +24,14 @@ class TimelineComposeHarnessTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
+    private lateinit var timelineViewModel: TimelineViewModel
+
     @Before
     fun setTimelineContent() {
+        timelineViewModel = TimelineViewModel()
         composeRule.setContent {
             JujiDawTheme {
-                TimelineScreen(showTransportControls = true)
+                TimelineScreen(viewModel = timelineViewModel, showTransportControls = true)
             }
         }
     }
@@ -42,5 +49,49 @@ class TimelineComposeHarnessTest {
         composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-zoom-indicator").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-snap-indicator").assertIsDisplayed()
+    }
+
+    @Test
+    fun fiveHundredPercentZoomKeepsViewportAndPlayheadVisible() {
+        composeRule.runOnIdle { timelineViewModel.setZoom(5f) }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("timeline-viewport").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-grid").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-ruler").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-playhead").assertIsDisplayed()
+    }
+
+    @Test
+    fun pinchZoomAndHorizontalScrollDoNotEmptyTheViewport() {
+        val viewport = composeRule.onNodeWithTag("timeline-viewport")
+        composeRule.onNodeWithTag("timeline-playhead").assertIsDisplayed()
+        viewport.performTouchInput {
+            pinch(
+                start0 = center - Offset(40f, 0f),
+                end0 = center - Offset(140f, 0f),
+                start1 = center + Offset(40f, 0f),
+                end1 = center + Offset(140f, 0f),
+                durationMillis = 350L,
+            )
+        }
+        viewport.performTouchInput {
+            swipeLeft(startX = width * 0.85f, endX = width * 0.15f, durationMillis = 350L)
+        }
+
+        composeRule.onNodeWithTag("timeline-grid").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-ruler").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-playhead").assertExists("playhead remains composed when scrolled offscreen")
+    }
+
+    @Test
+    fun playheadRemainsVisibleAfterSeekingAndZooming() {
+        composeRule.runOnIdle {
+            timelineViewModel.seekToTick(120L)
+            timelineViewModel.setZoom(5f)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("timeline-playhead").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-viewport").assertIsDisplayed()
     }
 }
