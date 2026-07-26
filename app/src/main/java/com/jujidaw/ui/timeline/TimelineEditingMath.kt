@@ -157,11 +157,39 @@ internal fun timelineClipIdsAtPoint(
     clips: List<Clip>,
     trackIndex: Int,
     tick: Long,
+    hitSlopTicks: Long = 0L,
 ): Set<String> =
     clips
         .asSequence()
-        .filter { it.trackIndex == trackIndex && tick >= it.startTick && tick < it.startTick + it.durationTicks }
-        .mapTo(linkedSetOf()) { it.id }
+        .filter { it.trackIndex == trackIndex }
+        .let { candidates ->
+            val safeTick = tick.coerceAtLeast(0L)
+            val exact =
+                candidates
+                    .filter { safeTick >= it.startTick && safeTick < saturatingAdd(it.startTick, it.durationTicks) }
+                    .mapTo(linkedSetOf()) { it.id }
+            if (exact.isNotEmpty() || hitSlopTicks <= 0L) {
+                exact
+            } else {
+                // A very short clip can be smaller than a finger without
+                // making adjacent clips overlap. If there is no exact hit,
+                // choose only the nearest clip inside the musical hit slop.
+                candidates
+                    .mapNotNull { clip ->
+                        val endExclusive = saturatingAdd(clip.startTick, clip.durationTicks)
+                        val distance =
+                            when {
+                                safeTick < clip.startTick -> clip.startTick - safeTick
+                                safeTick >= endExclusive -> safeTick - endExclusive + 1L
+                                else -> 0L
+                            }
+                        if (distance <= hitSlopTicks) clip to distance else null
+                    }
+                    .minWithOrNull(compareBy<Pair<Clip, Long>> { it.second }.thenBy { it.first.startTick })
+                    ?.let { setOf(it.first.id) }
+                    ?: emptySet()
+            }
+        }
 
 internal enum class ClipResizeEdge {
     LEFT,

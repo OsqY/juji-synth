@@ -846,7 +846,11 @@ fun TimelineScreen(
                                         resolveClipIds = { offset ->
                                             val track = (offset.y / trackHeightPx).toInt().coerceIn(0, 15)
                                             val tick = currentTimelineTransform.viewportPxToTick(offset.x)
-                                            timelineClipIdsAtPoint(currentClips, track, tick)
+                                            val hitSlopTicks =
+                                                currentTimelineTransform
+                                                    .pxDeltaToTicks(with(density) { 12.dp.toPx() })
+                                                    .coerceAtLeast(1L)
+                                            timelineClipIdsAtPoint(currentClips, track, tick, hitSlopTicks)
                                         },
                                         onPreview = {
                                             transitionGesture(TimelineGestureEvent.BeginDelete(it))
@@ -1009,9 +1013,8 @@ private suspend fun PointerInputScope.detectTimelineEraseGestures(
     try {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
-            val erased = linkedSetOf<String>()
-            erased += resolveClipIds(down.position)
-            onPreview(erased.toSet())
+            val erased = TimelineDeleteSession()
+            onPreview(erased.add(resolveClipIds(down.position)))
             down.consume()
             var cancelled = false
             do {
@@ -1021,12 +1024,11 @@ private suspend fun PointerInputScope.detectTimelineEraseGestures(
                     if (!cancelled) onCancel()
                     cancelled = true
                 } else if (!cancelled && pressed.size == 1) {
-                    erased += resolveClipIds(pressed.first().position)
-                    onPreview(erased.toSet())
+                    onPreview(erased.add(resolveClipIds(pressed.first().position)))
                     pressed.first().consume()
                 }
             } while (event.changes.any { it.pressed })
-            if (!cancelled) onCommit(erased)
+            if (!cancelled) onCommit(erased.ids)
         }
     } finally {
         onCancel()

@@ -68,6 +68,47 @@ class TimelineEditingMathTest {
     }
 
     @Test
+    fun deleteHitSlopFindsShortClipWithoutDeletingAdjacentClip() {
+        val clips =
+            listOf(
+                PadClip(id = "short", trackIndex = 2, startTick = 120L, durationTicks = 1L, padIndex = 0),
+                PadClip(id = "adjacent", trackIndex = 2, startTick = 121L, durationTicks = 120L, padIndex = 1),
+            )
+
+        assertEquals(
+            setOf("short"),
+            timelineClipIdsAtPoint(clips, trackIndex = 2, tick = 118L, hitSlopTicks = 3L),
+        )
+        // An exact hit always wins over the fallback hit slop.
+        assertEquals(
+            setOf("adjacent"),
+            timelineClipIdsAtPoint(clips, trackIndex = 2, tick = 121L, hitSlopTicks = 120L),
+        )
+    }
+
+    @Test
+    fun deleteHitTestingClampsInvalidNegativeTicksWithoutOverflow() {
+        val clip = PadClip(
+            id = "last",
+            trackIndex = 0,
+            startTick = Long.MAX_VALUE - 2L,
+            durationTicks = 2L,
+            padIndex = 0,
+        )
+
+        assertEquals(
+            setOf("last"),
+            timelineClipIdsAtPoint(
+                listOf(clip),
+                trackIndex = 0,
+                tick = Long.MAX_VALUE,
+                hitSlopTicks = Long.MAX_VALUE,
+            ),
+        )
+        assertEquals(emptySet<String>(), timelineClipIdsAtPoint(listOf(clip), 0, -1L, 1L))
+    }
+
+    @Test
     fun resizeGeometryPreviewsEdgesAndHonorsMinimumWidth() {
         val left = timelineResizeGeometry(100f, 80f, 20f, ClipResizeEdge.LEFT, 25f)
         assertEquals(125f, left.leftPx, 0.001f)

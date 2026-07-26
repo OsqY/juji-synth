@@ -1,5 +1,9 @@
 package com.jujidaw.ui.timeline
 
+import com.jujidaw.model.Clip
+import com.jujidaw.model.AudioClip
+import com.jujidaw.model.PadClip
+import com.jujidaw.model.PatternClip
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -7,6 +11,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimelineEditHistoryTest {
+    private data class ClipEditState(
+        val clips: List<Clip>,
+        val trash: List<Clip>,
+        val selectedIds: Set<String>,
+    )
+
     @Test
     fun undoAndRedoRoundTripAtomicStates() {
         val history = TimelineEditHistory<Int>()
@@ -69,5 +79,97 @@ class TimelineEditHistoryTest {
         assertEquals(1, history.redo()?.after)
         assertEquals(2, history.redo()?.after)
         assertEquals(3, history.redo()?.after)
+    }
+
+    @Test
+    fun multiDeleteRoundTripPreservesCompleteClipStateAsOneCommand() {
+        val kept = PatternClip(
+            id = "kept",
+            trackIndex = 3,
+            startTick = 960L,
+            durationTicks = 480L,
+            patternId = 2,
+        )
+        val deletedPad = PadClip(
+            id = "pad",
+            trackIndex = 1,
+            startTick = 120L,
+            durationTicks = 1L,
+            padIndex = 7,
+            mute = true,
+        )
+        val deletedPattern = PatternClip(
+            id = "pattern",
+            trackIndex = 2,
+            startTick = 240L,
+            durationTicks = 960L,
+            patternId = 4,
+            mute = true,
+            contentOffsetTicks = 120L,
+        )
+        val deletedAudio = AudioClip(
+            id = "audio",
+            trackIndex = 4,
+            startTick = 480L,
+            durationTicks = 720L,
+            audioFilePath = "samples/kick.wav",
+            audioStartOffsetSamples = 240L,
+            gain = 0.75f,
+            fadeInSamples = 12,
+            fadeOutSamples = 24,
+        )
+        val before = ClipEditState(
+            clips = listOf(kept, deletedPad, deletedPattern, deletedAudio),
+            trash = emptyList(),
+            selectedIds = setOf(deletedPad.id, deletedPattern.id, deletedAudio.id),
+        )
+        val after = ClipEditState(
+            clips = listOf(kept),
+            trash = listOf(deletedPad, deletedPattern, deletedAudio),
+            selectedIds = emptySet(),
+        )
+        val history = TimelineEditHistory<ClipEditState>()
+
+        history.record(
+            DeleteClipsCommand(
+                setOf(deletedPad.id, deletedPattern.id, deletedAudio.id),
+                before,
+                after,
+            ),
+        )
+
+        assertEquals(1, history.undoCount)
+        assertEquals(before, history.undo()?.before)
+        assertEquals(1, history.redoCount)
+        assertEquals(after, history.redo()?.after)
+    }
+
+    @Test
+    fun restoringTrashRoundTripKeepsClipIdentityAndMetadata() {
+        val restored = PadClip(
+            id = "restored",
+            trackIndex = 5,
+            startTick = 360L,
+            durationTicks = 120L,
+            padIndex = 31,
+            velocity = 0.35f,
+            mute = true,
+        )
+        val before = ClipEditState(
+            clips = emptyList(),
+            trash = listOf(restored),
+            selectedIds = emptySet(),
+        )
+        val after = ClipEditState(
+            clips = listOf(restored),
+            trash = emptyList(),
+            selectedIds = setOf(restored.id),
+        )
+        val history = TimelineEditHistory<ClipEditState>()
+
+        history.record(RestoreTrashClipCommand(restored.id, before, after))
+
+        assertEquals(before, history.undo()?.before)
+        assertEquals(after, history.redo()?.after)
     }
 }
