@@ -10,8 +10,10 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.jujidaw.project.PadSelectionStore
 import com.jujidaw.ui.theme.JujiDawTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -129,5 +131,91 @@ class TimelineComposeHarnessTest {
             assertEquals(restoredId, timelineViewModel.arrangement.value.clips.single { it.id == restoredId }.id)
             assertTrue(timelineViewModel.deletedClips.value.none { it.id == restoredId })
         }
+    }
+
+    // ── Selector isolation tests (Módulo 9) ──
+
+    @Test
+    fun selectorShowsFiveChips() {
+        composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
+        for (i in 1..5) {
+            composeRule.onNodeWithTag("timeline-source-chip-A$i").assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun selectorCanSelectFirstAndLastPadOptions() {
+        composeRule.onNodeWithTag("timeline-source-chip-A1").performTouchInput { click() }
+        composeRule.waitForIdle()
+        assertEquals(0, PadSelectionStore.selectedPad.value)
+
+        composeRule.runOnIdle {
+            timelineViewModel.setTool(TimelineTool.SELECT)
+            PadSelectionStore.select(31)
+        }
+        composeRule.waitForIdle()
+        assertEquals(31, PadSelectionStore.selectedPad.value)
+    }
+
+    @Test
+    fun selectorCanSelectFirstAndLastPatternOptions() {
+        composeRule.runOnIdle {
+            timelineViewModel.setTool(TimelineTool.DRAW_PATTERN)
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("timeline-pattern-selector").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-source-chip-P1").assertIsDisplayed()
+
+        composeRule.runOnIdle {
+            timelineViewModel.selectPattern(15)
+        }
+        composeRule.waitForIdle()
+        assertEquals(15, timelineViewModel.selectedPatternId.value)
+    }
+
+    @Test
+    fun selectorScrollDoesNotAffectTimelineViewport() {
+        // Get initial pad selection
+        val initialSelection = PadSelectionStore.selectedPad.value
+
+        // Scroll the selector
+        composeRule.onNodeWithTag("timeline-pad-selector").performTouchInput {
+            swipeLeft(durationMillis = 200L)
+        }
+        composeRule.waitForIdle()
+
+        // Viewport should still be untouched — the selector has its own scroll state
+        composeRule.onNodeWithTag("timeline-viewport").assertIsDisplayed()
+        // Pad selection should not have changed from scrolling
+        assertEquals(initialSelection, PadSelectionStore.selectedPad.value)
+    }
+
+    @Test
+    fun padsAndPatternsKeepIndependentScrollState() {
+        // Start in Pads mode
+        composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
+
+        // Switch to Patterns
+        composeRule.runOnIdle { timelineViewModel.setTool(TimelineTool.DRAW_PATTERN) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("timeline-pattern-selector").assertIsDisplayed()
+
+        // Switch back to Pads — should not crash
+        composeRule.runOnIdle { timelineViewModel.setTool(TimelineTool.DRAW_PAD) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
+    }
+
+    @Test
+    fun timelineViewportDragDoesNotScrollSelector() {
+        // Scroll the viewport
+        composeRule.onNodeWithTag("timeline-viewport").performTouchInput {
+            swipeLeft(durationMillis = 200L)
+        }
+        composeRule.waitForIdle()
+
+        // Selector chips should still be visible
+        composeRule.onNodeWithTag("timeline-source-chip-A1").assertIsDisplayed()
     }
 }

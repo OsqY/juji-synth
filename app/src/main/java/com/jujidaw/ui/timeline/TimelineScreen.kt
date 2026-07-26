@@ -1102,7 +1102,9 @@ private fun TimelineEditorToolbar(
     var sourceMode by rememberSaveable {
         mutableStateOf(if (tool == TimelineTool.DRAW_PATTERN) TimelineTool.DRAW_PATTERN else TimelineTool.DRAW_PAD)
     }
-    val sourceListState = rememberLazyListState()
+    val padListState = rememberLazyListState()
+    val patternListState = rememberLazyListState()
+    val sourceListState = if (sourceMode == TimelineTool.DRAW_PAD) padListState else patternListState
     val selectedSourceIndex = if (sourceMode == TimelineTool.DRAW_PAD) padIndex else patternId
 
     LaunchedEffect(tool) {
@@ -1160,8 +1162,9 @@ private fun TimelineEditorToolbar(
             ) {
                 items(sourceIndexes, key = { it }) { index ->
                     val isPad = sourceMode == TimelineTool.DRAW_PAD
+                    val chipLabel = if (isPad) if (index < 16) "A${index + 1}" else "B${index - 15}" else "P${index + 1}"
                     SourceChip(
-                        label = if (isPad) if (index < 16) "A${index + 1}" else "B${index - 15}" else "P${index + 1}",
+                        label = chipLabel,
                         selected =
                             if (isPad) {
                                 padIndex == index && tool == TimelineTool.DRAW_PAD
@@ -1169,7 +1172,9 @@ private fun TimelineEditorToolbar(
                                 patternId == index && tool == TimelineTool.DRAW_PATTERN
                             },
                         accent = if (isPad) Secondary else Primary,
-                        modifier = Modifier.width(itemWidth),
+                        modifier = Modifier
+                            .width(itemWidth)
+                            .testTag("timeline-source-chip-$chipLabel"),
                     ) {
                         if (isPad) onPadSelect(index) else onPatternSelect(index)
                     }
