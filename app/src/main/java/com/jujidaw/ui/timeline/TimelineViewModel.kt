@@ -206,7 +206,7 @@ class TimelineViewModel(
 
     fun nudgePlayhead(ticks: Long) {
         val current = _transportState.value.position.toTicks()
-        seekToTick(current + ticks)
+        seekToTick(timelineSaturatingAdd(current, ticks))
     }
 
     fun resetLoop() {
@@ -290,11 +290,7 @@ class TimelineViewModel(
     fun setPunchInToPlayhead() {
         val tick = _transportState.value.position.toTicks()
         val oneBarTicks = PPQ * _transportState.value.timeSignature.numerator.toLong()
-        val newArr =
-            _arrangement.value.copy(
-                punchInTick = tick,
-                punchOutTick = maxOf(_arrangement.value.punchOutTick, tick + oneBarTicks),
-            )
+        val newArr = setPunchInArrangement(_arrangement.value, tick, oneBarTicks)
         updateArrangement(newArr)
         if (_transportState.value.recording) transportController.setRecording(true)
     }
@@ -314,7 +310,7 @@ class TimelineViewModel(
     // ---- Zoom / Snap ----
 
     fun setZoom(z: Float) {
-        _zoom.value = z.coerceIn(0.2f, 5f)
+        _zoom.value = sanitizeTimelineZoom(z, fallback = _zoom.value)
     }
 
     fun setSnap(s: Snap) {
@@ -402,12 +398,15 @@ class TimelineViewModel(
             ?: _patterns.value.firstOrNull { it.id == patternId }?.lengthTicks
             ?: PPQ * 4L,
     ) {
+        val isCanonicalTimelinePattern = patternId in 0..15
+        if (!isCanonicalTimelinePattern && _patterns.value.none { it.id == patternId }) return
+        val safeTrackIndex = trackIndex.coerceIn(0, 15)
         val snapped = snapTick(startTick.coerceAtLeast(0))
         val duration = normalizeDuration(durationTicks)
         val newClip =
             PatternClip(
                 id = "clip_${System.nanoTime()}",
-                trackIndex = trackIndex,
+                trackIndex = safeTrackIndex,
                 startTick = snapped,
                 durationTicks = duration,
                 patternId = patternId,
@@ -427,11 +426,13 @@ class TimelineViewModel(
         path: String,
         durationTicks: Long,
     ) {
+        if (path.isBlank()) return
+        val safeTrackIndex = trackIndex.coerceIn(0, 15)
         val snapped = snapTick(startTick.coerceAtLeast(0))
         val newClip =
             AudioClip(
                 id = "clip_${System.nanoTime()}",
-                trackIndex = trackIndex,
+                trackIndex = safeTrackIndex,
                 startTick = snapped,
                 durationTicks = durationTicks.coerceAtLeast(TICKS_PER_STEP.toLong()),
                 audioFilePath = path,
@@ -450,11 +451,13 @@ class TimelineViewModel(
         padIndex: Int,
         durationTicks: Long = lastPadDurationTicks,
     ) {
+        if (padIndex !in 0..31) return
+        val safeTrackIndex = trackIndex.coerceIn(0, 15)
         val snapped = snapTick(startTick.coerceAtLeast(0))
         val newClip =
             PadClip(
                 id = "padClip_${System.nanoTime()}",
-                trackIndex = trackIndex,
+                trackIndex = safeTrackIndex,
                 startTick = snapped,
                 durationTicks = normalizeDuration(durationTicks),
                 padIndex = padIndex,
@@ -598,11 +601,12 @@ class TimelineViewModel(
         val minTrack = _arrangement.value.clips.filter { it.id in selected }.minOfOrNull { it.trackIndex } ?: anchor.trackIndex
         val maxTrack = _arrangement.value.clips.filter { it.id in selected }.maxOfOrNull { it.trackIndex } ?: anchor.trackIndex
         val deltaTick = (snapTick(newStartTick) - anchor.startTick).coerceAtLeast(-minStart)
-        val deltaTrack = (newTrackIndex - anchor.trackIndex).coerceIn(-minTrack, 15 - maxTrack)
+        val safeTrackIndex = newTrackIndex.coerceIn(0, 15)
+        val deltaTrack = (safeTrackIndex - anchor.trackIndex).coerceIn(-minTrack, 15 - maxTrack)
         updateClips(
             _arrangement.value.clips.map { clip ->
                 if (clip.id !in selected) return@map clip
-                moveClipValue(clip, clip.startTick + deltaTick, clip.trackIndex + deltaTrack)
+                moveClipValue(clip, timelineSaturatingAdd(clip.startTick, deltaTick), clip.trackIndex + deltaTrack)
             },
             commandFactory = { previous, after -> MoveClipsCommand(selected, previous, after) },
         )
@@ -642,7 +646,7 @@ class TimelineViewModel(
     /** Keep the right edge fixed while changing a clip's left edge. */
     fun trimClipFromLeft(clipId: String, requestedStartTick: Long) {
         val clip = _arrangement.value.clips.find { it.id == clipId } ?: return
-        val end = clip.startTick + clip.durationTicks
+        val end = timelineClipEndTick(clip)
         val minDuration = minimumDuration()
         val start = snapTick(requestedStartTick.coerceAtLeast(0)).coerceAtMost(end - minDuration)
         val duration = (end - start).coerceAtLeast(minDuration)
@@ -687,7 +691,7 @@ class TimelineViewModel(
         val bottom = maxOf(startTrack, endTrack)
         _selectedClipIds.value =
             _arrangement.value.clips
-                .filter { it.trackIndex in top..bottom && it.startTick < right && it.startTick + it.durationTicks > left }
+                .filter { it.trackIndex in top..bottom && it.startTick < right && timelineClipEndTick(it) > left }
                 .mapTo(linkedSetOf()) { it.id }
     }
 
@@ -706,7 +710,9 @@ class TimelineViewModel(
         val maxTrack = clipboard.maxOf { it.trackIndex }
         val trackOffset = anchorTrack.coerceIn(0, 15 - (maxTrack - minTrack)) - minTrack
         val tickOffset = snapTick(anchorTick.coerceAtLeast(0)) - minTick
-        val pasted = clipboard.map { clip -> copyClipWithNewId(clip, clip.startTick + tickOffset, clip.trackIndex + trackOffset) }
+        val pasted = clipboard.map { clip ->
+            copyClipWithNewId(clip, timelineSaturatingAdd(clip.startTick, tickOffset), clip.trackIndex + trackOffset)
+        }
         val before = timelineSnapshot()
         _selectedClipIds.value = pasted.mapTo(linkedSetOf()) { it.id }
         updateClips(
@@ -720,9 +726,9 @@ class TimelineViewModel(
         val selected = _arrangement.value.clips.filter { it.id in _selectedClipIds.value }
         if (selected.isEmpty()) return
         val minTick = selected.minOf { it.startTick }
-        val maxEnd = selected.maxOf { it.startTick + it.durationTicks }
+        val maxEnd = selected.maxOf(::timelineClipEndTick)
         val offset = normalizeDuration(maxEnd - minTick)
-        val duplicated = selected.map { copyClipWithNewId(it, it.startTick + offset, it.trackIndex) }
+        val duplicated = selected.map { copyClipWithNewId(it, timelineSaturatingAdd(it.startTick, offset), it.trackIndex) }
         val before = timelineSnapshot()
         _selectedClipIds.value = duplicated.mapTo(linkedSetOf()) { it.id }
         updateClips(
@@ -978,7 +984,13 @@ class TimelineViewModel(
         when (clip) {
             is PatternClip -> {
                 val patternLength = _patterns.value.firstOrNull { it.id == clip.patternId }?.lengthTicks ?: 1L
-                val offset = Math.floorMod(clip.contentOffsetTicks + (start - clip.startTick), patternLength)
+                val offset =
+                    timelinePatternContentOffset(
+                        contentOffsetTicks = clip.contentOffsetTicks,
+                        newStartTick = start,
+                        previousStartTick = clip.startTick,
+                        patternLengthTicks = patternLength,
+                    )
                 clip.copy(startTick = start, durationTicks = duration, contentOffsetTicks = offset)
             }
             is PadClip -> clip.copy(startTick = start, durationTicks = duration)
@@ -1037,9 +1049,24 @@ internal fun enablePunchArrangement(
     if (arrangement.punchInTick < arrangement.punchOutTick) {
         arrangement.copy(punchEnabled = true)
     } else {
+        val punchIn = currentTick.coerceIn(0L, Long.MAX_VALUE - 1L)
         arrangement.copy(
             punchEnabled = true,
-            punchInTick = currentTick.coerceAtLeast(0L),
-            punchOutTick = currentTick.coerceAtLeast(0L) + oneBarTicks.coerceAtLeast(1L),
+            punchInTick = punchIn,
+            punchOutTick = timelineSaturatingAdd(punchIn, oneBarTicks.coerceAtLeast(1L)),
         )
     }
+
+internal fun setPunchInArrangement(
+    arrangement: Arrangement,
+    currentTick: Long,
+    oneBarTicks: Long,
+): Arrangement {
+    val punchIn = currentTick.coerceIn(0L, Long.MAX_VALUE - 1L)
+    val minimumPunchOut = timelineSaturatingAdd(punchIn, 1L)
+    val requestedPunchOut = timelineSaturatingAdd(punchIn, oneBarTicks.coerceAtLeast(1L))
+    return arrangement.copy(
+        punchInTick = punchIn,
+        punchOutTick = maxOf(arrangement.punchOutTick, minimumPunchOut, requestedPunchOut),
+    )
+}

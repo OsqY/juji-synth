@@ -1,7 +1,8 @@
 # Timeline Hardening — Plan ejecutable de pendientes
 
-> **Fuente de verdad actual.** Actualizado para `feat/timeline-hardening` en
-> `42129c9` el 2026-07-27. El contenido histórico posterior a esta cabecera se
+> **Fuente de verdad actual.** Actualizado para `feat/timeline-hardening`
+> después de completar R3 el 2026-07-27. El SHA queda registrado por el commit
+> independiente de la fase. El contenido histórico posterior a esta cabecera se
 > conserva como referencia de arquitectura, pero no debe usarse para elegir el
 > siguiente módulo ni para ejecutar Git. `AGENTS.md` y `CONVENTIONS.md` definen
 > el flujo obligatorio vigente.
@@ -17,15 +18,15 @@ publicar cada fase.
 | --- | --- |
 | Rama de trabajo | `feat/timeline-hardening` |
 | Commit base | `2b350d6` — `fix(timeline): prevent zoom layout overflow` |
-| Último hito funcional validado | R2 — cancelación segura de pinch durante edición; el SHA queda registrado por el commit de la fase |
-| Módulos terminados | 0–9; regresiones R1–R2 corregidas y validadas |
-| Próxima fase | R3 — aritmética temporal total y segura |
+| Último hito funcional validado | R3 — aritmética temporal total y segura; el SHA queda registrado por el commit de la fase |
+| Módulos terminados | 0–9; regresiones R1–R3 corregidas y validadas |
+| Próxima fase | R4 — restauración real de scroll del selector |
 | Rama remota | Confirmar antes de publicar; no asumir su posición desde este documento |
 | Pull request | Pendiente; no crear hasta terminar los módulos 9–14 |
 | Linear | Último estado documentado: `OSQ-5` en `In Review`; comprobarlo antes de escribir |
 | Notion | Último estado documentado: `En curso/listo para revisión`; comprobarlo antes de escribir |
 
-Validación local más reciente registrada para `42129c9`:
+Validación más reciente registrada para R3:
 
 | Comando | Resultado |
 | --- | --- |
@@ -33,11 +34,12 @@ Validación local más reciente registrada para `42129c9`:
 | `./gradlew compileDebugKotlin` | PASS |
 | `./gradlew lintDebug` | PASS |
 | `./gradlew assembleDebug` | PASS |
-| `./gradlew connectedDebugAndroidTest` | No repetido en esta fase documental; ejecutar si ADB tiene un dispositivo `device` |
+| Instrumentación Android | PASS, 18/18 tests en SM-G998W con Android 15 mediante instalación `--no-streaming` y `am instrument` |
 
-La compilación de los tests instrumentados pasó. La ausencia de una ejecución
-en dispositivo no debe presentarse como un PASS ni como un fallo funcional:
-debe registrarse como prueba no ejecutada por limitación del entorno.
+La tarea Gradle de instalación por streaming no es fiable con este dispositivo.
+El procedimiento validado está documentado en `CONVENTIONS.md`: compilar ambos
+APK, instalarlos con `adb install --no-streaming -r` y ejecutar el runner con
+`adb shell am instrument -w`.
 
 ### Archivos ajenos que deben preservarse
 
@@ -64,16 +66,15 @@ debe registrarse como prueba no ejecutada por limitación del entorno.
 | 8. Delete/Trash | `7fa5510` | Hit-testing de clips pequeños, IDs deduplicados y tests de restauración |
 | 9. Selector horizontal | `42129c9` | Estados de scroll separados y tags de selector; pendiente de regresión de restauración de scroll |
 
-No reimplementar estos módulos. Las siguientes regresiones bloquean el avance:
+No reimplementar estos módulos. Estado de las regresiones detectadas:
 
-1. Un drag colapsa una selección múltiple y mueve sólo el clip ancla.
-2. Un pinch puede confirmar un move o resize que debía cancelar.
-3. La matemática temporal no es segura ante `Long.MAX_VALUE`, `NaN` e infinito.
-4. Cambiar entre Pads y Patterns recentra el selector y las pruebas no verifican
+1. Corregida en R1: selección múltiple durante drag.
+2. Corregida en R2: cancelación de move/resize al iniciar pinch.
+3. Corregida en R3: aritmética segura ante `Long.MAX_VALUE`, `NaN` e infinito.
+4. Pendiente en R4: cambiar entre Pads y Patterns recentra el selector y las pruebas no verifican
    su scroll real.
 
-Corregirlas en el siguiente orden, una fase por commit, antes de los módulos
-10–15.
+Completar R4 en un commit independiente antes de los módulos 10–15.
 
 ### R1 — Movimiento de selección múltiple
 
@@ -132,6 +133,9 @@ iniciado durante move y resize.
 
 ### R3 — Aritmética temporal total y segura
 
+**Estado.** Completado el 2026-07-27. Cuatro gates locales PASS, 18/18 tests
+instrumentados PASS en SM-G998W con Android 15 y revisión independiente PASS.
+
 **Objetivo.** Ningún valor temporal extremo o no finito produce overflow,
 duraciones inválidas, viewport vacío o crash.
 
@@ -151,6 +155,10 @@ round trips de coordenadas que no generen resultados inválidos.
 **Validación.** Los cuatro gates; instrumentación si está disponible.
 
 **Commit.** `fix(timeline): harden temporal coordinate bounds`
+
+**Seguimiento no bloqueante.** Endurecer los setters de Loop ante rangos
+extremos y considerar un helper de fin de clip saturado compartido en el modelo,
+sin mezclar esas tareas con R4.
 
 ### R4 — Restauración real de scroll del selector
 

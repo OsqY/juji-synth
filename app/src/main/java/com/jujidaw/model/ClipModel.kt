@@ -145,6 +145,9 @@ data class Arrangement(
     ): List<Clip> =
         clips.filter { clip ->
             !clip.mute && clip.startTick < endTick &&
-                (clip.startTick + clip.durationTicks) > startTick
+                clip.playbackEndTick() > startTick
         }
+
+    private fun Clip.playbackEndTick(): Long =
+        if (startTick > Long.MAX_VALUE - durationTicks) Long.MAX_VALUE else startTick + durationTicks
 }

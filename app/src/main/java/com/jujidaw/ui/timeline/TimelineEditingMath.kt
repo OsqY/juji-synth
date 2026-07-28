@@ -19,22 +19,39 @@ internal data class TimelineTransform(
     val zoom: Float,
     val density: Float,
 ) {
+    private val safeViewportWidthPx: Float
+        get() = timelineFiniteNonNegative(viewportWidthPx)
+
+    private val safeHorizontalScrollPx: Float
+        get() = timelineFiniteNonNegative(horizontalScrollPx)
+
+    private val safePixelsPerBeat: Float
+        get() = timelineFinitePositive(pixelsPerBeat, fallback = 1f)
+
     val pixelsPerTick: Float
-        get() = (pixelsPerBeat * zoom / PPQ).coerceAtLeast(Float.MIN_VALUE)
+        get() = timelineFinitePositive(
+            timelineFiniteFloat(safePixelsPerBeat.toDouble() * sanitizeTimelineZoom(zoom) / PPQ),
+            fallback = Float.MIN_VALUE,
+        )
 
     val barWidthPx: Float
-        get() = pixelsPerBeat * zoom * 4f
+        get() = timelineFiniteNonNegative(
+            timelineFiniteFloat(safePixelsPerBeat.toDouble() * sanitizeTimelineZoom(zoom) * 4.0),
+        )
 
-    fun tickToContentPx(tick: Long): Float = tick.coerceAtLeast(0L) * pixelsPerTick
+    fun tickToContentPx(tick: Long): Float =
+        timelineFiniteFloat(tick.coerceAtLeast(0L).toDouble() * pixelsPerTick)
 
-    fun tickToViewportPx(tick: Long): Float = tickToContentPx(tick) - horizontalScrollPx
+    fun tickToViewportPx(tick: Long): Float =
+        timelineFiniteFloat(tickToContentPx(tick).toDouble() - safeHorizontalScrollPx)
 
-    fun viewportPxToContentPx(x: Float): Float = (x + horizontalScrollPx).coerceAtLeast(0f)
+    fun viewportPxToContentPx(x: Float): Float =
+        timelineFiniteNonNegative(
+            timelineFiniteFloat(timelineFiniteOrZero(x).toDouble() + safeHorizontalScrollPx),
+        )
 
     fun contentPxToTick(x: Float): Long =
-        floor(x.coerceAtLeast(0f) / pixelsPerTick)
-            .toLong()
-            .coerceAtLeast(0L)
+        timelineDoubleToLong(floor(timelineFiniteNonNegative(x).toDouble() / pixelsPerTick))
 
     fun viewportPxToTick(x: Float): Long =
         floor(viewportPxToContentPx(x) / pixelsPerTick)
@@ -44,26 +61,30 @@ internal data class TimelineTransform(
     fun viewportPxToSnappedTick(x: Float, resolution: Long): Long =
         snapTimelineTick(viewportPxToTick(x), resolution)
 
-    fun durationToPx(durationTicks: Long): Float = durationTicks.coerceAtLeast(0L) * pixelsPerTick
+    fun durationToPx(durationTicks: Long): Float =
+        timelineFiniteFloat(durationTicks.coerceAtLeast(0L).toDouble() * pixelsPerTick)
 
     fun pxToDuration(px: Float): Long =
-        floor(px.coerceAtLeast(0f) / pixelsPerTick)
-            .toLong()
-            .coerceAtLeast(0L)
+        timelineDoubleToLong(floor(timelineFiniteNonNegative(px).toDouble() / pixelsPerTick))
 
-    fun pxDeltaToTicks(px: Float): Long = (px / pixelsPerTick).toLong()
+    fun pxDeltaToTicks(px: Float): Long =
+        timelineDoubleToLong(timelineFiniteOrZero(px).toDouble() / pixelsPerTick, allowNegative = true)
 
     fun visibleTickRange(): LongRange {
         val first = viewportPxToTick(0f)
+        if (first == Long.MAX_VALUE) return Long.MAX_VALUE..Long.MAX_VALUE
         val lastExclusive =
-            ceil(((horizontalScrollPx + viewportWidthPx).coerceAtLeast(horizontalScrollPx)) / pixelsPerTick)
-                .toLong()
+            timelineDoubleToLong(
+                ceil(viewportPxToContentPx(safeViewportWidthPx).toDouble() / pixelsPerTick),
+            )
                 .coerceAtLeast(first + 1L)
         return first..(lastExclusive - 1L)
     }
 
     fun maxScroll(totalDurationTicks: Long): Float =
-        (durationToPx(totalDurationTicks) - viewportWidthPx).coerceAtLeast(0f)
+        timelineFiniteNonNegative(
+            timelineFiniteFloat(durationToPx(totalDurationTicks).toDouble() - safeViewportWidthPx),
+        )
 
     fun zoomAroundAnchor(
         anchorViewportPx: Float,
@@ -71,14 +92,18 @@ internal data class TimelineTransform(
         newZoom: Float,
         totalDurationTicks: Long,
     ): TimelineTransform {
-        val safePreviousZoom = previousZoom.coerceAtLeast(0.01f)
-        val anchorTick =
-            ((anchorViewportPx + horizontalScrollPx).coerceAtLeast(0f) /
-                (pixelsPerBeat * safePreviousZoom / PPQ).coerceAtLeast(Float.MIN_VALUE))
-        val next = copy(zoom = newZoom.coerceIn(0.2f, 5f))
+        val safeAnchorViewportPx = timelineFiniteOrZero(anchorViewportPx)
+        val safePreviousZoom = timelineFinitePositive(previousZoom, fallback = sanitizeTimelineZoom(zoom)).coerceAtLeast(0.01f)
+        val previousPixelsPerTick =
+            timelineFinitePositive(
+                timelineFiniteFloat(safePixelsPerBeat.toDouble() * safePreviousZoom / PPQ),
+                Float.MIN_VALUE,
+            )
+        val anchorTick = viewportPxToContentPx(safeAnchorViewportPx) / previousPixelsPerTick
+        val next = copy(zoom = sanitizeTimelineZoom(newZoom, fallback = sanitizeTimelineZoom(zoom)))
         return next.copy(
             horizontalScrollPx =
-                (anchorTick * next.pixelsPerTick - anchorViewportPx)
+                timelineFiniteFloat((anchorTick * next.pixelsPerTick - safeAnchorViewportPx).toDouble())
                     .coerceIn(0f, next.maxScroll(totalDurationTicks)),
         )
     }
@@ -89,14 +114,20 @@ internal data class TimelineTransform(
         newZoom: Float,
         maxScrollPx: Float,
     ): TimelineTransform {
-        val safePreviousZoom = previousZoom.coerceAtLeast(0.01f)
-        val anchorTick = viewportPxToContentPx(anchorViewportPx) /
-            (pixelsPerBeat * safePreviousZoom / PPQ).coerceAtLeast(Float.MIN_VALUE)
-        val next = copy(zoom = newZoom.coerceIn(0.2f, 5f))
+        val safeAnchorViewportPx = timelineFiniteOrZero(anchorViewportPx)
+        val safePreviousZoom = timelineFinitePositive(previousZoom, fallback = sanitizeTimelineZoom(zoom)).coerceAtLeast(0.01f)
+        val previousPixelsPerTick =
+            timelineFinitePositive(
+                timelineFiniteFloat(safePixelsPerBeat.toDouble() * safePreviousZoom / PPQ),
+                Float.MIN_VALUE,
+            )
+        val anchorTick = viewportPxToContentPx(safeAnchorViewportPx) / previousPixelsPerTick
+        val next = copy(zoom = sanitizeTimelineZoom(newZoom, fallback = sanitizeTimelineZoom(zoom)))
+        val safeMaxScrollPx = timelineFiniteNonNegative(maxScrollPx, positiveInfinityFallback = Float.MAX_VALUE)
         return next.copy(
             horizontalScrollPx =
-                (anchorTick * next.pixelsPerTick - anchorViewportPx)
-                    .coerceIn(0f, maxScrollPx),
+                timelineFiniteFloat((anchorTick * next.pixelsPerTick - safeAnchorViewportPx).toDouble())
+                    .coerceIn(0f, safeMaxScrollPx),
         )
     }
 }
@@ -122,7 +153,13 @@ internal fun normalizeTimelineDuration(
     val minimum = if (free) 1L else resolution.coerceAtLeast(1L)
     val safeDuration = duration.coerceAtLeast(minimum)
     if (free) return safeDuration
-    return ((safeDuration + minimum / 2L) / minimum) * minimum
+    val quotient = safeDuration / minimum
+    val remainder = safeDuration % minimum
+    val half = minimum / 2L
+    val roundUp = remainder > half || (minimum % 2L == 0L && remainder == half)
+    val maxQuotient = Long.MAX_VALUE / minimum
+    val roundedQuotient = if (roundUp && quotient < maxQuotient) quotient + 1L else quotient
+    return (roundedQuotient * minimum).coerceAtLeast(minimum)
 }
 
 /** Convert a viewport x-coordinate into the translated timeline content space. */
@@ -138,7 +175,7 @@ internal fun timelineTickAtViewportX(
     tickWidthPx: Float,
     resolution: Long,
 ): Long {
-    if (tickWidthPx <= 0f) return 0L
+    if (!tickWidthPx.isFinite() || tickWidthPx <= 0f) return 0L
     return TimelineTransform(Float.POSITIVE_INFINITY, scrollX, tickWidthPx * PPQ, 1f, 1f)
         .viewportPxToSnappedTick(viewportX, resolution)
 }
@@ -148,7 +185,7 @@ internal fun timelineRawTickAtViewportX(
     scrollX: Float,
     tickWidthPx: Float,
 ): Long {
-    if (tickWidthPx <= 0f) return 0L
+    if (!tickWidthPx.isFinite() || tickWidthPx <= 0f) return 0L
     return TimelineTransform(Float.POSITIVE_INFINITY, scrollX, tickWidthPx * PPQ, 1f, 1f)
         .viewportPxToTick(viewportX)
 }
@@ -166,7 +203,7 @@ internal fun timelineClipIdsAtPoint(
             val safeTick = tick.coerceAtLeast(0L)
             val exact =
                 candidates
-                    .filter { safeTick >= it.startTick && safeTick < saturatingAdd(it.startTick, it.durationTicks) }
+                    .filter { safeTick >= it.startTick && safeTick < timelineSaturatingAdd(it.startTick, it.durationTicks) }
                     .mapTo(linkedSetOf()) { it.id }
             if (exact.isNotEmpty() || hitSlopTicks <= 0L) {
                 exact
@@ -176,11 +213,11 @@ internal fun timelineClipIdsAtPoint(
                 // choose only the nearest clip inside the musical hit slop.
                 candidates
                     .mapNotNull { clip ->
-                        val endExclusive = saturatingAdd(clip.startTick, clip.durationTicks)
+                        val endExclusive = timelineSaturatingAdd(clip.startTick, clip.durationTicks)
                         val distance =
                             when {
                                 safeTick < clip.startTick -> clip.startTick - safeTick
-                                safeTick >= endExclusive -> safeTick - endExclusive + 1L
+                                safeTick >= endExclusive -> timelineSaturatingAdd(safeTick - endExclusive, 1L)
                                 else -> 0L
                             }
                         if (distance <= hitSlopTicks) clip to distance else null
@@ -208,7 +245,7 @@ internal data class TimelineResizeTicks(
     val durationTicks: Long,
 ) {
     val endTick: Long
-        get() = saturatingAdd(startTick, durationTicks)
+        get() = timelineSaturatingAdd(startTick, durationTicks)
 }
 
 internal fun timelineResizeTicks(
@@ -222,22 +259,22 @@ internal fun timelineResizeTicks(
     val minimumDuration = if (free) 1L else snapResolution.coerceAtLeast(1L)
     val safeStart = baseStartTick.coerceAtLeast(0L)
     val safeDuration = baseDurationTicks.coerceAtLeast(minimumDuration)
-    val safeEnd = saturatingAdd(safeStart, safeDuration)
+    val safeEnd = timelineSaturatingAdd(safeStart, safeDuration)
     val maximumStart = (safeEnd - minimumDuration).coerceAtLeast(0L)
 
     return when (edge) {
         ClipResizeEdge.LEFT -> {
-            val requestedStart = saturatingAdd(safeStart, requestedDeltaTicks)
+            val requestedStart = timelineSaturatingAdd(safeStart, requestedDeltaTicks)
             val snappedStart =
                 if (free || requestedDeltaTicks == 0L) requestedStart else snapTimelineTick(requestedStart, snapResolution)
             val start = snappedStart.coerceIn(0L, maximumStart)
             TimelineResizeTicks(startTick = start, durationTicks = (safeEnd - start).coerceAtLeast(minimumDuration))
         }
         ClipResizeEdge.RIGHT -> {
-            val requestedEnd = saturatingAdd(safeEnd, requestedDeltaTicks)
+            val requestedEnd = timelineSaturatingAdd(safeEnd, requestedDeltaTicks)
             val snappedEnd =
                 if (free || requestedDeltaTicks == 0L) requestedEnd else snapTimelineTick(requestedEnd, snapResolution)
-            val end = snappedEnd.coerceAtLeast(saturatingAdd(safeStart, minimumDuration))
+            val end = snappedEnd.coerceAtLeast(timelineSaturatingAdd(safeStart, minimumDuration))
             TimelineResizeTicks(startTick = safeStart, durationTicks = (end - safeStart).coerceAtLeast(minimumDuration))
         }
     }
@@ -250,13 +287,14 @@ internal fun timelineResizeGeometry(
     edge: ClipResizeEdge?,
     requestedDeltaPx: Float,
 ): TimelineResizeGeometry {
-    val safeLeft = baseLeftPx.coerceAtLeast(0f)
-    val safeMinimum = minimumWidthPx.coerceAtLeast(0f)
-    val safeWidth = baseWidthPx.coerceAtLeast(safeMinimum)
+    val safeLeft = timelineFiniteNonNegative(baseLeftPx)
+    val safeMinimum = timelineFiniteNonNegative(minimumWidthPx)
+    val safeWidth = timelineFiniteNonNegative(baseWidthPx).coerceAtLeast(safeMinimum)
+    val safeRequestedDelta = timelineFiniteOrZero(requestedDeltaPx)
     val delta =
         when (edge) {
-            ClipResizeEdge.LEFT -> requestedDeltaPx.coerceIn(-safeLeft, (safeWidth - safeMinimum).coerceAtLeast(0f))
-            ClipResizeEdge.RIGHT -> requestedDeltaPx.coerceAtLeast(safeMinimum - safeWidth)
+            ClipResizeEdge.LEFT -> safeRequestedDelta.coerceIn(-safeLeft, (safeWidth - safeMinimum).coerceAtLeast(0f))
+            ClipResizeEdge.RIGHT -> safeRequestedDelta.coerceAtLeast(safeMinimum - safeWidth)
             null -> 0f
         }
     return when (edge) {
@@ -266,17 +304,41 @@ internal fun timelineResizeGeometry(
     }
 }
 
-private fun saturatingAdd(left: Long, right: Long): Long =
+internal fun timelineSaturatingAdd(left: Long, right: Long): Long =
     when {
         right > 0L && left > Long.MAX_VALUE - right -> Long.MAX_VALUE
         right < 0L && (right == Long.MIN_VALUE || left < Long.MIN_VALUE - right) -> Long.MIN_VALUE
         else -> left + right
     }
 
+internal fun timelinePatternContentOffset(
+    contentOffsetTicks: Long,
+    newStartTick: Long,
+    previousStartTick: Long,
+    patternLengthTicks: Long,
+): Long {
+    val length = patternLengthTicks.coerceAtLeast(1L)
+    val base = Math.floorMod(contentOffsetTicks, length)
+    val newStart = Math.floorMod(newStartTick, length)
+    val previousStart = Math.floorMod(previousStartTick, length)
+    val delta = Math.floorMod(newStart - previousStart, length)
+    return if (base >= length - delta) {
+        base - (length - delta)
+    } else {
+        base + delta
+    }
+}
+
 internal fun timelineMaxScroll(
     totalWidthPx: Float,
     viewportWidthPx: Float,
-): Float = (totalWidthPx - viewportWidthPx).coerceAtLeast(0f)
+): Float =
+    timelineFiniteNonNegative(
+        timelineFiniteFloat(
+            timelineFiniteNonNegative(totalWidthPx, positiveInfinityFallback = Float.MAX_VALUE).toDouble() -
+                timelineFiniteNonNegative(viewportWidthPx),
+        ),
+    )
 
 internal fun timelineZoomScroll(
     anchorViewportX: Float,
@@ -286,10 +348,17 @@ internal fun timelineZoomScroll(
     panX: Float,
     maxScrollX: Float,
 ): Float {
-    if (oldTickWidthPx <= 0f || newTickWidthPx <= 0f) return scrollX.coerceIn(0f, maxScrollX)
+    val safeMaxScrollX = timelineFiniteNonNegative(maxScrollX, positiveInfinityFallback = Float.MAX_VALUE)
+    val safeScrollX = timelineFiniteNonNegative(scrollX).coerceIn(0f, safeMaxScrollX)
+    if (
+        !oldTickWidthPx.isFinite() || oldTickWidthPx <= 0f ||
+        !newTickWidthPx.isFinite() || newTickWidthPx <= 0f
+    ) {
+        return safeScrollX
+    }
     val transform = TimelineTransform(
         viewportWidthPx = Float.POSITIVE_INFINITY,
-        horizontalScrollPx = scrollX,
+        horizontalScrollPx = safeScrollX,
         pixelsPerBeat = oldTickWidthPx * PPQ,
         zoom = 1f,
         density = 1f,
@@ -300,8 +369,58 @@ internal fun timelineZoomScroll(
                 anchorViewportPx = anchorViewportX,
                 previousZoom = 1f,
                 newZoom = newTickWidthPx / oldTickWidthPx,
-                maxScrollPx = maxScrollX,
+                maxScrollPx = safeMaxScrollX,
             )
-            .horizontalScrollPx - panX
-    ).coerceIn(0f, maxScrollX)
+            .horizontalScrollPx - timelineFiniteOrZero(panX)
+    ).coerceIn(0f, safeMaxScrollX)
 }
+
+internal fun sanitizeTimelineZoom(
+    value: Float,
+    fallback: Float = 1f,
+): Float {
+    val safeFallback = if (fallback.isFinite()) fallback.coerceIn(0.2f, 5f) else 1f
+    return if (value.isFinite()) value.coerceIn(0.2f, 5f) else safeFallback
+}
+
+internal fun timelineClipEndTick(clip: Clip): Long =
+    timelineSaturatingAdd(clip.startTick, clip.durationTicks)
+
+private fun timelineFiniteOrZero(value: Float): Float =
+    if (value.isFinite()) value else 0f
+
+private fun timelineFinitePositive(
+    value: Float,
+    fallback: Float,
+): Float =
+    if (value.isFinite() && value > 0f) value else fallback.coerceAtLeast(Float.MIN_VALUE)
+
+private fun timelineFiniteNonNegative(
+    value: Float,
+    positiveInfinityFallback: Float = 0f,
+): Float =
+    when {
+        value == Float.POSITIVE_INFINITY -> positiveInfinityFallback.coerceAtLeast(0f)
+        !value.isFinite() -> 0f
+        else -> value.coerceAtLeast(0f)
+    }
+
+private fun timelineFiniteFloat(value: Double): Float =
+    when {
+        value.isNaN() -> 0f
+        value >= Float.MAX_VALUE -> Float.MAX_VALUE
+        value <= -Float.MAX_VALUE -> -Float.MAX_VALUE
+        else -> value.toFloat()
+    }
+
+private fun timelineDoubleToLong(
+    value: Double,
+    allowNegative: Boolean = false,
+): Long =
+    when {
+        value.isNaN() -> 0L
+        value >= Long.MAX_VALUE.toDouble() -> Long.MAX_VALUE
+        allowNegative && value <= Long.MIN_VALUE.toDouble() -> Long.MIN_VALUE
+        value <= 0.0 -> if (allowNegative) value.toLong() else 0L
+        else -> value.toLong()
+    }

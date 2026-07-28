@@ -177,6 +177,22 @@ class TimelineComposeHarnessTest {
     }
 
     @Test
+    fun extremeTrackTargetsClampBeforeMoveArithmetic() {
+        lateinit var clipId: String
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(trackIndex = 8, startTick = 0L, padIndex = 0)
+            clipId = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }.id
+
+            timelineViewModel.moveClips(setOf(clipId), clipId, 0L, Int.MIN_VALUE)
+            assertEquals(0, timelineViewModel.arrangement.value.clips.single { it.id == clipId }.trackIndex)
+
+            timelineViewModel.moveClips(setOf(clipId), clipId, 0L, Int.MAX_VALUE)
+            assertEquals(15, timelineViewModel.arrangement.value.clips.single { it.id == clipId }.trackIndex)
+        }
+    }
+
+    @Test
     fun draggingSelectedClipMovesTheCapturedGroupAndUndoRestoresIt() {
         lateinit var firstId: String
         lateinit var secondId: String
@@ -278,6 +294,45 @@ class TimelineComposeHarnessTest {
             assertEquals(originalDuration, unchanged.durationTicks)
             timelineViewModel.undo()
             assertTrue(timelineViewModel.arrangement.value.clips.none { it.id == clipId })
+        }
+    }
+
+    @Test
+    fun invalidPublicTimelineInputsAreRejectedOrClampedWithoutCrashing() {
+        composeRule.runOnIdle {
+            val initialCount = timelineViewModel.arrangement.value.clips.size
+
+            timelineViewModel.setZoom(Float.NaN)
+            timelineViewModel.setZoom(Float.POSITIVE_INFINITY)
+            assertTrue(timelineViewModel.zoom.value.isFinite())
+            assertTrue(timelineViewModel.zoom.value in 0.2f..5f)
+
+            timelineViewModel.addPadClip(trackIndex = 0, startTick = 0L, padIndex = -1)
+            timelineViewModel.addAudioClip(
+                trackIndex = 0,
+                startTick = 0L,
+                path = " ",
+                durationTicks = Long.MAX_VALUE,
+            )
+            assertEquals(initialCount, timelineViewModel.arrangement.value.clips.size)
+
+            timelineViewModel.addPatternClip(trackIndex = 0, startTick = 0L, patternId = -1)
+            assertEquals(initialCount, timelineViewModel.arrangement.value.clips.size)
+
+            timelineViewModel.addPatternClip(trackIndex = 0, startTick = 0L, patternId = 0)
+            val canonicalPatternClip = timelineViewModel.arrangement.value.clips.last()
+            assertEquals(0, (canonicalPatternClip as com.jujidaw.model.PatternClip).patternId)
+
+            timelineViewModel.addPadClip(
+                trackIndex = Int.MAX_VALUE,
+                startTick = Long.MIN_VALUE,
+                padIndex = 0,
+                durationTicks = Long.MAX_VALUE,
+            )
+            val added = timelineViewModel.arrangement.value.clips.last()
+            assertEquals(15, added.trackIndex)
+            assertEquals(0L, added.startTick)
+            assertTrue(added.durationTicks > 0L)
         }
     }
 

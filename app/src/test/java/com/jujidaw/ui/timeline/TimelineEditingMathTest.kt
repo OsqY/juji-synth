@@ -180,4 +180,76 @@ class TimelineEditingMathTest {
         assertTrue(snapped in 0L..Long.MAX_VALUE)
         assertTrue(snapped <= Long.MAX_VALUE)
     }
+
+    @Test
+    fun maximumDurationRoundsWithoutOverflow() {
+        val normalized = normalizeTimelineDuration(Long.MAX_VALUE, 120L, free = false)
+
+        assertTrue(normalized > 0L)
+        assertTrue(normalized <= Long.MAX_VALUE)
+        assertEquals(0L, normalized % 120L)
+    }
+
+    @Test
+    fun clipEndsAndTickDeltasSaturateAtLongBounds() {
+        val clip = PadClip(
+            id = "extreme",
+            trackIndex = 0,
+            startTick = Long.MAX_VALUE - 10L,
+            durationTicks = 120L,
+            padIndex = 0,
+        )
+
+        assertEquals(Long.MAX_VALUE, timelineClipEndTick(clip))
+        assertEquals(Long.MAX_VALUE, timelineSaturatingAdd(Long.MAX_VALUE - 1L, 10L))
+        assertEquals(Long.MIN_VALUE, timelineSaturatingAdd(Long.MIN_VALUE + 1L, -10L))
+    }
+
+    @Test
+    fun patternContentOffsetUsesModularArithmeticAtLongBounds() {
+        val length = 1_920L
+        val expected =
+            Math.floorMod(
+                Math.floorMod(Long.MAX_VALUE - 3L, length) +
+                    Math.floorMod(Long.MAX_VALUE, length) -
+                    Math.floorMod(Long.MIN_VALUE, length),
+                length,
+            )
+
+        val offset =
+            timelinePatternContentOffset(
+                contentOffsetTicks = Long.MAX_VALUE - 3L,
+                newStartTick = Long.MAX_VALUE,
+                previousStartTick = Long.MIN_VALUE,
+                patternLengthTicks = length,
+            )
+
+        assertEquals(expected, offset)
+        assertTrue(offset in 0L until length)
+    }
+
+    @Test
+    fun nonFiniteResizeAndZoomInputsProduceFiniteGeometry() {
+        val geometry = timelineResizeGeometry(
+            baseLeftPx = Float.NaN,
+            baseWidthPx = Float.POSITIVE_INFINITY,
+            minimumWidthPx = Float.NaN,
+            edge = ClipResizeEdge.RIGHT,
+            requestedDeltaPx = Float.NaN,
+        )
+        assertTrue(geometry.leftPx.isFinite())
+        assertTrue(geometry.widthPx.isFinite())
+        assertTrue(geometry.appliedDeltaPx.isFinite())
+
+        val scroll = timelineZoomScroll(
+            anchorViewportX = Float.NaN,
+            scrollX = Float.NaN,
+            oldTickWidthPx = Float.POSITIVE_INFINITY,
+            newTickWidthPx = Float.NaN,
+            panX = Float.NaN,
+            maxScrollX = Float.POSITIVE_INFINITY,
+        )
+        assertTrue(scroll.isFinite())
+        assertTrue(scroll >= 0f)
+    }
 }

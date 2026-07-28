@@ -29,4 +29,37 @@ class PunchRangeTest {
         assertEquals(120L, result.punchInTick)
         assertEquals(840L, result.punchOutTick)
     }
+
+    @Test
+    fun enablingPunchAtMaximumTickCreatesValidSaturatedRange() {
+        val result =
+            enablePunchArrangement(
+                arrangement = Arrangement(),
+                currentTick = Long.MAX_VALUE,
+                oneBarTicks = Long.MAX_VALUE,
+            )
+
+        assertTrue(result.punchEnabled)
+        assertEquals(Long.MAX_VALUE - 1L, result.punchInTick)
+        assertEquals(Long.MAX_VALUE, result.punchOutTick)
+    }
+
+    @Test
+    fun settingPunchInAtMaximumTickKeepsEnabledArrangementValid() {
+        val result =
+            setPunchInArrangement(
+                arrangement =
+                    Arrangement(
+                        punchEnabled = true,
+                        punchInTick = 0L,
+                        punchOutTick = 1L,
+                    ),
+                currentTick = Long.MAX_VALUE,
+                oneBarTicks = Long.MAX_VALUE,
+            )
+
+        assertTrue(result.punchEnabled)
+        assertEquals(Long.MAX_VALUE - 1L, result.punchInTick)
+        assertEquals(Long.MAX_VALUE, result.punchOutTick)
+    }
 }

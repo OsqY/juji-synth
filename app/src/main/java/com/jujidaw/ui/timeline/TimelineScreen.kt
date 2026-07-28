@@ -169,7 +169,7 @@ fun TimelineScreen(
     val currentClips by rememberUpdatedState(arrangement.clips)
 
     val setZoomAtAnchor: (Float, Float) -> Unit = { requestedZoom, anchorViewportX ->
-        val nextZoom = requestedZoom.coerceIn(0.2f, 5f)
+        val nextZoom = sanitizeTimelineZoom(requestedZoom, fallback = zoom)
         scrollX = timelineTransform
             .zoomAroundAnchor(anchorViewportX, zoom, nextZoom, totalDurationTicks)
             .horizontalScrollPx
@@ -217,14 +217,14 @@ fun TimelineScreen(
     val firstVisibleTick = if (viewportMeasured) visibleTicks.first else 0L
     val lastVisibleTick =
         if (viewportMeasured) {
-            (visibleTicks.last + 1L).coerceAtLeast(firstVisibleTick)
+            timelineSaturatingAdd(visibleTicks.last, 1L).coerceAtLeast(firstVisibleTick)
         } else {
             Long.MAX_VALUE
         }
     val visibleClips =
         arrangement.clips.filter { clip ->
             clip.id == draggedClipId || clip.id == resizePreview?.clipId ||
-                (clip.startTick < lastVisibleTick && clip.startTick + clip.durationTicks > firstVisibleTick)
+                (clip.startTick < lastVisibleTick && timelineClipEndTick(clip) > firstVisibleTick)
         }
 
     Column(
@@ -382,7 +382,10 @@ fun TimelineScreen(
                                 },
                                 onGesture = { centroid, absoluteScale ->
                                     if (gestureStateHolder.value != TimelineGestureState.Pinching) return@detectTwoFingerTransformGestures
-                                    val nextZoom = (gestureStartZoom * absoluteScale).coerceIn(0.2f, 5f)
+                                    val nextZoom = sanitizeTimelineZoom(
+                                        gestureStartZoom * absoluteScale,
+                                        fallback = gestureZoom,
+                                    )
                                     gestureZoom = nextZoom
                                     val nextTransform = currentTimelineTransform.copy(
                                         zoom = nextZoom,
@@ -620,7 +623,10 @@ fun TimelineScreen(
                                                     gestureStateHolder.value.ownsMove(draggedClipIds)
                                             if (ownsMove) {
                                                 val newTick = viewModel.snapTick(
-                                                    (clip.startTick + timelineTransform.pxDeltaToTicks(draggedClipOffset.x)).coerceAtLeast(0),
+                                                    timelineSaturatingAdd(
+                                                        clip.startTick,
+                                                        timelineTransform.pxDeltaToTicks(draggedClipOffset.x),
+                                                    ).coerceAtLeast(0),
                                                 )
                                                 val newTrack = (clip.trackIndex + (draggedClipOffset.y / trackHeightPx).toInt()).coerceIn(0, 15)
                                                 viewModel.moveClips(draggedClipIds, clip.id, newTick, newTrack)

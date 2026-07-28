@@ -126,4 +126,38 @@ class TimelineTransformTest {
         assertTrue(transform.tickToViewportPx(longDuration).isFinite())
         assertTrue(transform.pxToDuration(width) > 0L)
     }
+
+    @Test
+    fun invalidAndMaximumInputsStayFiniteAndOrdered() {
+        val invalid = TimelineTransform(
+            viewportWidthPx = Float.NaN,
+            horizontalScrollPx = Float.POSITIVE_INFINITY,
+            pixelsPerBeat = Float.POSITIVE_INFINITY,
+            zoom = Float.NaN,
+            density = Float.NaN,
+        )
+
+        assertTrue(invalid.pixelsPerTick.isFinite())
+        assertTrue(invalid.barWidthPx.isFinite())
+        assertTrue(invalid.tickToContentPx(Long.MAX_VALUE).isFinite())
+        assertTrue(invalid.tickToViewportPx(Long.MAX_VALUE).isFinite())
+        assertTrue(invalid.durationToPx(Long.MAX_VALUE).isFinite())
+
+        val atEnd = invalid.copy(
+            viewportWidthPx = Float.MAX_VALUE,
+            horizontalScrollPx = Float.MAX_VALUE,
+        ).visibleTickRange()
+        assertTrue(atEnd.first >= 0L)
+        assertTrue(atEnd.last >= atEnd.first)
+
+        val zoomed = invalid.zoomAroundAnchor(
+            anchorViewportPx = Float.NaN,
+            previousZoom = Float.NaN,
+            newZoom = Float.POSITIVE_INFINITY,
+            totalDurationTicks = Long.MAX_VALUE,
+        )
+        assertTrue(zoomed.zoom.isFinite())
+        assertTrue(zoomed.horizontalScrollPx.isFinite())
+        assertTrue(zoomed.horizontalScrollPx >= 0f)
+    }
 }
