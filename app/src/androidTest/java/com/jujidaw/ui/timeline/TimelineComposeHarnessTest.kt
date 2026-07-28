@@ -217,6 +217,70 @@ class TimelineComposeHarnessTest {
         }
     }
 
+    @Test
+    fun pinchDuringMoveCancelsPreviewWithoutCreatingHistory() {
+        lateinit var clipId: String
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(trackIndex = 0, startTick = 0L, padIndex = 0)
+            clipId = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }.id
+            timelineViewModel.selectClip(clipId)
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("timeline-clip-$clipId").performTouchInput {
+            down(0, center)
+            moveTo(0, center + Offset(80f, 0f), delayMillis = 150L)
+            down(1, center + Offset(0f, 8f))
+            moveTo(0, center + Offset(120f, 0f), delayMillis = 100L)
+            moveTo(1, center + Offset(-40f, 8f), delayMillis = 100L)
+            up(1)
+            up(0)
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            val unchanged = timelineViewModel.arrangement.value.clips.single { it.id == clipId }
+            assertEquals(0L, unchanged.startTick)
+            timelineViewModel.undo()
+            assertTrue(timelineViewModel.arrangement.value.clips.none { it.id == clipId })
+        }
+    }
+
+    @Test
+    fun pinchDuringResizeCancelsPreviewWithoutCreatingHistory() {
+        lateinit var clipId: String
+        var originalDuration = 0L
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(trackIndex = 0, startTick = 0L, padIndex = 0)
+            val clip = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }
+            clipId = clip.id
+            originalDuration = clip.durationTicks
+            timelineViewModel.selectClip(clipId)
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("timeline-clip-$clipId").performTouchInput {
+            val rightHandle = Offset(width - 1f, 1f)
+            down(0, rightHandle)
+            moveTo(0, rightHandle + Offset(80f, 0f), delayMillis = 150L)
+            down(1, Offset(1f, height - 1f))
+            moveTo(0, rightHandle + Offset(120f, 0f), delayMillis = 100L)
+            moveTo(1, Offset(1f, height - 1f) + Offset(-40f, 0f), delayMillis = 100L)
+            up(1)
+            up(0)
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            val unchanged = timelineViewModel.arrangement.value.clips.single { it.id == clipId }
+            assertEquals(originalDuration, unchanged.durationTicks)
+            timelineViewModel.undo()
+            assertTrue(timelineViewModel.arrangement.value.clips.none { it.id == clipId })
+        }
+    }
+
     // ── Selector isolation tests (Módulo 9) ──
 
     @Test

@@ -80,3 +80,15 @@ internal fun timelineMoveClipIds(
     anchorClipId: String,
 ): Set<String> =
     if (anchorClipId in selectedClipIds) selectedClipIds else setOf(anchorClipId)
+
+internal fun TimelineGestureState.ownsMove(clipIds: Set<String>): Boolean =
+    this is TimelineGestureState.MovingClip && this.clipIds == clipIds
+
+internal fun TimelineGestureState.ownsResize(
+    clipId: String,
+    edge: ClipResizeEdge,
+): Boolean =
+    when (edge) {
+        ClipResizeEdge.LEFT -> this == TimelineGestureState.ResizingStart(clipId)
+        ClipResizeEdge.RIGHT -> this == TimelineGestureState.ResizingEnd(clipId)
+    }

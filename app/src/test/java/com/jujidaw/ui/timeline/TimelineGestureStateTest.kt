@@ -74,4 +74,23 @@ class TimelineGestureStateTest {
         assertEquals(setOf("tom"), timelineMoveClipIds(selected, "tom"))
         assertEquals(setOf("kick"), timelineMoveClipIds(emptySet(), "kick"))
     }
+
+    @Test
+    fun pinchReplacesMoveAndResizeOwnership() {
+        val moving = TimelineGestureState.MovingClip(setOf("clip"))
+        val resizingStart = TimelineGestureState.ResizingStart("clip")
+        val resizingEnd = TimelineGestureState.ResizingEnd("clip")
+
+        assertEquals(true, moving.ownsMove(setOf("clip")))
+        assertEquals(true, resizingStart.ownsResize("clip", ClipResizeEdge.LEFT))
+        assertEquals(true, resizingEnd.ownsResize("clip", ClipResizeEdge.RIGHT))
+
+        listOf(moving, resizingStart, resizingEnd).forEach { activeEdit ->
+            val pinching = reduceTimelineGestureState(activeEdit, TimelineGestureEvent.BeginPinch)
+            assertEquals(TimelineGestureState.Pinching, pinching)
+            assertEquals(false, pinching.ownsMove(setOf("clip")))
+            assertEquals(false, pinching.ownsResize("clip", ClipResizeEdge.LEFT))
+            assertEquals(false, pinching.ownsResize("clip", ClipResizeEdge.RIGHT))
+        }
+    }
 }

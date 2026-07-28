@@ -17,9 +17,9 @@ publicar cada fase.
 | --- | --- |
 | Rama de trabajo | `feat/timeline-hardening` |
 | Commit base | `2b350d6` — `fix(timeline): prevent zoom layout overflow` |
-| Último hito funcional validado | R1 — movimiento de selección múltiple; el SHA queda registrado por el commit de la fase |
-| Módulos terminados | 0–9; regresión R1 corregida y validada |
-| Próxima fase | R2 — cancelación segura de pinch durante edición |
+| Último hito funcional validado | R2 — cancelación segura de pinch durante edición; el SHA queda registrado por el commit de la fase |
+| Módulos terminados | 0–9; regresiones R1–R2 corregidas y validadas |
+| Próxima fase | R3 — aritmética temporal total y segura |
 | Rama remota | Confirmar antes de publicar; no asumir su posición desde este documento |
 | Pull request | Pendiente; no crear hasta terminar los módulos 9–14 |
 | Linear | Último estado documentado: `OSQ-5` en `In Review`; comprobarlo antes de escribir |
@@ -105,6 +105,9 @@ si ADB informa un dispositivo `device`.
 **Commit.** `fix(timeline): preserve multi-clip move selection`
 
 ### R2 — Cancelación segura de pinch durante edición
+
+**Estado.** Completado el 2026-07-27. Cuatro gates locales PASS, 16/16 tests
+instrumentados PASS en SM-G998W con Android 15, y revisión independiente PASS.
 
 **Objetivo.** Un pinch cancela de forma explícita un move o resize en curso y
 nunca confirma su preview ni registra historial.
