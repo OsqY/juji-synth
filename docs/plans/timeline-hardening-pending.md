@@ -1,7 +1,7 @@
 # Timeline Hardening — Plan ejecutable de pendientes
 
 > **Fuente de verdad actual.** Actualizado para `feat/timeline-hardening`
-> después de completar R3 el 2026-07-27. El SHA queda registrado por el commit
+> después de completar R4 el 2026-07-27. El SHA queda registrado por el commit
 > independiente de la fase. El contenido histórico posterior a esta cabecera se
 > conserva como referencia de arquitectura, pero no debe usarse para elegir el
 > siguiente módulo ni para ejecutar Git. `AGENTS.md` y `CONVENTIONS.md` definen
@@ -18,15 +18,15 @@ publicar cada fase.
 | --- | --- |
 | Rama de trabajo | `feat/timeline-hardening` |
 | Commit base | `2b350d6` — `fix(timeline): prevent zoom layout overflow` |
-| Último hito funcional validado | R3 — aritmética temporal total y segura; el SHA queda registrado por el commit de la fase |
-| Módulos terminados | 0–9; regresiones R1–R3 corregidas y validadas |
-| Próxima fase | R4 — restauración real de scroll del selector |
+| Último hito funcional validado | R4 — restauración real de scroll del selector; el SHA queda registrado por el commit de la fase |
+| Módulos terminados | 0–9; regresiones R1–R4 corregidas y validadas |
+| Próxima fase | 10 — auto-scroll al mover clips |
 | Rama remota | Confirmar antes de publicar; no asumir su posición desde este documento |
 | Pull request | Pendiente; no crear hasta terminar los módulos 9–14 |
 | Linear | Último estado documentado: `OSQ-5` en `In Review`; comprobarlo antes de escribir |
 | Notion | Último estado documentado: `En curso/listo para revisión`; comprobarlo antes de escribir |
 
-Validación más reciente registrada para R3:
+Validación más reciente registrada para R4:
 
 | Comando | Resultado |
 | --- | --- |
@@ -34,7 +34,7 @@ Validación más reciente registrada para R3:
 | `./gradlew compileDebugKotlin` | PASS |
 | `./gradlew lintDebug` | PASS |
 | `./gradlew assembleDebug` | PASS |
-| Instrumentación Android | PASS, 18/18 tests en SM-G998W con Android 15 mediante instalación `--no-streaming` y `am instrument` |
+| Instrumentación Android | PASS, 19/19 tests en SM-G998W con Android 15 mediante instalación `--no-streaming` y `am instrument` |
 
 La tarea Gradle de instalación por streaming no es fiable con este dispositivo.
 El procedimiento validado está documentado en `CONVENTIONS.md`: compilar ambos
@@ -71,10 +71,9 @@ No reimplementar estos módulos. Estado de las regresiones detectadas:
 1. Corregida en R1: selección múltiple durante drag.
 2. Corregida en R2: cancelación de move/resize al iniciar pinch.
 3. Corregida en R3: aritmética segura ante `Long.MAX_VALUE`, `NaN` e infinito.
-4. Pendiente en R4: cambiar entre Pads y Patterns recentra el selector y las pruebas no verifican
-   su scroll real.
+4. Corregida en R4: scroll independiente y aislado de Pads y Patterns.
 
-Completar R4 en un commit independiente antes de los módulos 10–15.
+Las cuatro regresiones están cerradas. Continuar con los módulos 10–15 en orden.
 
 ### R1 — Movimiento de selección múltiple
 
@@ -161,6 +160,9 @@ extremos y considerar un helper de fin de clip saturado compartido en el modelo,
 sin mezclar esas tareas con R4.
 
 ### R4 — Restauración real de scroll del selector
+
+**Estado.** Completado el 2026-07-27. Cuatro gates locales PASS, 19/19 tests
+instrumentados PASS en SM-G998W con Android 15 y revisión independiente PASS.
 
 **Objetivo.** Pads y Patterns conservan su propio scroll y los gestos del
 selector no alteran la Timeline.

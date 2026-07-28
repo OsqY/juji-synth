@@ -3,6 +3,7 @@ package com.jujidaw.ui.timeline
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
@@ -352,10 +353,8 @@ class TimelineComposeHarnessTest {
         composeRule.waitForIdle()
         assertEquals(0, PadSelectionStore.selectedPad.value)
 
-        composeRule.runOnIdle {
-            timelineViewModel.setTool(TimelineTool.SELECT)
-            PadSelectionStore.select(31)
-        }
+        composeRule.onNodeWithTag("timeline-pad-selector").performScrollToIndex(31)
+        composeRule.onNodeWithTag("timeline-source-chip-B16").performTouchInput { click() }
         composeRule.waitForIdle()
         assertEquals(31, PadSelectionStore.selectedPad.value)
     }
@@ -370,55 +369,91 @@ class TimelineComposeHarnessTest {
         composeRule.onNodeWithTag("timeline-pattern-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-source-chip-P1").assertIsDisplayed()
 
-        composeRule.runOnIdle {
-            timelineViewModel.selectPattern(15)
-        }
+        composeRule.onNodeWithTag("timeline-pattern-selector").performScrollToIndex(15)
+        composeRule.onNodeWithTag("timeline-source-chip-P16").performTouchInput { click() }
         composeRule.waitForIdle()
         assertEquals(15, timelineViewModel.selectedPatternId.value)
     }
 
     @Test
     fun selectorScrollDoesNotAffectTimelineViewport() {
-        // Get initial pad selection
         val initialSelection = PadSelectionStore.selectedPad.value
+        val initialPlayheadX =
+            composeRule.onNodeWithTag("timeline-playhead").fetchSemanticsNode().boundsInRoot.left
 
-        // Scroll the selector
         composeRule.onNodeWithTag("timeline-pad-selector").performTouchInput {
             swipeLeft(durationMillis = 200L)
         }
         composeRule.waitForIdle()
 
-        // Viewport should still be untouched — the selector has its own scroll state
-        composeRule.onNodeWithTag("timeline-viewport").assertIsDisplayed()
-        // Pad selection should not have changed from scrolling
+        val finalPlayheadX =
+            composeRule.onNodeWithTag("timeline-playhead").fetchSemanticsNode().boundsInRoot.left
+        assertEquals(initialPlayheadX, finalPlayheadX, 0.5f)
         assertEquals(initialSelection, PadSelectionStore.selectedPad.value)
     }
 
     @Test
     fun padsAndPatternsKeepIndependentScrollState() {
-        // Start in Pads mode
-        composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-pad-selector").performScrollToIndex(31)
+        composeRule.onNodeWithTag("timeline-source-chip-B16").performTouchInput { click() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("timeline-pad-selector").performScrollToIndex(24)
+        val padChipX =
+            composeRule.onNodeWithTag("timeline-source-chip-B9").fetchSemanticsNode().boundsInRoot.left
 
-        // Switch to Patterns
         composeRule.runOnIdle { timelineViewModel.setTool(TimelineTool.DRAW_PATTERN) }
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("timeline-pattern-selector").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-pattern-selector").performScrollToIndex(15)
+        composeRule.onNodeWithTag("timeline-source-chip-P16").performTouchInput { click() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("timeline-pattern-selector").performScrollToIndex(8)
+        val patternChipX =
+            composeRule.onNodeWithTag("timeline-source-chip-P9").fetchSemanticsNode().boundsInRoot.left
 
-        // Switch back to Pads — should not crash
         composeRule.runOnIdle { timelineViewModel.setTool(TimelineTool.DRAW_PAD) }
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
+        val restoredPadChipX =
+            composeRule.onNodeWithTag("timeline-source-chip-B9").fetchSemanticsNode().boundsInRoot.left
+        assertEquals(padChipX, restoredPadChipX, 0.5f)
+        assertEquals(31, PadSelectionStore.selectedPad.value)
+
+        composeRule.runOnIdle { timelineViewModel.setTool(TimelineTool.DRAW_PATTERN) }
+        composeRule.waitForIdle()
+        val restoredPatternChipX =
+            composeRule.onNodeWithTag("timeline-source-chip-P9").fetchSemanticsNode().boundsInRoot.left
+        assertEquals(patternChipX, restoredPatternChipX, 0.5f)
+        assertEquals(15, timelineViewModel.selectedPatternId.value)
+    }
+
+    @Test
+    fun shortHorizontalDragOnSourceChipDoesNotSelectIt() {
+        composeRule.onNodeWithTag("timeline-source-chip-A1").performTouchInput { click() }
+        composeRule.waitForIdle()
+        assertEquals(0, PadSelectionStore.selectedPad.value)
+
+        composeRule.onNodeWithTag("timeline-source-chip-A2").performTouchInput {
+            down(center)
+            moveTo(center - Offset(36f, 0f), delayMillis = 200L)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        assertEquals(0, PadSelectionStore.selectedPad.value)
     }
 
     @Test
     fun timelineViewportDragDoesNotScrollSelector() {
-        // Scroll the viewport
+        composeRule.onNodeWithTag("timeline-pad-selector").performScrollToIndex(31)
+        val initialChipX =
+            composeRule.onNodeWithTag("timeline-source-chip-B16").fetchSemanticsNode().boundsInRoot.left
+
         composeRule.onNodeWithTag("timeline-viewport").performTouchInput {
             swipeLeft(durationMillis = 200L)
         }
         composeRule.waitForIdle()
 
-        // Selector chips should still be visible
-        composeRule.onNodeWithTag("timeline-source-chip-A1").assertIsDisplayed()
+        val finalChipX =
+            composeRule.onNodeWithTag("timeline-source-chip-B16").fetchSemanticsNode().boundsInRoot.left
+        assertEquals(initialChipX, finalChipX, 0.5f)
     }
 }

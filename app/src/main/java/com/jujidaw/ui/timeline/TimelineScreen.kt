@@ -1153,13 +1153,25 @@ private fun TimelineEditorToolbar(
     val padListState = rememberLazyListState()
     val patternListState = rememberLazyListState()
     val sourceListState = if (sourceMode == TimelineTool.DRAW_PAD) padListState else patternListState
-    val selectedSourceIndex = if (sourceMode == TimelineTool.DRAW_PAD) padIndex else patternId
+    var previousPadIndex by remember { mutableIntStateOf(padIndex) }
+    var previousPatternId by remember { mutableIntStateOf(patternId) }
 
     LaunchedEffect(tool) {
         if (tool == TimelineTool.DRAW_PAD || tool == TimelineTool.DRAW_PATTERN) sourceMode = tool
     }
-    LaunchedEffect(sourceMode, selectedSourceIndex) {
-        sourceListState.animateScrollToItem((selectedSourceIndex - 2).coerceAtLeast(0))
+    LaunchedEffect(padIndex) {
+        val selectionChanged = padIndex != previousPadIndex
+        previousPadIndex = padIndex
+        if (selectionChanged && sourceMode == TimelineTool.DRAW_PAD) {
+            padListState.animateScrollToItem((padIndex - 2).coerceAtLeast(0))
+        }
+    }
+    LaunchedEffect(patternId) {
+        val selectionChanged = patternId != previousPatternId
+        previousPatternId = patternId
+        if (selectionChanged && sourceMode == TimelineTool.DRAW_PATTERN) {
+            patternListState.animateScrollToItem((patternId - 2).coerceAtLeast(0))
+        }
     }
 
     Column(
@@ -1198,13 +1210,21 @@ private fun TimelineEditorToolbar(
                     .clip(RoundedCornerShape(RadiusSm))
                     .background(SurfaceContainerLow)
                     .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
-                    .testTag(if (sourceMode == TimelineTool.DRAW_PAD) "timeline-pad-selector" else "timeline-pattern-selector")
                     .padding(horizontal = Spacing.xs, vertical = 2.dp),
         ) {
             val itemWidth = (maxWidth - Spacing.xs * 4) / 5
             val sourceIndexes = if (sourceMode == TimelineTool.DRAW_PAD) (0 until 32).toList() else (0 until 16).toList()
             LazyRow(
-                modifier = Modifier.fillMaxSize(),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .testTag(
+                            if (sourceMode == TimelineTool.DRAW_PAD) {
+                                "timeline-pad-selector"
+                            } else {
+                                "timeline-pattern-selector"
+                            },
+                        ),
                 state = sourceListState,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
