@@ -1,5 +1,11 @@
 # Backlog — Timeline Hardening
 
+> **Historical snapshot — not authoritative.** This file records an earlier
+> handoff and contains stale branch, module, validation, and staging guidance.
+> Do not use it to choose work or execute Git commands. Use
+> `docs/plans/timeline-hardening-pending.md`, `AGENTS.md`, and
+> `CONVENTIONS.md` instead.
+
 ## Estado verificable actual
 
 | Propiedad | Valor |
