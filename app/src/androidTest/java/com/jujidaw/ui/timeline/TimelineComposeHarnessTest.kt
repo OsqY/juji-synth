@@ -133,6 +133,90 @@ class TimelineComposeHarnessTest {
         }
     }
 
+    @Test
+    fun capturedMultiClipMoveKeepsOffsetsAndUndoesAsOneTransaction() {
+        lateinit var firstId: String
+        lateinit var secondId: String
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(trackIndex = 0, startTick = 0L, padIndex = 0)
+            firstId = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }.id
+
+            val idsAfterFirst = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(trackIndex = 1, startTick = 120L, padIndex = 1)
+            secondId = timelineViewModel.arrangement.value.clips.first { it.id !in idsAfterFirst }.id
+
+            timelineViewModel.selectClip(firstId)
+            timelineViewModel.selectClip(secondId, addToSelection = true)
+            timelineViewModel.moveClips(
+                clipIds = setOf(firstId, secondId),
+                anchorClipId = firstId,
+                newStartTick = 240L,
+                newTrackIndex = 2,
+            )
+
+            val moved = timelineViewModel.arrangement.value.clips.associateBy { it.id }
+            assertEquals(240L, moved.getValue(firstId).startTick)
+            assertEquals(2, moved.getValue(firstId).trackIndex)
+            assertEquals(360L, moved.getValue(secondId).startTick)
+            assertEquals(3, moved.getValue(secondId).trackIndex)
+            assertEquals(setOf(firstId, secondId), timelineViewModel.selectedClipIds.value)
+
+            timelineViewModel.undo()
+            val restored = timelineViewModel.arrangement.value.clips.associateBy { it.id }
+            assertEquals(0L, restored.getValue(firstId).startTick)
+            assertEquals(0, restored.getValue(firstId).trackIndex)
+            assertEquals(120L, restored.getValue(secondId).startTick)
+            assertEquals(1, restored.getValue(secondId).trackIndex)
+
+            timelineViewModel.redo()
+            val redone = timelineViewModel.arrangement.value.clips.associateBy { it.id }
+            assertEquals(240L, redone.getValue(firstId).startTick)
+            assertEquals(360L, redone.getValue(secondId).startTick)
+        }
+    }
+
+    @Test
+    fun draggingSelectedClipMovesTheCapturedGroupAndUndoRestoresIt() {
+        lateinit var firstId: String
+        lateinit var secondId: String
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(trackIndex = 0, startTick = 0L, padIndex = 0)
+            firstId = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }.id
+
+            val idsAfterFirst = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(trackIndex = 1, startTick = 120L, padIndex = 1)
+            secondId = timelineViewModel.arrangement.value.clips.first { it.id !in idsAfterFirst }.id
+
+            timelineViewModel.selectClip(firstId)
+            timelineViewModel.selectClip(secondId, addToSelection = true)
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("timeline-clip-$firstId").performTouchInput {
+            down(center)
+            moveTo(center + Offset(240f, 0f), delayMillis = 300L)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            val moved = timelineViewModel.arrangement.value.clips.associateBy { it.id }
+            val movedFirstStart = moved.getValue(firstId).startTick
+            assertTrue(movedFirstStart > 0L)
+            assertEquals(movedFirstStart + 120L, moved.getValue(secondId).startTick)
+            assertEquals(0, moved.getValue(firstId).trackIndex)
+            assertEquals(1, moved.getValue(secondId).trackIndex)
+            assertEquals(setOf(firstId, secondId), timelineViewModel.selectedClipIds.value)
+
+            timelineViewModel.undo()
+            val restored = timelineViewModel.arrangement.value.clips.associateBy { it.id }
+            assertEquals(0L, restored.getValue(firstId).startTick)
+            assertEquals(120L, restored.getValue(secondId).startTick)
+        }
+    }
+
     // ── Selector isolation tests (Módulo 9) ──
 
     @Test

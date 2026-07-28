@@ -192,6 +192,7 @@ fun TimelineScreen(
     }
 
     var draggedClipId by remember { mutableStateOf<String?>(null) }
+    var draggedClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var draggedClipOffset by remember { mutableStateOf(Offset.Zero) }
     var resizePreview by remember { mutableStateOf<ClipResizePreview?>(null) }
     var pendingDeleteClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -561,7 +562,7 @@ fun TimelineScreen(
                                 // one another; selected clips get dedicated
                                 // edge handles below instead.
                                 val renderedWidth = width.coerceAtLeast(1f)
-                                val isDragging = draggedClipId == clip.id
+                                val isDragging = clip.id in draggedClipIds
                                 ClipItem(
                                         clip = clip,
                                         pattern =
@@ -583,11 +584,14 @@ fun TimelineScreen(
                                         isSelected = clip.id in selectedClipIds,
                                         isDragging = isDragging,
                                         onDragStart = {
+                                            val moveClipIds = timelineMoveClipIds(selectedClipIds, clip.id)
+                                            if (clip.id !in selectedClipIds) viewModel.selectClip(clip.id)
                                             val nextState = transitionGesture(
-                                                TimelineGestureEvent.BeginMove(selectedClipIds + clip.id),
+                                                TimelineGestureEvent.BeginMove(moveClipIds),
                                             )
-                                            if (nextState == TimelineGestureState.MovingClip(selectedClipIds + clip.id)) {
+                                            if (nextState == TimelineGestureState.MovingClip(moveClipIds)) {
                                                 draggedClipId = clip.id
+                                                draggedClipIds = moveClipIds
                                                 draggedClipOffset = Offset.Zero
                                             }
                                         },
@@ -600,11 +604,12 @@ fun TimelineScreen(
                                                     (clip.startTick + timelineTransform.pxDeltaToTicks(draggedClipOffset.x)).coerceAtLeast(0),
                                                 )
                                                 val newTrack = (clip.trackIndex + (draggedClipOffset.y / trackHeightPx).toInt()).coerceIn(0, 15)
-                                                viewModel.moveSelectedClips(clip.id, newTick, newTrack)
+                                                viewModel.moveClips(draggedClipIds, clip.id, newTick, newTrack)
                                             }
                                             if (draggedClipId == clip.id) {
                                                 transitionGesture(TimelineGestureEvent.Finish)
                                                 draggedClipId = null
+                                                draggedClipIds = emptySet()
                                                 draggedClipOffset = Offset.Zero
                                             }
                                         },
@@ -612,6 +617,7 @@ fun TimelineScreen(
                                             if (draggedClipId == clip.id) {
                                                 transitionGesture(TimelineGestureEvent.Cancel)
                                                 draggedClipId = null
+                                                draggedClipIds = emptySet()
                                                 draggedClipOffset = Offset.Zero
                                             }
                                         },
@@ -1831,7 +1837,6 @@ private fun ClipItem(
                 .pointerInput(clip.id) {
                         detectDragGestures(
                             onDragStart = { offset ->
-                                onTap()
                                 val inHandleBand = offset.y <= handleBandPx
                                 val nearLeft = offset.x <= edgeTouchPx
                                 val nearRight = offset.x >= size.width - edgeTouchPx

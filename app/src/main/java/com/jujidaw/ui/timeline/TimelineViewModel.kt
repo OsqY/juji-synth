@@ -584,13 +584,16 @@ class TimelineViewModel(
         )
     }
 
-    fun moveSelectedClips(
+    /** Moves the clip IDs captured when a drag gesture began as one transaction. */
+    fun moveClips(
+        clipIds: Set<String>,
         anchorClipId: String,
         newStartTick: Long,
         newTrackIndex: Int,
     ) {
-        val selected = _selectedClipIds.value.ifEmpty { setOf(anchorClipId) }
+        val selected = _arrangement.value.clips.filter { it.id in clipIds }.mapTo(linkedSetOf()) { it.id }
         val anchor = _arrangement.value.clips.firstOrNull { it.id == anchorClipId } ?: return
+        if (selected.size != clipIds.size || anchorClipId !in selected) return
         val minStart = _arrangement.value.clips.filter { it.id in selected }.minOfOrNull { it.startTick } ?: anchor.startTick
         val minTrack = _arrangement.value.clips.filter { it.id in selected }.minOfOrNull { it.trackIndex } ?: anchor.trackIndex
         val maxTrack = _arrangement.value.clips.filter { it.id in selected }.maxOfOrNull { it.trackIndex } ?: anchor.trackIndex

@@ -73,3 +73,10 @@ internal fun reduceTimelineGestureState(
         TimelineGestureEvent.Cancel,
         -> TimelineGestureState.Idle
     }
+
+/** Keep an existing multi-selection when one of its clips starts a move gesture. */
+internal fun timelineMoveClipIds(
+    selectedClipIds: Set<String>,
+    anchorClipId: String,
+): Set<String> =
+    if (anchorClipId in selectedClipIds) selectedClipIds else setOf(anchorClipId)

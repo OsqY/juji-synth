@@ -65,4 +65,13 @@ class TimelineGestureStateTest {
             )
         }
     }
+
+    @Test
+    fun moveGestureKeepsAnExistingMultiSelection() {
+        val selected = linkedSetOf("kick", "snare", "hat")
+
+        assertEquals(selected, timelineMoveClipIds(selected, "snare"))
+        assertEquals(setOf("tom"), timelineMoveClipIds(selected, "tom"))
+        assertEquals(setOf("kick"), timelineMoveClipIds(emptySet(), "kick"))
+    }
 }
