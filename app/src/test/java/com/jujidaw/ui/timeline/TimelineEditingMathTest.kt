@@ -252,4 +252,22 @@ class TimelineEditingMathTest {
         assertTrue(scroll.isFinite())
         assertTrue(scroll >= 0f)
     }
+
+    @Test
+    fun edgeAutoScrollVelocityIsDirectionalAndZeroInTheMiddle() {
+        assertEquals(0f, timelineEdgeAutoScrollVelocity(400f, 800f, 100f, 600f), 0.001f)
+        assertEquals(-600f, timelineEdgeAutoScrollVelocity(0f, 800f, 100f, 600f), 0.001f)
+        assertEquals(600f, timelineEdgeAutoScrollVelocity(800f, 800f, 100f, 600f), 0.001f)
+        assertTrue(timelineEdgeAutoScrollVelocity(50f, 800f, 100f, 600f) < 0f)
+        assertTrue(timelineEdgeAutoScrollVelocity(750f, 800f, 100f, 600f) > 0f)
+    }
+
+    @Test
+    fun autoScrollDeltaClampsAtBothViewportBounds() {
+        assertEquals(10f, timelineAutoScrollDelta(0f, 600f, 1f / 60f, 100f), 0.001f)
+        assertEquals(-10f, timelineAutoScrollDelta(100f, -600f, 1f / 60f, 100f), 0.001f)
+        assertEquals(10f, timelineAutoScrollDelta(90f, 600f, 1f / 60f, 100f), 0.001f)
+        assertEquals(0f, timelineAutoScrollDelta(0f, -600f, 1f / 60f, 100f), 0.001f)
+        assertEquals(0f, timelineAutoScrollDelta(50f, Float.NaN, 1f, 100f), 0.001f)
+    }
 }

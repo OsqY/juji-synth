@@ -329,6 +329,37 @@ internal fun timelinePatternContentOffset(
     }
 }
 
+internal fun timelineEdgeAutoScrollVelocity(
+    pointerViewportX: Float,
+    viewportWidthPx: Float,
+    edgeWidthPx: Float,
+    maxVelocityPxPerSecond: Float,
+): Float {
+    if (!pointerViewportX.isFinite() || !viewportWidthPx.isFinite() || viewportWidthPx <= 0f) return 0f
+    val edge = edgeWidthPx.takeIf { it.isFinite() && it > 0f } ?: return 0f
+    val maxVelocity = maxVelocityPxPerSecond.takeIf { it.isFinite() && it > 0f } ?: return 0f
+    val zone = edge.coerceAtMost(viewportWidthPx / 2f)
+    return when {
+        pointerViewportX < zone -> -maxVelocity * ((zone - pointerViewportX) / zone).coerceIn(0f, 1f)
+        pointerViewportX > viewportWidthPx - zone -> maxVelocity * ((pointerViewportX - (viewportWidthPx - zone)) / zone).coerceIn(0f, 1f)
+        else -> 0f
+    }
+}
+
+internal fun timelineAutoScrollDelta(
+    currentScrollPx: Float,
+    velocityPxPerSecond: Float,
+    elapsedSeconds: Float,
+    maxScrollPx: Float,
+): Float {
+    val safeCurrent = currentScrollPx.takeIf { it.isFinite() } ?: 0f
+    val safeVelocity = velocityPxPerSecond.takeIf { it.isFinite() } ?: 0f
+    val safeElapsed = elapsedSeconds.takeIf { it.isFinite() && it > 0f } ?: 0f
+    val safeMax = maxScrollPx.takeIf { it.isFinite() && it > 0f } ?: 0f
+    val next = (safeCurrent + safeVelocity * safeElapsed).coerceIn(0f, safeMax)
+    return next - safeCurrent.coerceIn(0f, safeMax)
+}
+
 internal fun timelineMaxScroll(
     totalWidthPx: Float,
     viewportWidthPx: Float,

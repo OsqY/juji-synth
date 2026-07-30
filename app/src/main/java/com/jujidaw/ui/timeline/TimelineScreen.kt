@@ -53,6 +53,8 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.focus.FocusRequester
@@ -75,7 +77,13 @@ import com.jujidaw.model.TransportState
 import com.jujidaw.project.PadSelectionStore
 import com.jujidaw.project.PatternSelectionStore
 import com.jujidaw.ui.theme.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.sqrt
+
+internal val TimelineScrollPxSemanticsKey = SemanticsPropertyKey<Float>("TimelineScrollPx")
+
 
 /**
  * Arrangement Timeline screen.
@@ -194,14 +202,80 @@ fun TimelineScreen(
     var draggedClipId by remember { mutableStateOf<String?>(null) }
     var draggedClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var draggedClipOffset by remember { mutableStateOf(Offset.Zero) }
+    var draggedPointerViewportX by remember { mutableFloatStateOf(Float.NaN) }
     var resizePreview by remember { mutableStateOf<ClipResizePreview?>(null) }
     var pendingDeleteClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val gestureStateHolder = remember { mutableStateOf<TimelineGestureState>(TimelineGestureState.Idle) }
+    val autoScrollScope = rememberCoroutineScope()
+    val autoScrollJob = remember { mutableStateOf<Job?>(null) }
     val currentDraggedClipId by rememberUpdatedState(draggedClipId)
+    fun stopAutoScroll() {
+        autoScrollJob.value?.cancel()
+        autoScrollJob.value = null
+    }
     fun transitionGesture(event: TimelineGestureEvent): TimelineGestureState {
+        if (event == TimelineGestureEvent.Finish || event == TimelineGestureEvent.Cancel) {
+            stopAutoScroll()
+        }
         val nextState = reduceTimelineGestureState(gestureStateHolder.value, event)
         gestureStateHolder.value = nextState
         return nextState
+    }
+    DisposableEffect(Unit) {
+        onDispose { stopAutoScroll() }
+    }
+    LaunchedEffect(tool) {
+        if (draggedClipId != null) {
+            transitionGesture(TimelineGestureEvent.Cancel)
+            draggedClipId = null
+            draggedClipIds = emptySet()
+            draggedClipOffset = Offset.Zero
+            draggedPointerViewportX = Float.NaN
+        }
+    }
+    val autoScrollEdgeWidthPx = with(density) { 64.dp.toPx() }
+    val autoScrollMaxVelocityPxPerSecond = with(density) { 720.dp.toPx() }
+    fun startAutoScroll() {
+        stopAutoScroll()
+        autoScrollJob.value = autoScrollScope.launch {
+            var previousFrameNanos = 0L
+            while (isActive && draggedClipId != null && gestureStateHolder.value.ownsMove(draggedClipIds)) {
+                val frameNanos = withFrameNanos { it }
+                if (previousFrameNanos == 0L) {
+                    previousFrameNanos = frameNanos
+                    continue
+                }
+                val elapsedSeconds =
+                    ((frameNanos - previousFrameNanos).coerceAtLeast(0L) / 1_000_000_000f).coerceAtMost(0.1f)
+                previousFrameNanos = frameNanos
+                val velocity = timelineEdgeAutoScrollVelocity(
+                    pointerViewportX = draggedPointerViewportX,
+                    viewportWidthPx = viewportWidthPx,
+                    edgeWidthPx = autoScrollEdgeWidthPx,
+                    maxVelocityPxPerSecond = autoScrollMaxVelocityPxPerSecond,
+                )
+                if (velocity == 0f) break
+                val appliedDelta = timelineAutoScrollDelta(
+                    currentScrollPx = scrollX,
+                    velocityPxPerSecond = velocity,
+                    elapsedSeconds = elapsedSeconds,
+                    maxScrollPx = maxScrollX,
+                )
+                if (appliedDelta == 0f) break
+                scrollX = (scrollX + appliedDelta).coerceIn(0f, maxScrollX)
+                draggedClipOffset = draggedClipOffset.copy(x = draggedClipOffset.x + appliedDelta)
+            }
+        }
+    }
+    fun ensureAutoScrollForPointer() {
+        val velocity = timelineEdgeAutoScrollVelocity(
+            pointerViewportX = draggedPointerViewportX,
+            viewportWidthPx = viewportWidthPx,
+            edgeWidthPx = autoScrollEdgeWidthPx,
+            maxVelocityPxPerSecond = autoScrollMaxVelocityPxPerSecond,
+        )
+        if (velocity == 0f) stopAutoScroll()
+        else if (autoScrollJob.value?.isActive != true) startAutoScroll()
     }
     val viewportMeasured = measuredViewportWidthPx > 0f
     val visibleTicks = timelineTransform.visibleTickRange()
@@ -351,6 +425,7 @@ fun TimelineScreen(
                         .height(timelineContentHeight)
                         .onSizeChanged { measuredViewportWidthPx = it.width.toFloat() }
                         .testTag("timeline-viewport")
+                        .semantics { set(TimelineScrollPxSemanticsKey, scrollX) }
                         .clip(RoundedCornerShape(RadiusLg))
                         .background(Bg1)
                         .pointerInput(Unit) {
@@ -361,9 +436,11 @@ fun TimelineScreen(
                                 onGestureStart = { centroid ->
                                     when (gestureStateHolder.value) {
                                         is TimelineGestureState.MovingClip -> {
+                                            stopAutoScroll()
                                             draggedClipId = null
                                             draggedClipIds = emptySet()
                                             draggedClipOffset = Offset.Zero
+                                            draggedPointerViewportX = Float.NaN
                                         }
                                         is TimelineGestureState.ResizingStart,
                                         is TimelineGestureState.ResizingEnd,
@@ -597,16 +674,19 @@ fun TimelineScreen(
                                         onTap = { viewModel.selectClip(clip.id) },
                                         isSelected = clip.id in selectedClipIds,
                                         isDragging = isDragging,
-                                        onDragStart = {
+                                        onDragStart = { pointerOffset ->
                                             val moveClipIds = timelineMoveClipIds(selectedClipIds, clip.id)
                                             if (clip.id !in selectedClipIds) viewModel.selectClip(clip.id)
                                             val nextState = transitionGesture(
                                                 TimelineGestureEvent.BeginMove(moveClipIds),
                                             )
                                             if (nextState == TimelineGestureState.MovingClip(moveClipIds)) {
+                                                followPlayhead = false
                                                 draggedClipId = clip.id
                                                 draggedClipIds = moveClipIds
                                                 draggedClipOffset = Offset.Zero
+                                                draggedPointerViewportX = left + pointerOffset.x
+                                                ensureAutoScrollForPointer()
                                             }
                                         },
                                         onDrag = { delta ->
@@ -615,6 +695,8 @@ fun TimelineScreen(
                                                 gestureStateHolder.value.ownsMove(draggedClipIds)
                                             ) {
                                                 draggedClipOffset += delta
+                                                draggedPointerViewportX += delta.x
+                                                ensureAutoScrollForPointer()
                                             }
                                         },
                                         onDragEnd = {
@@ -636,6 +718,7 @@ fun TimelineScreen(
                                                 draggedClipId = null
                                                 draggedClipIds = emptySet()
                                                 draggedClipOffset = Offset.Zero
+                                                draggedPointerViewportX = Float.NaN
                                             }
                                         },
                                         onDragCancel = {
@@ -646,6 +729,7 @@ fun TimelineScreen(
                                                 draggedClipId = null
                                                 draggedClipIds = emptySet()
                                                 draggedClipOffset = Offset.Zero
+                                                draggedPointerViewportX = Float.NaN
                                             }
                                         },
                                         onResizeStart = { edge ->
@@ -1865,7 +1949,7 @@ private fun ClipItem(
     onTap: () -> Unit,
     isSelected: Boolean,
     isDragging: Boolean,
-    onDragStart: () -> Unit,
+    onDragStart: (Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
@@ -1911,7 +1995,7 @@ private fun ClipItem(
                                     else -> ClipDragMode.MOVE
                                 }
                                 when (dragMode) {
-                                    ClipDragMode.MOVE -> onDragStart()
+                                    ClipDragMode.MOVE -> onDragStart(offset)
                                     ClipDragMode.RESIZE_LEFT -> onResizeStart(ClipResizeEdge.LEFT)
                                     ClipDragMode.RESIZE_RIGHT -> onResizeStart(ClipResizeEdge.RIGHT)
                                 }

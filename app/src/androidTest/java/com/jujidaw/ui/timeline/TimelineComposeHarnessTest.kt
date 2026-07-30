@@ -235,6 +235,46 @@ class TimelineComposeHarnessTest {
     }
 
     @Test
+    fun movingClipAtFiveHundredPercentScrollsAndUndoesAsOneTransaction() {
+        lateinit var clipId: String
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(
+                trackIndex = 0,
+                startTick = 0L,
+                padIndex = 0,
+                durationTicks = 1920L,
+            )
+            clipId = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }.id
+            timelineViewModel.setZoom(5f)
+        }
+        composeRule.waitForIdle()
+        val initialScroll = composeRule.onNodeWithTag("timeline-viewport")
+            .fetchSemanticsNode().config[TimelineScrollPxSemanticsKey]
+        val viewportBounds = composeRule.onNodeWithTag("timeline-viewport").fetchSemanticsNode().boundsInRoot
+        val clipBounds = composeRule.onNodeWithTag("timeline-clip-$clipId").fetchSemanticsNode().boundsInRoot
+        val edgePointX = viewportBounds.right - 8f - clipBounds.left
+
+        composeRule.onNodeWithTag("timeline-clip-$clipId").performTouchInput {
+            val bodyPoint = Offset(center.x, height - 5f)
+            down(bodyPoint)
+            moveTo(Offset(edgePointX, bodyPoint.y), delayMillis = 250L)
+            moveTo(Offset(edgePointX, bodyPoint.y), delayMillis = 350L)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        val finalScroll = composeRule.onNodeWithTag("timeline-viewport")
+            .fetchSemanticsNode().config[TimelineScrollPxSemanticsKey]
+        composeRule.runOnIdle {
+            assertTrue(finalScroll > initialScroll)
+            assertTrue(timelineViewModel.arrangement.value.clips.single { it.id == clipId }.startTick > 0L)
+            timelineViewModel.undo()
+            assertEquals(0L, timelineViewModel.arrangement.value.clips.single { it.id == clipId }.startTick)
+        }
+    }
+
+    @Test
     fun pinchDuringMoveCancelsPreviewWithoutCreatingHistory() {
         lateinit var clipId: String
         composeRule.runOnIdle {
