@@ -6,6 +6,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -55,6 +56,21 @@ class TimelineComposeHarnessTest {
         composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-zoom-indicator").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-snap-indicator").assertIsDisplayed()
+    }
+
+    @Test
+    fun editingIndicatorsReflectZoomAndDeleteToolState() {
+        composeRule.runOnIdle { timelineViewModel.setZoom(2f) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("timeline-zoom-indicator").assertTextEquals("200%")
+
+        composeRule.runOnIdle { timelineViewModel.setSnap(TimelineViewModel.Snap.EIGHTH) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("timeline-snap-indicator").assertTextEquals("Snap 1/8")
+
+        composeRule.onNodeWithTag("timeline-delete-tool-button").performTouchInput { click() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("timeline-delete-tool").assertIsDisplayed()
     }
 
     @Test

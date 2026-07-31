@@ -1350,6 +1350,7 @@ private fun TimelineToolButton(
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(if (selected) accent.copy(alpha = 0.18f) else SurfaceContainerLow)
                 .border(1.dp, if (selected) accent else OutlineVariant, RoundedCornerShape(RadiusSm))
+                .testTag(if (label == "Delete") "timeline-delete-tool-button" else "timeline-tool-$label")
                 .clickable(onClick = onClick)
                 .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,
@@ -1547,7 +1548,12 @@ private fun TransportStrip(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
-                Text("Zoom", color = OnSurfaceVariant, style = CaptionSmall, modifier = Modifier.testTag("timeline-zoom-indicator"))
+                Text(
+                    "${(zoom * 100).toInt()}%",
+                    color = OnSurfaceVariant,
+                    style = CaptionSmall,
+                    modifier = Modifier.testTag("timeline-zoom-indicator"),
+                )
                 ZoomStepButton(Icons.Outlined.ZoomOut) { onZoomChange(zoom - 0.2f) }
                 ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
             }

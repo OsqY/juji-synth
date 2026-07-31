@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-07-29. State: `CLOSE_PHASE` M10 complete; next M11.
+Updated: 2026-07-30. State: `CLOSE_PHASE` M11 complete; next M12.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -20,7 +20,11 @@ Gate status:
   device suite pass (20/20).
 - REVIEW: PASS — `/root/m10_redesign_review`; no P0/P1 findings. P2 matrix
   coverage is assigned to M12.
-- CLOSE_PHASE: complete — commit `7cd28eb`, acceptance, gates, device suite,
-  review, rollback, and Oboe exclusion are recorded.
+- M11 IMPLEMENT_PHASE: complete — live zoom percentage, effective snap label,
+  stable Delete button tag/state, and non-intercepting indicator coverage.
+- M11 VALIDATE: four Gradle gates pass; focused indicator test and full device
+  suite pass (21/21).
+- M11 REVIEW: PASS — `/root/m11_review`; no P0-P3 findings.
+- CLOSE_PHASE: ready — commit pending; M12 remains the next phase.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
