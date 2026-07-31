@@ -228,6 +228,24 @@ internal fun timelineClipIdsAtPoint(
             }
         }
 
+/**
+ * Keep composition bounded to the viewport while retaining clips involved in
+ * an active gesture even when their preview moves outside the visible range.
+ */
+internal fun timelineVisibleClips(
+    clips: List<Clip>,
+    firstVisibleTick: Long,
+    lastVisibleTickExclusive: Long,
+    pinnedClipId: String? = null,
+): List<Clip> {
+    val safeFirstTick = firstVisibleTick.coerceAtLeast(0L)
+    val safeLastTick = lastVisibleTickExclusive.coerceAtLeast(safeFirstTick)
+    return clips.filter { clip ->
+        clip.id == pinnedClipId ||
+            (clip.startTick < safeLastTick && timelineClipEndTick(clip) > safeFirstTick)
+    }
+}
+
 internal enum class ClipResizeEdge {
     LEFT,
     RIGHT,

@@ -159,7 +159,7 @@ fun TimelineScreen(
     var scrollX by remember { mutableStateOf(0f) }
     var measuredViewportWidthPx by remember { mutableFloatStateOf(0f) }
     val viewportWidthPx = measuredViewportWidthPx.coerceAtLeast(1f)
-    val timelineTransform =
+    val timelineTransform = remember(viewportWidthPx, scrollX, zoom, density.density) {
         TimelineTransform(
             viewportWidthPx = viewportWidthPx,
             horizontalScrollPx = scrollX,
@@ -167,6 +167,7 @@ fun TimelineScreen(
             zoom = zoom,
             density = density.density,
         )
+    }
     val barWidthPx = timelineTransform.barWidthPx
     val maxScrollX = timelineTransform.maxScroll(totalDurationTicks)
     val currentZoom by rememberUpdatedState(zoom)
@@ -278,7 +279,7 @@ fun TimelineScreen(
         else if (autoScrollJob.value?.isActive != true) startAutoScroll()
     }
     val viewportMeasured = measuredViewportWidthPx > 0f
-    val visibleTicks = timelineTransform.visibleTickRange()
+    val visibleTicks = remember(timelineTransform) { timelineTransform.visibleTickRange() }
     val ticksPerBar = (PPQ * 4).toLong()
     val firstVisibleBar =
         if (viewportMeasured) (visibleTicks.first / ticksPerBar).toInt().coerceIn(0, totalBars) else 0
@@ -295,11 +296,16 @@ fun TimelineScreen(
         } else {
             Long.MAX_VALUE
         }
-    val visibleClips =
-        arrangement.clips.filter { clip ->
-            clip.id == draggedClipId || clip.id == resizePreview?.clipId ||
-                (clip.startTick < lastVisibleTick && timelineClipEndTick(clip) > firstVisibleTick)
-        }
+    val resizeClipId = resizePreview?.clipId
+    val visibleClips = remember(arrangement.clips, firstVisibleTick, lastVisibleTick, draggedClipId, resizeClipId) {
+        timelineVisibleClips(
+            clips = arrangement.clips,
+            firstVisibleTick = firstVisibleTick,
+            lastVisibleTickExclusive = lastVisibleTick,
+            pinnedClipId = draggedClipId ?: resizeClipId,
+        )
+    }
+    val patternsById = remember(patterns) { patterns.associateBy { it.id } }
 
     Column(
         modifier =
@@ -657,9 +663,7 @@ fun TimelineScreen(
                                 ClipItem(
                                         clip = clip,
                                         pattern =
-                                            (clip as? PatternClip)?.let { pc ->
-                                                patterns.find { it.id == pc.patternId }
-                                            },
+                                            (clip as? PatternClip)?.let { pc -> patternsById[pc.patternId] },
                                         modifier =
                                             Modifier
                                                 .zIndex(if (clip.id in selectedClipIds || preview != null) 1f else 0f)
@@ -869,7 +873,6 @@ fun TimelineScreen(
                             }
                         }
 
-                        // Playhead line
                         Box(
                             modifier =
                                 Modifier

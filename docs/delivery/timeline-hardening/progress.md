@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-07-30. State: `CLOSE_PHASE` M12 complete; next M13.
+Updated: 2026-07-30. State: `CLOSE_PHASE` M13 complete; next M14.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -33,6 +33,15 @@ Gate status:
   correction and follow-up review.
 - M12 CLOSE_PHASE: complete — matrix artifacts committed; pending AVD profiles
   remain explicitly unvalidated.
-- M13: next — performance and recomposition measurement.
+- M13 IMPLEMENT_PHASE: complete — viewport clip filtering extracted and
+  memoized, pattern lookup indexed by ID, and stable keys/virtualization kept.
+- M13 VALIDATE: four Gradle gates, Android test APK build, focused performance
+  unit test, and full 21/21 device instrumentation pass.
+- M13 REVIEW: PASS — `/root/m13_review`; no P0-P3 findings. The attempted
+  child-composable extraction that produced a DEX VerifyError was removed and
+  the final diff was retested.
+- M13 CLOSE_PHASE: complete — bounded composition evidence recorded; no FPS
+  claim made without a frame profiler.
+- M14: next — document the viewport/tick rendering model and constraints.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
