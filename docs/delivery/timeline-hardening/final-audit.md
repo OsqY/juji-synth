@@ -2,7 +2,7 @@
 
 Date: 2026-07-30
 Base: `2b350d6`
-Current audit head: working tree after M15 security remediation
+Current audit head: `229f144`
 
 ## Acceptance checklist
 

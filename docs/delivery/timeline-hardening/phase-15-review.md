@@ -3,6 +3,7 @@
 Reviewer: `/root/m15_review` (independent context)
 Date: 2026-07-30
 Security skill: `omk-security-review`
+Commit: `229f144`
 Verdict: **PASS for the remediation; M15 closure remains BLOCKED by process evidence**
 
 ## Remediation reviewed

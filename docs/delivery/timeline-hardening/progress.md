@@ -55,6 +55,8 @@ Gate status:
 - M15 IMPLEMENT/FIX: security remediation complete — clip identity validation,
   canonical project/audio path containment, TimelineVM JNI boundary coverage,
   and active-project state consistency.
+- M15 security commit: `229f144` (`fix(timeline): harden project paths and
+  clip identity`).
 - M15 VALIDATE: all four Gradle gates pass; focused policy tests pass. The last
   successful 21/21 physical suite predates the final project-root adjustment;
   later attempts blocked in ADB during APK installation.
