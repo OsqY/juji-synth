@@ -118,6 +118,88 @@ snap-to-grid editing, and an automation lane.
 > automatically disabled (`setSequencerEnabled(false)`) so arrangement playback
 > and the step launcher don't fire simultaneously. It re-enables when you leave.
 
+### Technical rendering model
+
+The Timeline is a viewport-based editor. Musical state is kept in ticks; pixels
+exist only at the boundary where Compose renders the viewport or resolves a
+pointer gesture.
+
+```text
+Timeline state
+     |
+     v
+Visible tick range
+     |
+     +--> Grid marks
+     +--> Ruler marks
+     +--> Visible clips
+     +--> Playhead viewport position
+```
+
+#### State and coordinate conversion
+
+- `Arrangement.clips` stores each clip's stable `id`, `startTick`,
+  `durationTicks`, `trackIndex`, source reference, and mute state. Pad,
+  pattern, and audio clips all use the same musical coordinate contract.
+- `TimelineTransform` in
+  `app/src/main/java/com/jujidaw/ui/timeline/TimelineEditingMath.kt` is the
+  single conversion boundary. It maps ticks to viewport pixels, viewport
+  pixels back to ticks, converts durations, snaps input, and computes the
+  visible tick range.
+- `horizontalScrollPx` translates the virtual musical content; it is never
+  stored as a clip position. `TimelineScreen` currently supplies a fixed
+  200-bar virtual musical extent to `maxScroll()`, which clamps the viewport
+  within that extent rather than deriving a full-width layout from clip count.
+- Pointer x-coordinates are converted with `viewportPxToTick()` (or its snap
+  variant) before a clip is created, moved, resized, or selected. Rendering
+  uses `tickToViewportPx()` and `durationToPx()`.
+
+#### Virtualized rendering
+
+`TimelineScreen` asks the transform for the visible tick range and passes that
+range through `timelineVisibleClips()`. Only clips intersecting the range are
+composed, with the clip being moved or resized pinned while its preview is
+outside the range. Grid and ruler marks are generated from visible bars and
+ticks, and the playhead uses the same transform as clips, so all vertical
+indicators share one coordinate system. The implementation does not create a
+full-width content layout.
+
+#### Zoom, scroll, and playback
+
+Zoom is limited to the supported `0.2×–5×` range. Pinch and toolbar zoom call
+`zoomAroundAnchor()`: the tick under the gesture anchor is calculated before
+the zoom and the new scroll is clamped so that tick remains under the anchor.
+Horizontal drag changes only the viewport scroll. When Follow is enabled during
+playback, the playhead may adjust the viewport; starting an edit or an explicit
+zoom disables follow so the user's viewport is preserved.
+
+#### Gesture ownership and editing history
+
+`TimelineGestureState` arbitrates input in this order: pinch, Delete tool,
+resize handle, clip body, ruler scrub, then the empty Timeline background.
+Once a gesture enters a state it cannot silently become another operation.
+Delete strokes collect unique clip IDs and commit once. Move, resize, add,
+delete, duplicate, paste, mute, and Trash restoration are recorded as command
+objects in `TimelineEditHistory`; one completed gesture therefore creates one
+undo/redo transaction.
+
+#### Autosave and constraints
+
+`TimelineViewModel.updateArrangement()` records the command, refreshes the
+transport arrangement, and schedules the debounced `ProjectAutosave` only
+after the transaction is committed. Undo and redo restore the complete
+timeline snapshot, including deleted clips and selection state.
+
+Inputs are sanitized at the transform and model boundaries: ticks and
+durations are non-negative/positive, tracks are limited to the 16 lanes, and
+zoom and scroll are finite and clamped. `AudioClip` requires a nonblank path;
+autosave resolves project-relative paths but absolute paths are currently also
+accepted and remain an M15 security-audit concern. The current device
+evidence covers the physical SM-G998W profile;
+other density/orientation profiles remain explicitly pending. Frame-time
+profiling is not claimed by the viewport tests; a profiler trace is the next
+step only if device evidence shows a remaining performance issue.
+
 ### Transport Bar Controls (Play, Record, BPM, Loop, Punch)
 
 The **global transport bar** is always visible at the bottom of the screen (portrait) or side

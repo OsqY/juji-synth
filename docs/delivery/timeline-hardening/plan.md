@@ -18,6 +18,7 @@ R1 `e1c2f71`, R2 `8f25d30`, R3 `5d93af4`, and R4 `1c7e6e2` are closed.
 | M14 | Document viewport/tick model and constraints | `docs(timeline): document viewport-based rendering model` | AC-C1, docs review |
 | M15 | Final audit and authorized handoff | optional `chore(timeline): finalize validation and review artifacts` | AC-O1, final-audit complete/blocked |
 
-Current phase: M14. M10 is closed in `22b0461`, M11 in `7f6de85`, M12 in
-`6f8f8d2`, and M13 is validated/reviewed. The next phase is technical
-documentation of the viewport/tick rendering model.
+Current phase: M15 final audit. M10 is closed in `22b0461`, M11 in `7f6de85`,
+M12 in `6f8f8d2`, M13 in `77a76f6`, and M14 is closed with AC-C1 evidence in
+`phase-14-review.md`. The remaining work is the final audit and explicitly
+authorized external handoff; no direct merge is permitted.

@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-07-30. State: `CLOSE_PHASE` M13 complete; next M14.
+Updated: 2026-07-30. State: `CLOSE_PHASE` M14 complete; next M15 final audit.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -42,6 +42,16 @@ Gate status:
   the final diff was retested.
 - M13 CLOSE_PHASE: complete — bounded composition evidence recorded; no FPS
   claim made without a frame profiler.
-- M14: next — document the viewport/tick rendering model and constraints.
+- M14 IMPLEMENT_PHASE: complete — technical documentation now describes the
+  tick/viewport model, fixed 200-bar virtual extent, visible-range rendering,
+  gesture ownership, atomic history, autosave, and constraints. Stale package
+  paths in the historical backlog navigation map were corrected.
+- M14 VALIDATE: `git diff --check`, all four Gradle gates, and connected device
+  instrumentation pass; the physical SM-G998W suite reports 21/21.
+- M14 REVIEW: initial P2 documentation findings were corrected; follow-up
+  `/root/m14_review` PASS with no P0-P3 findings.
+- M14 CLOSE_PHASE: complete — AC-C1 is met. See `phase-14-review.md`.
+- M15: next — final audit, security review, and explicitly authorized external
+  handoff. No PR, Linear, Notion, or merge action is authorized yet.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.

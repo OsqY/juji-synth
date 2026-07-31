@@ -77,32 +77,32 @@ Archivos clave para trabajar en Timeline, ordenados por relevancia:
 
 | Archivo | Propósito |
 |---|---|
-| `app/src/main/java/com/jujisynth/app/timeline/TimelineScreen.kt` | UI Compose: viewport, renderizado de grid/ruler/clips/playhead y gestión de gestos. |
-| `app/src/main/java/com/jujisynth/app/timeline/TimelineViewModel.kt` | Estado de Timeline, comandos de edición, historial, autosave y comunicación con TransportController. |
-| `app/src/main/java/com/jujisynth/app/timeline/TimelineEditingMath.kt` | Transformación tick ↔ píxel, snapping, hit-testing y resize. |
-| `app/src/main/java/com/jujisynth/app/timeline/TimelineGestureState.kt` | Prioridad y exclusividad de gestos (máquina de estados). |
+| `app/src/main/java/com/jujidaw/ui/timeline/TimelineScreen.kt` | UI Compose: viewport, renderizado de grid/ruler/clips/playhead y gestión de gestos. |
+| `app/src/main/java/com/jujidaw/ui/timeline/TimelineViewModel.kt` | Estado de Timeline, comandos de edición, historial, autosave y comunicación con TransportController. |
+| `app/src/main/java/com/jujidaw/ui/timeline/TimelineEditingMath.kt` | Transformación tick ↔ píxel, snapping, hit-testing y resize. |
+| `app/src/main/java/com/jujidaw/ui/timeline/TimelineGestureState.kt` | Prioridad y exclusividad de gestos (máquina de estados). |
 
 ### Transacciones y persistencia
 
 | Archivo | Propósito |
 |---|---|
-| `app/src/main/java/com/jujisynth/app/timeline/TimelineEditCommands.kt` | Comandos de edición (Add, Move, Resize, Delete, Duplicate, Paste, Mute, Restore). |
-| `app/src/main/java/com/jujisynth/app/timeline/TimelineEditHistory.kt` | Historial de undo/redo con ejecución atómica. |
-| `app/src/main/java/com/jujisynth/app/timeline/TimelineDeleteSession.kt` | Sesión de delete múltiple con MutableSet de IDs. |
+| `app/src/main/java/com/jujidaw/ui/timeline/TimelineEditCommands.kt` | Comandos de edición (Add, Move, Resize, Delete, Duplicate, Paste, Mute, Restore). |
+| `app/src/main/java/com/jujidaw/ui/timeline/TimelineEditHistory.kt` | Historial de undo/redo con ejecución atómica. |
+| `app/src/main/java/com/jujidaw/ui/timeline/TimelineDeleteSession.kt` | Sesión de delete múltiple con MutableSet de IDs. |
 
 ### Modelos y controladores
 
 | Archivo | Propósito |
 |---|---|
-| `app/src/main/java/com/jujisynth/app/model/ClipModel.kt` | Modelo de datos de clip (ticks, duración, fila, mute, source). |
-| `app/src/main/java/com/jujisynth/app/transport/TransportController.kt` | Control de reproducción (play, stop, playhead, loop, punch). |
+| `app/src/main/java/com/jujidaw/model/ClipModel.kt` | Modelo de datos de clip (ticks, duración, fila, mute, source). |
+| `app/src/main/java/com/jujidaw/engine/TransportController.kt` | Control de reproducción (play, stop, playhead, loop, punch). |
 
 ### Pruebas
 
 | Archivo | Propósito |
 |---|---|
-| `app/src/test/java/com/jujisynth/app/timeline/TimelineEditingMathTest.kt` | Pruebas unitarias de transformación de coordenadas. |
-| `app/src/androidTest/java/com/jujisynth/app/timeline/TimelineComposeTest.kt` | Pruebas instrumentadas de UI Compose. |
+| `app/src/test/java/com/jujidaw/ui/timeline/TimelineEditingMathTest.kt` | Pruebas unitarias de transformación de coordenadas. |
+| `app/src/androidTest/java/com/jujidaw/ui/timeline/TimelineComposeHarnessTest.kt` | Pruebas instrumentadas de UI Compose. |
 
 ### Búsqueda rápida
 

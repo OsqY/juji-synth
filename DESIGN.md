@@ -29,9 +29,9 @@ Arrangement clips and transport state (ticks)
 - Grid, ruler, clips, and playhead render from the visible tick range. Active
   drag and resize clips remain composed even if their source position moves out
   of range.
-- For finite inputs, zoom is anchored to the gesture centroid and horizontal
-  scroll is clamped to the virtual musical extent. Non-finite inputs are an
-  active hardening gap.
+- Zoom is anchored to the gesture centroid and horizontal scroll is clamped to
+  the virtual musical extent. Transform and model boundaries sanitize
+  non-finite/extreme values before they reach rendering or editing state.
 
 ## Interaction contract
 
@@ -47,20 +47,23 @@ empty Timeline background.
 
 ## Current phase order
 
-1. Preserve multi-selection when beginning and completing clip moves.
-2. Make pinch cancellation safe for active move and resize gestures.
-3. Make Timeline arithmetic total for large, invalid, and non-finite inputs.
-4. Restore selector scroll behavior and make its UI tests meaningful.
-5. Continue the remaining modules in `docs/timeline-hardening-plan.md` only
-   after each phase passes validation and independent review.
+The implementation phases through M13 are closed on `feat/timeline-hardening`:
+multi-clip moves, safe pinch cancellation, bounded timeline arithmetic,
+selector isolation, edge auto-scroll, editing indicators, physical-device
+evidence, and viewport composition work all have independent validation and
+review records under `docs/delivery/timeline-hardening/`.
+
+The remaining work is documentation (M14), then the final audit and explicitly
+authorized PR, security, Linear, and Notion handoff (M15).
 
 ## Known limitations
 
-- Group move, pinch cancellation, extreme coordinate values, and selector
-  scroll restoration are currently under active hardening and are not accepted
-  as complete.
-- Auto-scroll during clip movement, device-density evidence, performance
-  profiling, and final security/PR closure remain future modules.
+- Additional device-density and orientation profiles beyond the physical
+  SM-G998W evidence remain unvalidated.
+- The viewport tests demonstrate bounded composition, but do not claim a frame
+  time or FPS improvement without a device profiler trace.
+- Final security review and external PR/Linear/Notion closure require the
+  authorized M15 handoff.
 - The Oboe submodule is excluded from Timeline work.
 
 ## Validation
