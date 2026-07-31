@@ -11,6 +11,7 @@ import com.jujidaw.project.PadSelectionStore
 import com.jujidaw.project.PatternSelectionStore
 import com.jujidaw.project.PadPerformanceEvent
 import com.jujidaw.project.PadPerformanceEventBus
+import com.jujidaw.project.ProjectPathPolicy
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * ViewModel for the Arrangement Timeline screen.
@@ -105,6 +107,15 @@ class TimelineViewModel(
     val automationPoints: StateFlow<List<UiAutomationPoint>> = _automationPoints.asStateFlow()
 
     private var pollJob: Job? = null
+
+    private fun resolveAudioClipPath(path: String): String? {
+        val app = JujiDawApp.instance
+        val appFilesDirectory = app.getExternalFilesDir(null) ?: app.filesDir
+        return ProjectPathPolicy
+            .appAudioFile(appFilesDirectory, app.currentProjectName, path)
+            ?.takeIf(File::isFile)
+            ?.absolutePath
+    }
 
     init {
         viewModelScope.launch {
@@ -427,6 +438,7 @@ class TimelineViewModel(
         durationTicks: Long,
     ) {
         if (path.isBlank()) return
+        val safePath = resolveAudioClipPath(path) ?: return
         val safeTrackIndex = trackIndex.coerceIn(0, 15)
         val snapped = snapTick(startTick.coerceAtLeast(0))
         val newClip =
@@ -435,13 +447,13 @@ class TimelineViewModel(
                 trackIndex = safeTrackIndex,
                 startTick = snapped,
                 durationTicks = durationTicks.coerceAtLeast(TICKS_PER_STEP.toLong()),
-                audioFilePath = path,
+                audioFilePath = safePath,
             )
         updateClips(
             _arrangement.value.clips + newClip,
             commandFactory = { previous, after -> AddClipCommand(setOf(newClip.id), previous, after) },
         )
-        SynthEngine.loadAudioClip(newClip.id, path)
+        SynthEngine.loadAudioClip(newClip.id, safePath)
     }
 
     /** Place a pad on the timeline: creates a pad-trigger clip at [startTick]. */
@@ -799,7 +811,9 @@ class TimelineViewModel(
             historyBefore = before,
             commandFactory = { previous, after -> RestoreTrashClipCommand(clip.id, previous, after) },
         )
-        if (clip is AudioClip) SynthEngine.loadAudioClip(clip.id, clip.audioFilePath)
+        if (clip is AudioClip) {
+            resolveAudioClipPath(clip.audioFilePath)?.let { SynthEngine.loadAudioClip(clip.id, it) }
+        }
     }
 
     private fun updateClips(
@@ -866,7 +880,11 @@ class TimelineViewModel(
             .forEach { SynthEngine.unloadAudioClip(it.id) }
         next.values
             .filter { new -> previous[new.id]?.audioFilePath != new.audioFilePath }
-            .forEach { SynthEngine.loadAudioClip(it.id, it.audioFilePath) }
+            .forEach { clip ->
+                resolveAudioClipPath(clip.audioFilePath)?.let { path ->
+                    SynthEngine.loadAudioClip(clip.id, path)
+                }
+            }
     }
 
     private fun updateHistoryAvailability() {

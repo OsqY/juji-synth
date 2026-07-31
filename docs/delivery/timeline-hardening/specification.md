@@ -2,7 +2,7 @@
 
 Task: `timeline-hardening`
 Baseline: `2b350d6`
-Current verified commit: `1c7e6e2`
+Current verified commit: pending M15 security remediation commit
 
 ## Objective
 

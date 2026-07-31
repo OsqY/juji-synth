@@ -138,4 +138,19 @@ class ClipModelTest {
 
         assertEquals(listOf("extreme"), overlaps.map { it.id })
     }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun arrangementRejectsBlankClipIds() {
+        Arrangement(clips = listOf(PatternClip("", 0, 0, PPQ.toLong(), patternId = 0)))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun arrangementRejectsDuplicateClipIds() {
+        Arrangement(
+            clips = listOf(
+                PatternClip("duplicate", 0, 0, PPQ.toLong(), patternId = 0),
+                PatternClip("duplicate", 1, PPQ.toLong(), PPQ.toLong(), patternId = 1),
+            ),
+        )
+    }
 }

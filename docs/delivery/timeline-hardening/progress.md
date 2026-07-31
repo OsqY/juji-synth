@@ -1,6 +1,7 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-07-30. State: `CLOSE_PHASE` M14 complete; next M15 final audit.
+Updated: 2026-07-30. State: `FINAL_AUDIT` M15 blocked on device evidence and
+external authorization.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -51,7 +52,16 @@ Gate status:
 - M14 REVIEW: initial P2 documentation findings were corrected; follow-up
   `/root/m14_review` PASS with no P0-P3 findings.
 - M14 CLOSE_PHASE: complete — AC-C1 is met. See `phase-14-review.md`.
-- M15: next — final audit, security review, and explicitly authorized external
-  handoff. No PR, Linear, Notion, or merge action is authorized yet.
+- M15 IMPLEMENT/FIX: security remediation complete — clip identity validation,
+  canonical project/audio path containment, TimelineVM JNI boundary coverage,
+  and active-project state consistency.
+- M15 VALIDATE: all four Gradle gates pass; focused policy tests pass. The last
+  successful 21/21 physical suite predates the final project-root adjustment;
+  later attempts blocked in ADB during APK installation.
+- M15 REVIEW: `/root/m15_review` final remediation review PASS with no P0-P3
+  findings. See `phase-15-review.md`.
+- M15 FINAL_AUDIT: blocked — AVD/density matrix and latest device evidence are
+  pending, and PR/Linear/Notion/merge actions lack explicit authorization. See
+  `final-audit.md`.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.

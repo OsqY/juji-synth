@@ -92,7 +92,9 @@ class ProjectRepository(private val context: Context) {
      */
     suspend fun saveProject(project: Project): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val projectDir = projectsDir.resolve(project.name)
+            val projectDir =
+                ProjectPathPolicy.projectDirectory(projectsDir, project.name)
+                    ?: return@withContext Result.failure(IOException("Invalid project name"))
             projectDir.mkdirs()
 
             // Copy referenced samples into the project samples directory.
@@ -101,8 +103,10 @@ class ProjectRepository(private val context: Context) {
 
             for (clip in project.arrangement.clips) {
                 if (clip is AudioClip) {
-                    val srcFile = File(clip.audioFilePath)
-                    if (srcFile.exists()) {
+                    val srcFile =
+                        ProjectPathPolicy.audioFile(projectDir, clip.audioFilePath)
+                            ?: return@withContext Result.failure(IOException("Audio path is outside the project"))
+                    if (srcFile.isFile) {
                         val destFile = File(samplesDir, srcFile.name)
                         if (!destFile.exists()) {
                             srcFile.copyTo(destFile, overwrite = false)
@@ -124,13 +128,18 @@ class ProjectRepository(private val context: Context) {
     /** Load a saved project by name. Returns [IOException] if not found. */
     suspend fun loadProject(name: String): Result<Project> = withContext(Dispatchers.IO) {
         try {
-            val projectDir = projectsDir.resolve(name)
+            val projectDir =
+                ProjectPathPolicy.projectDirectory(projectsDir, name)
+                    ?: return@withContext Result.failure(IOException("Invalid project name"))
             val jsonFile = projectDir.resolve("project.json")
             if (!jsonFile.exists()) {
                 return@withContext Result.failure(IOException("Project not found: $name"))
             }
             val jsonString = jsonFile.readText()
             val project = json.decodeFromString<Project>(jsonString)
+            if (project.name != name) {
+                return@withContext Result.failure(IOException("Project name does not match its directory"))
+            }
             Result.success(project)
         } catch (e: Exception) {
             Result.failure(e)
@@ -140,7 +149,9 @@ class ProjectRepository(private val context: Context) {
     /** Delete a saved project and all its files. */
     suspend fun deleteProject(name: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val projectDir = projectsDir.resolve(name)
+            val projectDir =
+                ProjectPathPolicy.projectDirectory(projectsDir, name)
+                    ?: return@withContext Result.failure(IOException("Invalid project name"))
             if (projectDir.exists()) {
                 projectDir.deleteRecursively()
             }
@@ -153,8 +164,12 @@ class ProjectRepository(private val context: Context) {
     /** Rename a project. Fails if a project with [newName] already exists. */
     suspend fun renameProject(oldName: String, newName: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val oldDir = projectsDir.resolve(oldName)
-            val newDir = projectsDir.resolve(newName)
+            val oldDir =
+                ProjectPathPolicy.projectDirectory(projectsDir, oldName)
+                    ?: return@withContext Result.failure(IOException("Invalid project name"))
+            val newDir =
+                ProjectPathPolicy.projectDirectory(projectsDir, newName)
+                    ?: return@withContext Result.failure(IOException("Invalid project name"))
             if (!oldDir.exists()) {
                 return@withContext Result.failure(IOException("Project not found: $oldName"))
             }
@@ -185,7 +200,10 @@ class ProjectRepository(private val context: Context) {
      */
     suspend fun importAudioClip(uri: Uri, projectName: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val samplesDir = projectsDir.resolve(projectName).resolve("samples").apply { mkdirs() }
+            val projectDir =
+                ProjectPathPolicy.projectDirectory(projectsDir, projectName)
+                    ?: return@withContext Result.failure(IOException("Invalid project name"))
+            val samplesDir = projectDir.resolve("samples").apply { mkdirs() }
             val ext = context.contentResolver.getType(uri)?.let { type ->
                 when {
                     type.contains("wav", ignoreCase = true) -> ".wav"

@@ -194,11 +194,18 @@ Inputs are sanitized at the transform and model boundaries: ticks and
 durations are non-negative/positive, tracks are limited to the 16 lanes, and
 zoom and scroll are finite and clamped. `AudioClip` requires a nonblank path;
 autosave resolves project-relative paths but absolute paths are currently also
-accepted and remain an M15 security-audit concern. The current device
-evidence covers the physical SM-G998W profile;
+accepted only when their canonical location remains inside the project root;
+paths outside that root are rejected. The current device evidence covers the
+physical SM-G998W profile;
 other density/orientation profiles remain explicitly pending. Frame-time
 profiling is not claimed by the viewport tests; a profiler trace is the next
 step only if device evidence shows a remaining performance issue.
+
+Legacy projects that reference an audio file outside their project root do not
+load that audio reference, and saving the reference returns an error. Copy the
+file into the project's `samples/` directory and update the clip before
+reopening it; automatic path migration is intentionally deferred to the
+security follow-up.
 
 ### Transport Bar Controls (Play, Record, BPM, Loop, Punch)
 
