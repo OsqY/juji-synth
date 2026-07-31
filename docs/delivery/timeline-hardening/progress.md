@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-07-30. State: `CLOSE_PHASE` M11 complete; next M12.
+Updated: 2026-07-30. State: `CLOSE_PHASE` M12 complete; next M13.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -25,6 +25,14 @@ Gate status:
 - M11 VALIDATE: four Gradle gates pass; focused indicator test and full device
   suite pass (21/21).
 - M11 REVIEW: PASS — `/root/m11_review`; no P0-P3 findings.
-- CLOSE_PHASE: ready — commit pending; M12 remains the next phase.
+- M12 IMPLEMENT_PHASE: complete — device matrix index, physical SM-G998W
+  profile, measured size/density/orientation, screenshot, and explicit AVD
+  gaps recorded.
+- M12 VALIDATE: four Gradle gates and 21/21 device instrumentation pass.
+- M12 REVIEW: PASS — `/root/m12_review`; no P0-P3 findings after evidence
+  correction and follow-up review.
+- M12 CLOSE_PHASE: complete — matrix artifacts committed; pending AVD profiles
+  remain explicitly unvalidated.
+- M13: next — performance and recomposition measurement.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.

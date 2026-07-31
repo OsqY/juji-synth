@@ -18,5 +18,6 @@ R1 `e1c2f71`, R2 `8f25d30`, R3 `5d93af4`, and R4 `1c7e6e2` are closed.
 | M14 | Document viewport/tick model and constraints | `docs(timeline): document viewport-based rendering model` | AC-C1, docs review |
 | M15 | Final audit and authorized handoff | optional `chore(timeline): finalize validation and review artifacts` | AC-O1, final-audit complete/blocked |
 
-Current phase: M12. M10 is closed in `22b0461` and M11 is validated/reviewed;
-the next phase is the device/density validation matrix.
+Current phase: M13. M10 is closed in `22b0461`, M11 in `7f6de85`, and M12 in
+the device-matrix commit. The next phase is performance and recomposition
+measurement.
