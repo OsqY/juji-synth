@@ -24,6 +24,12 @@ internal object ProjectPathPolicy {
             canonical.takeIf { it != root && canonical.path.startsWith(root.path + File.separator) }
         }.getOrNull()
 
+    fun relativeAudioPath(projectDirectory: File, path: String): String? =
+        audioFile(projectDirectory, path)
+            ?.toPath()
+            ?.let { projectDirectory.canonicalFile.toPath().relativize(it).toString() }
+            ?.replace(File.separatorChar, '/')
+
     fun appAudioFile(appFilesDirectory: File, projectName: String?, path: String): File? {
         val projectDirectory =
             projectName?.let { projectDirectory(appFilesDirectory.resolve("projects"), it) }

@@ -243,12 +243,15 @@ object ProjectAutosave {
         context: Context,
         tc: TransportController,
         name: String = AUTOSAVE_NAME,
-    ) {
-        withContext(Dispatchers.IO) {
+    ): Result<Unit> {
+        return withContext(Dispatchers.IO) {
             val repo = ProjectRepository(context.applicationContext)
             val project = buildProjectFromEngine(name, tc)
-            runCatching { repo.saveProject(project) }
-            SettingsDataStore(context.applicationContext).setLastProjectName(name)
+            val result = repo.saveProject(project, JujiDawApp.instance.currentProjectName)
+            if (result.isSuccess) {
+                SettingsDataStore(context.applicationContext).setLastProjectName(name)
+            }
+            result
         }
     }
 

@@ -117,6 +117,14 @@ class TimelineViewModel(
             ?.absolutePath
     }
 
+    private fun currentProjectDirectory(): File? {
+        val app = JujiDawApp.instance
+        val appFilesDirectory = app.getExternalFilesDir(null) ?: app.filesDir
+        return app.currentProjectName?.let {
+            ProjectPathPolicy.projectDirectory(appFilesDirectory.resolve("projects"), it)
+        }
+    }
+
     init {
         viewModelScope.launch {
             PatternSelectionStore.selectedPattern.collect { selected ->
@@ -439,6 +447,8 @@ class TimelineViewModel(
     ) {
         if (path.isBlank()) return
         val safePath = resolveAudioClipPath(path) ?: return
+        val projectDirectory = currentProjectDirectory() ?: return
+        val relativePath = ProjectPathPolicy.relativeAudioPath(projectDirectory, safePath) ?: return
         val safeTrackIndex = trackIndex.coerceIn(0, 15)
         val snapped = snapTick(startTick.coerceAtLeast(0))
         val newClip =
@@ -447,7 +457,7 @@ class TimelineViewModel(
                 trackIndex = safeTrackIndex,
                 startTick = snapped,
                 durationTicks = durationTicks.coerceAtLeast(TICKS_PER_STEP.toLong()),
-                audioFilePath = safePath,
+                audioFilePath = relativePath,
             )
         updateClips(
             _arrangement.value.clips + newClip,

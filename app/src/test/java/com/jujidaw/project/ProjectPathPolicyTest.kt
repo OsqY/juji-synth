@@ -28,6 +28,19 @@ class ProjectPathPolicyTest {
     }
 
     @Test
+    fun relativeAudioPathNormalizesAbsoluteAndRelativeInputs() {
+        assertEquals("samples/kick.wav", ProjectPathPolicy.relativeAudioPath(projectDirectory, "samples/kick.wav"))
+        assertEquals(
+            "samples/kick.wav",
+            ProjectPathPolicy.relativeAudioPath(
+                projectDirectory,
+                File(projectDirectory, "samples/kick.wav").absolutePath,
+            ),
+        )
+        assertNull(ProjectPathPolicy.relativeAudioPath(projectDirectory, "../../escape.wav"))
+    }
+
+    @Test
     fun appAudioFileResolvesRelativePathsOnlyForTheSelectedProject() {
         val appFilesDirectory = File("/tmp/juji-app")
 

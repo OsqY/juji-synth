@@ -1,7 +1,7 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-02. State: `PLAN` M16 remediation; M15 remains blocked on
-device matrix and external authorization.
+Updated: 2026-08-02. State: `IMPLEMENT_PHASE` M16-B next; M15 remains blocked
+on device matrix and external authorization.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -73,7 +73,15 @@ Gate status:
   rename behavior, captured drag IDs, tests, and rollback were traced.
 - M16 PLAN: complete — M16-A audio lifecycle, M16-B multi-clip pinning, and
   M16-C revalidation are documented in `plan.md`.
-- M16 IMPLEMENT/VALIDATE/REVIEW: pending. Do not merge until the focused fixes,
-  four Gradle gates, available-device evidence, and independent review pass.
+- M16-A IMPLEMENT: complete — audio paths are normalized at import, timeline
+  insertion, save, autosave, and rename boundaries; save failures are surfaced
+  and cannot advance `last_project`.
+- M16-A VALIDATE: four Gradle gates and `compileDebugAndroidTestKotlin` pass;
+  `adb devices -l` found no attached device, so connected instrumentation was
+  skipped honestly.
+- M16-A REVIEW: PASS — `/root/m16a_review`; no remaining P0/P1 findings. See
+  `phase-16a-review.md`.
+- M16-B IMPLEMENT/VALIDATE/REVIEW: pending. Do not merge until multi-clip
+  preview pinning, its tests, gates, and independent review pass.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
