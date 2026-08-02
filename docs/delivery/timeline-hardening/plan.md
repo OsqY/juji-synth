@@ -21,11 +21,13 @@ R1 `e1c2f71`, R2 `8f25d30`, R3 `5d93af4`, and R4 `1c7e6e2` are closed.
 | M16-B | Keep every captured clip composed during auto-scroll | `fix(timeline): pin all clips during multi-drag preview` | AC-R4, unit/Compose coverage, gates, independent review |
 | M16-C | Re-audit the PR and update local handoff records | `docs(timeline): record PR remediation validation` | zero P0/P1 findings, final audit updated |
 
-Current phase: M15 final audit (blocked). M10 is closed in `22b0461`, M11 in
+Current phase: M16-C local final audit (blocked only on optional device and
+external handoff). M10 is closed in `22b0461`, M11 in
 `7f6de85`, M12 in `6f8f8d2`, M13 in `77a76f6`, and M14 is closed with AC-C1
 evidence in `phase-14-review.md`. M15 security remediation has passed review;
-the remaining work is PR remediation M16, the deferred density matrix, and
-explicitly authorized external handoff. No direct merge is permitted.
+M16-A is closed in `2c63995` and M16-B in `41cb11e`; remaining work is local
+final-audit evidence, the deferred density matrix, and explicitly authorized
+external handoff. No direct merge is permitted.
 
 ## M16 — PR remediation plan
 
@@ -40,8 +42,8 @@ report a failed save as successful.
 Files/components:
 
 - `ProjectRepository.kt`: resolve source files from the active/source project,
-  copy them into the target `samples/` directory, and serialize normalized
-  relative paths; normalize paths before/while rename.
+  copy them into the target project at normalized relative paths (imports use
+  `samples/`), and serialize those paths; normalize paths before/while rename.
 - `ProjectAutosave.kt`: pass the active project as the source for autosave and
   update last-project settings only after `saveProject` succeeds.
 - `ProjectViewModel.kt`: surface failure from the regular Save action.
@@ -76,8 +78,9 @@ Files/components:
   pinned IDs.
 - `TimelineScreen.kt`: pass all `draggedClipIds`, plus any active resize ID,
   to the visibility filter.
-- `TimelineEditingMathTest.kt` and `TimelineComposeHarnessTest.kt`: cover
-  multiple pinned clips and a captured multi-selection during edge movement.
+- `TimelineViewportPerformanceTest.kt` and `TimelineComposeHarnessTest.kt`:
+  cover multiple pinned clips and a captured multi-selection during edge
+  movement.
 
 Acceptance criterion:
 
@@ -101,6 +104,7 @@ Validation:
 ./gradlew compileDebugKotlin
 ./gradlew lintDebug
 ./gradlew assembleDebug
+./gradlew compileDebugAndroidTestKotlin
 ```
 
 Run `adb devices -l` first. If a device is attached, run

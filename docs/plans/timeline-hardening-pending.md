@@ -1,7 +1,7 @@
 # Timeline Hardening — Plan ejecutable de pendientes
 
 > **Fuente de verdad actual.** Actualizado para `feat/timeline-hardening`
-> después de completar R4 el 2026-07-27. El SHA queda registrado por el commit
+> después de completar M16-B el 2026-08-02. El SHA queda registrado por el commit
 > independiente de la fase. El contenido histórico posterior a esta cabecera se
 > conserva como referencia de arquitectura, pero no debe usarse para elegir el
 > siguiente módulo ni para ejecutar Git. `AGENTS.md` y `CONVENTIONS.md` definen
@@ -18,23 +18,24 @@ publicar cada fase.
 | --- | --- |
 | Rama de trabajo | `feat/timeline-hardening` |
 | Commit base | `2b350d6` — `fix(timeline): prevent zoom layout overflow` |
-| Último hito funcional validado | R4 — restauración real de scroll del selector; el SHA queda registrado por el commit de la fase |
-| Módulos terminados | 0–9; regresiones R1–R4 corregidas y validadas |
-| Próxima fase | 10 — auto-scroll al mover clips |
+| Último hito funcional validado | M16-B — pinning de todos los clips capturados durante el preview; `41cb11e` |
+| Módulos terminados | M10, M11, M13, M14, M15-security y M16-A/B; M12 queda diferido por dispositivos |
+| Próxima fase | M16-C — cierre del audit local; sin merge mientras falte autorización externa |
 | Rama remota | Confirmar antes de publicar; no asumir su posición desde este documento |
-| Pull request | Pendiente; no crear hasta terminar los módulos 9–14 |
-| Linear | Último estado documentado: `OSQ-5` en `In Review`; comprobarlo antes de escribir |
-| Notion | Último estado documentado: `En curso/listo para revisión`; comprobarlo antes de escribir |
+| Pull request | Existente: #1; actualizar solo con autorización explícita |
+| Linear | `OSQ-5`; comprobar y actualizar solo con autorización explícita |
+| Notion | Comprobar y actualizar solo con autorización explícita |
 
-Validación más reciente registrada para R4:
+Validación más reciente registrada para M16-A/B:
 
 | Comando | Resultado |
 | --- | --- |
-| `./gradlew testDebugUnitTest` | PASS |
-| `./gradlew compileDebugKotlin` | PASS |
-| `./gradlew lintDebug` | PASS |
-| `./gradlew assembleDebug` | PASS |
-| Instrumentación Android | PASS, 19/19 tests en SM-G998W con Android 15 mediante instalación `--no-streaming` y `am instrument` |
+| `./gradlew testDebugUnitTest` | PASS en M16-A/B |
+| `./gradlew compileDebugKotlin` | PASS en M16-A/B |
+| `./gradlew lintDebug` | PASS en M16-A/B |
+| `./gradlew assembleDebug` | PASS en M16-A/B |
+| `./gradlew compileDebugAndroidTestKotlin` | PASS en M16-A/B |
+| `adb devices -l` | Sin dispositivos adjuntos; connected suite omitida honestamente |
 
 La tarea Gradle de instalación por streaming no es fiable con este dispositivo.
 El procedimiento validado está documentado en `CONVENTIONS.md`: compilar ambos
@@ -73,7 +74,10 @@ No reimplementar estos módulos. Estado de las regresiones detectadas:
 3. Corregida en R3: aritmética segura ante `Long.MAX_VALUE`, `NaN` e infinito.
 4. Corregida en R4: scroll independiente y aislado de Pads y Patterns.
 
-Las cuatro regresiones están cerradas. Continuar con los módulos 10–15 en orden.
+Las cuatro regresiones están cerradas. M10, M11, M13 y M14 también están
+cerrados; M16-A/B corrigen los bloqueos de la PR. M12 (matriz de dispositivos)
+queda diferido por decisión de alcance y M16-C solo requiere cerrar evidencia
+local antes de cualquier actualización externa autorizada.
 
 ### R1 — Movimiento de selección múltiple
 
@@ -324,10 +328,20 @@ git diff --cached --name-only
 4. Añadir únicamente rutas explícitas. Está prohibido usar `git add -A`,
    `git add .` o cualquier comando que pueda capturar Oboe.
 5. Crear exactamente un commit con el mensaje definido para el módulo.
-6. Publicar `feat/timeline-hardening`; no hacer merge a `main`.
+6. Publicar `feat/timeline-hardening` solo con autorización explícita; no hacer
+   merge a `main` desde el agente.
 7. Actualizar este documento con commit, fecha, gates y limitaciones reales.
 
-## 5. Módulos pendientes
+## Cola actual posterior a M16
+
+La única fase local restante es M16-C: cerrar `final-audit.md`, conservar la
+evidencia de los commits `2c63995` y `41cb11e`, y mantener explícitos los
+bloqueos de dispositivo/autorización. M12 (matriz de densidades) queda
+diferido por alcance. No actualizar PR, Linear o Notion ni hacer merge sin
+autorización explícita. El detalle de M8–M15 que sigue es histórico y no debe
+seleccionar trabajo nuevo.
+
+## 5. Módulos pendientes (histórico previo a M16)
 
 ### Pendiente inmediato — validar Módulo 8 en dispositivo
 

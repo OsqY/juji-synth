@@ -88,7 +88,13 @@ Gate status:
   skipped honestly.
 - M16-B REVIEW: PASS — `/root/m16b_review`; the lifecycle assertion P2 was
   resolved and no P0/P1 findings remain. See `phase-16b-review.md`.
-- M16-C IMPLEMENT/VALIDATE/REVIEW: pending — update local final-audit records
-  only; external PR/Linear/Notion actions still require explicit authorization.
+- M16-C IMPLEMENT: complete — `final-audit.md`, `plan.md`, the specification,
+  and the authoritative pending queue reflect M16-A/B and the real blockers.
+- M16-C VALIDATE: `git diff --check` and prior M16 gates pass; no device is
+  attached, so connected instrumentation remains skipped honestly.
+- M16-C REVIEW: PASS — `/root/m16b_review`; local handoff records are
+  consistent, no blocking findings, and external writes remain unauthorized.
+- M16-C CLOSE_PHASE: complete locally. Overall final audit remains blocked only
+  by the deferred device evidence and explicit PR/Linear/Notion/merge authority.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
