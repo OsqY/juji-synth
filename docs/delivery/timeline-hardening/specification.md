@@ -7,12 +7,12 @@ Current verified commit: `229f144`
 ## Objective
 
 Finish modules 10–15 from `docs/plans/timeline-hardening-pending.md` before
-new Timeline features: edge auto-scroll, indicators, device evidence,
-performance evidence, technical documentation, and final audit.
+new Timeline features, then close the PR review blockers without expanding
+Timeline scope.
 
 ## Scope and constraints
 
-In scope: M10–M15 only. Out of scope: new features, full-width rendering,
+In scope: M10–M16 remediation only. Out of scope: new features, full-width rendering,
 changes to `app/src/main/cpp/oboe`, changes to `.commandcode/`, and external
 PR/Linear/Notion writes without explicit authorization. Musical state remains in
 ticks; pixels are only for rendering/hit detection; one gesture is one history
@@ -29,6 +29,10 @@ transaction; viewport virtualization remains mandatory.
 - `AC-P1`: Visible clip/grid/ruler work remains bounded by the viewport and any performance claim has before/after measurements.
 - `AC-C1`: Technical docs describe the current tick/viewport architecture and constraints.
 - `AC-O1`: Final audit covers original acceptance, security, rollback, Oboe exclusion, and authorized external handoff.
+- `AC-R1`: Audio clip paths are normalized to project-relative paths before persistence.
+- `AC-R2`: Autosave copies/reloads audio clips across active-project and autosave roots.
+- `AC-R3`: Rename and failed-save paths preserve data and never publish false success.
+- `AC-R4`: All clips captured by a multi-clip move remain composed during viewport auto-scroll.
 
 ## Baseline evidence
 
@@ -36,4 +40,5 @@ R1 `e1c2f71` (14/14 device, review PASS); R2 `8f25d30` (16/16, PASS);
 R3 `5d93af4` (18/18, PASS); R4 `1c7e6e2` (19/19, PASS).
 
 Open decisions: external tracker/PR authorization and availability of more
-device profiles than SM-G998W Android 15.
+device profiles than SM-G998W Android 15. The PR review requires M16-A and
+M16-B before merge; the density matrix remains explicitly deferred by scope.

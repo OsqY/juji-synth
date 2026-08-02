@@ -1,7 +1,7 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-02. State: `FINAL_AUDIT` M15 blocked on device matrix and
-external authorization.
+Updated: 2026-08-02. State: `PLAN` M16 remediation; M15 remains blocked on
+device matrix and external authorization.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -13,7 +13,8 @@ Gate status:
 
 - DEFINE: complete — objective, boundaries, evidence, and acceptance recorded.
 - ANALYZE: complete — callers, contracts, risks, persistence, and rollback recorded.
-- PLAN: complete — M10–M15 increments and closure conditions recorded.
+- PLAN: complete — M10–M15 increments and closure conditions recorded; M16
+  remediation plan adds AC-R1–AC-R4 for the PR blockers.
 - IMPLEMENT_PHASE: complete for the redesign — explicit auto-scroll Job,
   cancellation on Finish/Cancel/tool change/pinch/dispose, pointer-preserving
   preview, playback-follow guard, and deterministic 500% move/scroll/undo test.
@@ -65,5 +66,14 @@ Gate status:
 - M15 FINAL_AUDIT: blocked — AVD/density matrix and PR/Linear/Notion/merge
   actions lack explicit authorization. See
   `final-audit.md`.
+- M16 DEFINE: complete — independent PR review found one P0 autosave failure,
+  one P1 rename failure, and one P1 multi-drag viewport-preview failure; no new
+  feature scope was added.
+- M16 ANALYZE: complete — source/target project roots, save-result handling,
+  rename behavior, captured drag IDs, tests, and rollback were traced.
+- M16 PLAN: complete — M16-A audio lifecycle, M16-B multi-clip pinning, and
+  M16-C revalidation are documented in `plan.md`.
+- M16 IMPLEMENT/VALIDATE/REVIEW: pending. Do not merge until the focused fixes,
+  four Gradle gates, available-device evidence, and independent review pass.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
