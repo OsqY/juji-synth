@@ -1,6 +1,6 @@
 # Timeline Hardening — Final Audit
 
-Date: 2026-07-30
+Date: 2026-08-02
 Base: `2b350d6`
 Current audit head: `229f144`
 
@@ -14,7 +14,7 @@ Current audit head: `229f144`
 | AC-P1 bounded viewport work | PASS | `phase-13-review.md`, exact 4,000 → 8 clip test |
 | AC-C1 technical documentation | PASS | `9582110`, `phase-14-review.md` |
 | Security remediation | PASS | `phase-15-review.md`, independent review no P0–P3 |
-| AC-O1 final handoff | BLOCKED | latest device run/AVD evidence and external authorization pending |
+| AC-O1 final handoff | BLOCKED | AVD evidence and external authorization pending |
 
 ## Security checklist
 
@@ -38,23 +38,22 @@ from staging and commits.
 
 ## Required next action
 
-Stabilize/reconnect ADB, rerun the latest APK's instrumentation, execute the
-available device-density matrix, then request explicit authorization before
-creating a PR or updating Linear/Notion. Do not merge directly to `main`.
+Execute the available device-density matrix, then request explicit
+authorization before creating a PR or updating Linear/Notion. Do not merge
+directly to `main`.
 
 Estado final: **blocked**
 
 Cambios: Timeline hardening through M15 security remediation; documentation and
 path/identity safeguards are implemented.
 
-Evidencia: Four Gradle gates pass; independent phase reviews pass; physical
-SM-G998W has prior 21/21 evidence; latest ADB run is blocked at install.
+Evidencia: Four Gradle gates pass; independent phase reviews pass; the latest
+physical SM-G998W instrumentation suite passes 21/21.
 
-Hallazgos abiertos: Device matrix, latest-code device evidence, and external
-handoff authorization.
+Hallazgos abiertos: Device matrix and external handoff authorization.
 
 Riesgos residuales: Legacy external audio references require manual migration;
 landscape/tablet behavior is not evidenced.
 
-Siguiente acción: Reconnect the device, rerun instrumentation, complete the
-matrix, then authorize PR/Linear/Notion handoff.
+Siguiente acción: Complete the device matrix, then authorize PR/Linear/Notion
+handoff.

@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-07-30. State: `FINAL_AUDIT` M15 blocked on device evidence and
+Updated: 2026-08-02. State: `FINAL_AUDIT` M15 blocked on device matrix and
 external authorization.
 
 The required `.codex/tasks` location is read-only in this environment, so this
@@ -57,13 +57,13 @@ Gate status:
   and active-project state consistency.
 - M15 security commit: `229f144` (`fix(timeline): harden project paths and
   clip identity`).
-- M15 VALIDATE: all four Gradle gates pass; focused policy tests pass. The last
-  successful 21/21 physical suite predates the final project-root adjustment;
-  later attempts blocked in ADB during APK installation.
+- M15 VALIDATE: all four Gradle gates and the full `21/21` physical SM-G998W
+  instrumentation suite pass. The required device-density matrix remains
+  pending.
 - M15 REVIEW: `/root/m15_review` final remediation review PASS with no P0-P3
   findings. See `phase-15-review.md`.
-- M15 FINAL_AUDIT: blocked — AVD/density matrix and latest device evidence are
-  pending, and PR/Linear/Notion/merge actions lack explicit authorization. See
+- M15 FINAL_AUDIT: blocked — AVD/density matrix and PR/Linear/Notion/merge
+  actions lack explicit authorization. See
   `final-audit.md`.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.

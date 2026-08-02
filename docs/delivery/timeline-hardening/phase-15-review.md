@@ -1,7 +1,7 @@
 # M15 review — security hardening and final audit gate
 
 Reviewer: `/root/m15_review` (independent context)
-Date: 2026-07-30
+Date: 2026-08-02
 Security skill: `omk-security-review`
 Commit: `229f144`
 Verdict: **PASS for the remediation; M15 closure remains BLOCKED by process evidence**
@@ -37,12 +37,8 @@ workflow documents the manual copy-to-`samples/` recovery.
 - `./gradlew compileDebugKotlin`: PASS.
 - `./gradlew lintDebug`: PASS.
 - `./gradlew assembleDebug`: PASS.
-- An earlier security-remediation APK run passed `21/21` on physical SM-G998W
-  (Android 15), before the final project-root/lifecycle documentation and
-  state-consistency adjustments.
-- Final post-adjustment attempts reached the instrumentation installer but ADB
-  lost the USB process/transport before test execution; no latest-code device
-  result is claimed.
+- `./gradlew --no-daemon connectedDebugAndroidTest`: PASS, `21/21` on the
+  physical SM-G998W (Android 15, latest source under test).
 
 ## Residual M15 blockers
 
@@ -52,6 +48,5 @@ workflow documents the manual copy-to-`samples/` recovery.
 - No PR, Linear, Notion, or merge action is authorized by the current scope.
 - Oboe and `.commandcode/` remain outside every staged/committed path.
 
-The remediation is ready for revalidation when ADB is stable. M15 cannot be
-closed until the latest build has device evidence and the external handoff is
-explicitly authorized.
+M15 cannot be closed until the required device-density matrix is executed and
+the external handoff is explicitly authorized.
