@@ -1,7 +1,7 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-02. State: `IMPLEMENT_PHASE` M16-B next; M15 remains blocked
-on device matrix and external authorization.
+Updated: 2026-08-02. State: `CLOSE_PHASE` M16-C local handoff next; M15 remains
+blocked on device matrix and external authorization.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -81,7 +81,14 @@ Gate status:
   skipped honestly.
 - M16-A REVIEW: PASS — `/root/m16a_review`; no remaining P0/P1 findings. See
   `phase-16a-review.md`.
-- M16-B IMPLEMENT/VALIDATE/REVIEW: pending. Do not merge until multi-clip
-  preview pinning, its tests, gates, and independent review pass.
+- M16-B IMPLEMENT: complete — all captured move IDs are pinned during active
+  preview, while unrelated clips remain viewport-virtualized.
+- M16-B VALIDATE: four Gradle gates and `compileDebugAndroidTestKotlin` pass;
+  `adb devices -l` found no attached device, so connected instrumentation was
+  skipped honestly.
+- M16-B REVIEW: PASS — `/root/m16b_review`; the lifecycle assertion P2 was
+  resolved and no P0/P1 findings remain. See `phase-16b-review.md`.
+- M16-C IMPLEMENT/VALIDATE/REVIEW: pending — update local final-audit records
+  only; external PR/Linear/Notion actions still require explicit authorization.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.

@@ -52,9 +52,27 @@ class TimelineViewportPerformanceTest {
             clips = listOf(farClip),
             firstVisibleTick = 0L,
             lastVisibleTickExclusive = PPQ.toLong(),
-            pinnedClipId = farClip.id,
+            pinnedClipIds = setOf(farClip.id),
         )
 
         assertTrue(visible.single().id == farClip.id)
+    }
+
+    @Test
+    fun allCapturedClipsRemainComposedWithoutDisablingVirtualization() {
+        val captured = listOf(
+            PadClip(id = "first", trackIndex = 0, startTick = PPQ.toLong() * 100, padIndex = 0),
+            PadClip(id = "second", trackIndex = 1, startTick = PPQ.toLong() * 200, padIndex = 1),
+        )
+        val unrelated = PadClip(id = "unrelated", trackIndex = 2, startTick = PPQ.toLong() * 300, padIndex = 2)
+        val visible = timelineVisibleClips(
+            clips = captured + unrelated,
+            firstVisibleTick = 0L,
+            lastVisibleTickExclusive = PPQ.toLong(),
+            pinnedClipIds = setOf("first", "second"),
+        )
+
+        assertEquals(setOf("first", "second"), visible.map { it.id }.toSet())
+        assertTrue(timelineVisibleClips(captured + unrelated, 0L, PPQ.toLong()).isEmpty())
     }
 }

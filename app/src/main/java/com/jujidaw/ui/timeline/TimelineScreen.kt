@@ -297,12 +297,15 @@ fun TimelineScreen(
             Long.MAX_VALUE
         }
     val resizeClipId = resizePreview?.clipId
-    val visibleClips = remember(arrangement.clips, firstVisibleTick, lastVisibleTick, draggedClipId, resizeClipId) {
+    val pinnedClipIds = remember(draggedClipIds, resizeClipId) {
+        draggedClipIds + listOfNotNull(resizeClipId)
+    }
+    val visibleClips = remember(arrangement.clips, firstVisibleTick, lastVisibleTick, pinnedClipIds) {
         timelineVisibleClips(
             clips = arrangement.clips,
             firstVisibleTick = firstVisibleTick,
             lastVisibleTickExclusive = lastVisibleTick,
-            pinnedClipId = draggedClipId ?: resizeClipId,
+            pinnedClipIds = pinnedClipIds,
         )
     }
     val patternsById = remember(patterns) { patterns.associateBy { it.id } }

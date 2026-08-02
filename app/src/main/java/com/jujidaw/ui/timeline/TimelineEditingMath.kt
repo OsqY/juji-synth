@@ -236,12 +236,12 @@ internal fun timelineVisibleClips(
     clips: List<Clip>,
     firstVisibleTick: Long,
     lastVisibleTickExclusive: Long,
-    pinnedClipId: String? = null,
+    pinnedClipIds: Set<String> = emptySet(),
 ): List<Clip> {
     val safeFirstTick = firstVisibleTick.coerceAtLeast(0L)
     val safeLastTick = lastVisibleTickExclusive.coerceAtLeast(safeFirstTick)
     return clips.filter { clip ->
-        clip.id == pinnedClipId ||
+        clip.id in pinnedClipIds ||
             (clip.startTick < safeLastTick && timelineClipEndTick(clip) > safeFirstTick)
     }
 }

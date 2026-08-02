@@ -158,8 +158,9 @@ Visible tick range
 
 `TimelineScreen` asks the transform for the visible tick range and passes that
 range through `timelineVisibleClips()`. Only clips intersecting the range are
-composed, with the clip being moved or resized pinned while its preview is
-outside the range. Grid and ruler marks are generated from visible bars and
+composed, with every clip captured by an active move or resize gesture pinned
+while its preview is outside the range; all clips unpin after completion or
+cancel. Grid and ruler marks are generated from visible bars and
 ticks, and the playhead uses the same transform as clips, so all vertical
 indicators share one coordinate system. The implementation does not create a
 full-width content layout.
