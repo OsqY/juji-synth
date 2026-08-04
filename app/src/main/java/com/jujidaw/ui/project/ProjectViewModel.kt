@@ -133,12 +133,20 @@ class ProjectViewModel(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            repository?.saveProject(project)
-            _uiState.value = _uiState.value.copy(
-                isLoading = false,
-                currentProjectName = name,
-                toastMessage = "Project saved: $name"
-            )
+            val result = repository?.saveProject(project, JujiDawApp.instance.currentProjectName)
+            if (result?.isSuccess == true) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    currentProjectName = name,
+                    toastMessage = "Project saved: $name"
+                )
+                JujiDawApp.instance.currentProjectName = name
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    toastMessage = "Project save failed: ${result?.exceptionOrNull()?.message ?: "repository unavailable"}"
+                )
+            }
             refreshProjectList()
         }
     }
@@ -156,10 +164,14 @@ class ProjectViewModel(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            repository?.saveProject(project)
+            val result = repository?.saveProject(project, name)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
-                toastMessage = "Project saved: $name"
+                toastMessage = if (result?.isSuccess == true) {
+                    "Project saved: $name"
+                } else {
+                    "Project save failed: ${result?.exceptionOrNull()?.message ?: "repository unavailable"}"
+                },
             )
             refreshProjectList()
         }
@@ -227,6 +239,7 @@ class ProjectViewModel(
             )
             if (_uiState.value.currentProjectName == info.name) {
                 _uiState.value = _uiState.value.copy(currentProjectName = null)
+                JujiDawApp.instance.currentProjectName = null
             }
             refreshProjectList()
         }
@@ -264,6 +277,7 @@ class ProjectViewModel(
                 )
                 if (_uiState.value.currentProjectName == info.name) {
                     _uiState.value = _uiState.value.copy(currentProjectName = newName)
+                    JujiDawApp.instance.currentProjectName = newName
                 }
             }?.onFailure { e ->
                 _uiState.value = _uiState.value.copy(
@@ -352,14 +366,14 @@ class ProjectViewModel(
         viewModelScope.launch {
             val repo = repository ?: return@launch
             repo.importAudioClip(uri, projectName)
-                .onSuccess { path ->
+                .onSuccess { relativePath ->
                     val tick = transportController.transportState.position.toTicks()
                     val clip = AudioClip(
                         id = "clip_${System.nanoTime()}",
                         trackIndex = _uiState.value.recordingTrackIndex,
                         startTick = tick,
                         durationTicks = PPQ * 4L,
-                        audioFilePath = path
+                        audioFilePath = relativePath
                     )
                     val newArr = transportController.arrangement.copy(
                         clips = transportController.arrangement.clips + clip

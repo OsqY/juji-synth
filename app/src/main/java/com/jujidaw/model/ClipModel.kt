@@ -130,6 +130,8 @@ data class Arrangement(
     val punchOutTick: Long = 0,
 ) {
     init {
+        require(clips.all { it.id.isNotBlank() }) { "Clip IDs must not be blank" }
+        require(clips.map { it.id }.toSet().size == clips.size) { "Clip IDs must be unique" }
         if (loopEnabled) {
             require(loopStartTick < loopEndTick) { "Loop start must be before loop end" }
         }
@@ -145,6 +147,9 @@ data class Arrangement(
     ): List<Clip> =
         clips.filter { clip ->
             !clip.mute && clip.startTick < endTick &&
-                (clip.startTick + clip.durationTicks) > startTick
+                clip.playbackEndTick() > startTick
         }
+
+    private fun Clip.playbackEndTick(): Long =
+        if (startTick > Long.MAX_VALUE - durationTicks) Long.MAX_VALUE else startTick + durationTicks
 }

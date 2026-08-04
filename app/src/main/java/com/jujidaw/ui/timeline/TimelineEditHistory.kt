@@ -4,8 +4,8 @@ package com.jujidaw.ui.timeline
 internal class TimelineEditHistory<T>(
     private val capacity: Int = 100,
 ) {
-    private val undoStack = ArrayDeque<T>()
-    private val redoStack = ArrayDeque<T>()
+    private val undoStack = ArrayDeque<TimelineEditCommand<T>>()
+    private val redoStack = ArrayDeque<TimelineEditCommand<T>>()
 
     val canUndo: Boolean
         get() = undoStack.isNotEmpty()
@@ -13,23 +13,29 @@ internal class TimelineEditHistory<T>(
     val canRedo: Boolean
         get() = redoStack.isNotEmpty()
 
-    fun record(before: T) {
+    internal val undoCount: Int
+        get() = undoStack.size
+
+    internal val redoCount: Int
+        get() = redoStack.size
+
+    fun record(command: TimelineEditCommand<T>) {
         if (capacity <= 0) return
-        undoStack.addLast(before)
+        undoStack.addLast(command)
         while (undoStack.size > capacity) undoStack.removeFirst()
         redoStack.clear()
     }
 
-    fun undo(current: T): T? {
-        val previous = undoStack.removeLastOrNull() ?: return null
-        redoStack.addLast(current)
-        return previous
+    fun undo(): TimelineEditCommand<T>? {
+        val command = undoStack.removeLastOrNull() ?: return null
+        redoStack.addLast(command)
+        return command
     }
 
-    fun redo(current: T): T? {
-        val next = redoStack.removeLastOrNull() ?: return null
-        undoStack.addLast(current)
-        return next
+    fun redo(): TimelineEditCommand<T>? {
+        val command = redoStack.removeLastOrNull() ?: return null
+        undoStack.addLast(command)
+        return command
     }
 
     fun clear() {

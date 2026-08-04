@@ -1,6 +1,7 @@
 package com.jujidaw.project
 
 import android.content.Context
+import com.jujidaw.JujiDawApp
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.data.SettingsDataStore
 import com.jujidaw.engine.TransportController
@@ -98,6 +99,12 @@ object ProjectAutosave {
         tc: TransportController,
         context: Context,
     ) {
+        val projectsBase =
+            ProjectPathPolicy.projectDirectory(
+                (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects"),
+                project.name,
+            ) ?: return
+        (context.applicationContext as? JujiDawApp)?.currentProjectName = project.name
         tc.setTempo(project.bpm)
         tc.setSwing(project.swing)
         tc.loadPatterns(project.patterns)
@@ -106,19 +113,10 @@ object ProjectAutosave {
         val loopEndSample = tickToSample(project.arrangement.loopEndTick, project.bpm)
         SynthEngine.setLoop(project.arrangement.loopEnabled, loopStartSample, loopEndSample)
         applyMixerState(project.mixerState)
-        val projectsBase =
-            (context.getExternalFilesDir(null) ?: context.filesDir)
-                .resolve("projects")
-                .resolve(project.name)
         for (clip in project.arrangement.clips) {
             if (clip is AudioClip) {
-                val full =
-                    if (File(clip.audioFilePath).isAbsolute) {
-                        clip.audioFilePath
-                    } else {
-                        projectsBase.resolve(clip.audioFilePath).absolutePath
-                    }
-                if (File(full).exists()) SynthEngine.loadAudioClip(clip.id, full)
+                val full = ProjectPathPolicy.audioFile(projectsBase, clip.audioFilePath)
+                if (full?.isFile == true) SynthEngine.loadAudioClip(clip.id, full.absolutePath)
             }
         }
         // Make the incoming snapshots authoritative before mode restoration.
@@ -245,12 +243,15 @@ object ProjectAutosave {
         context: Context,
         tc: TransportController,
         name: String = AUTOSAVE_NAME,
-    ) {
-        withContext(Dispatchers.IO) {
+    ): Result<Unit> {
+        return withContext(Dispatchers.IO) {
             val repo = ProjectRepository(context.applicationContext)
             val project = buildProjectFromEngine(name, tc)
-            runCatching { repo.saveProject(project) }
-            SettingsDataStore(context.applicationContext).setLastProjectName(name)
+            val result = repo.saveProject(project, JujiDawApp.instance.currentProjectName)
+            if (result.isSuccess) {
+                SettingsDataStore(context.applicationContext).setLastProjectName(name)
+            }
+            result
         }
     }
 

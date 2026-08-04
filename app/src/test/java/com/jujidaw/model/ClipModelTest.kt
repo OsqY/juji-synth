@@ -117,4 +117,40 @@ class ClipModelTest {
         assertTrue(overlaps.any { it.id == "a" })
         assertTrue(overlaps.any { it.id == "b" })
     }
+
+    @Test
+    fun clipsInRangeHandlesPlaybackWindowsAtMaximumTick() {
+        val arrangement =
+            Arrangement(
+                clips =
+                    listOf(
+                        PatternClip(
+                            id = "extreme",
+                            trackIndex = 0,
+                            startTick = Long.MAX_VALUE - 10L,
+                            durationTicks = 120L,
+                            patternId = 0,
+                        ),
+                    ),
+            )
+
+        val overlaps = arrangement.clipsInRange(Long.MAX_VALUE - 5L, Long.MAX_VALUE)
+
+        assertEquals(listOf("extreme"), overlaps.map { it.id })
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun arrangementRejectsBlankClipIds() {
+        Arrangement(clips = listOf(PatternClip("", 0, 0, PPQ.toLong(), patternId = 0)))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun arrangementRejectsDuplicateClipIds() {
+        Arrangement(
+            clips = listOf(
+                PatternClip("duplicate", 0, 0, PPQ.toLong(), patternId = 0),
+                PatternClip("duplicate", 1, PPQ.toLong(), PPQ.toLong(), patternId = 1),
+            ),
+        )
+    }
 }
