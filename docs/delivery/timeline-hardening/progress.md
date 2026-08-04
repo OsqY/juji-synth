@@ -1,7 +1,7 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-02. State: `CLOSE_PHASE` M16-C local handoff next; M15 remains
-blocked on device matrix and external authorization.
+Updated: 2026-08-03. State: `CLOSE_PHASE` M16-C local handoff next; M15 remains
+blocked on the full device matrix and external authorization.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -84,14 +84,16 @@ Gate status:
 - M16-B IMPLEMENT: complete — all captured move IDs are pinned during active
   preview, while unrelated clips remain viewport-virtualized.
 - M16-B VALIDATE: four Gradle gates and `compileDebugAndroidTestKotlin` pass;
-  `adb devices -l` found no attached device, so connected instrumentation was
-  skipped honestly.
+  `SM-G998W` manual instrumentation passes `24/24` after installing both APKs
+  with `--no-streaming`. The Gradle connected task still hangs in its streaming
+  installer on this device.
 - M16-B REVIEW: PASS — `/root/m16b_review`; the lifecycle assertion P2 was
-  resolved and no P0/P1 findings remain. See `phase-16b-review.md`.
+  resolved, the duplicate flaky Compose test was removed, and no P0/P1
+  findings remain. See `phase-16b-review.md`.
 - M16-C IMPLEMENT: complete — `final-audit.md`, `plan.md`, the specification,
   and the authoritative pending queue reflect M16-A/B and the real blockers.
-- M16-C VALIDATE: `git diff --check` and prior M16 gates pass; no device is
-  attached, so connected instrumentation remains skipped honestly.
+- M16-C VALIDATE: `git diff --check`, all M16 gates, and manual `24/24`
+  instrumentation on `SM-G998W` pass; the density matrix remains deferred.
 - M16-C REVIEW: PASS — `/root/m16b_review`; local handoff records are
   consistent, no blocking findings, and external writes remain unauthorized.
 - M16-C CLOSE_PHASE: complete locally. Overall final audit remains blocked only

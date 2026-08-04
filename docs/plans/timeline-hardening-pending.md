@@ -1,7 +1,7 @@
 # Timeline Hardening — Plan ejecutable de pendientes
 
 > **Fuente de verdad actual.** Actualizado para `feat/timeline-hardening`
-> después de completar M16-B el 2026-08-02. El SHA queda registrado por el commit
+> después de completar M16-B el 2026-08-03. El SHA queda registrado por el commit
 > independiente de la fase. El contenido histórico posterior a esta cabecera se
 > conserva como referencia de arquitectura, pero no debe usarse para elegir el
 > siguiente módulo ni para ejecutar Git. `AGENTS.md` y `CONVENTIONS.md` definen
@@ -18,9 +18,9 @@ publicar cada fase.
 | --- | --- |
 | Rama de trabajo | `feat/timeline-hardening` |
 | Commit base | `2b350d6` — `fix(timeline): prevent zoom layout overflow` |
-| Último hito funcional validado | M16-B — pinning de todos los clips capturados durante el preview; `41cb11e` |
+| Último hito funcional validado | M16-B — pinning de todos los clips capturados durante el preview; `41cb11e` + cobertura de dispositivo validada |
 | Módulos terminados | M10, M11, M13, M14, M15-security y M16-A/B; M12 queda diferido por dispositivos |
-| Próxima fase | M16-C — cierre del audit local; sin merge mientras falte autorización externa |
+| Próxima fase | Handoff externo M15 — PR/Linear/Notion y decisión de matriz; sin merge mientras falte autorización |
 | Rama remota | Confirmar antes de publicar; no asumir su posición desde este documento |
 | Pull request | Existente: #1; actualizar solo con autorización explícita |
 | Linear | `OSQ-5`; comprobar y actualizar solo con autorización explícita |
@@ -35,7 +35,9 @@ Validación más reciente registrada para M16-A/B:
 | `./gradlew lintDebug` | PASS en M16-A/B |
 | `./gradlew assembleDebug` | PASS en M16-A/B |
 | `./gradlew compileDebugAndroidTestKotlin` | PASS en M16-A/B |
-| `adb devices -l` | Sin dispositivos adjuntos; connected suite omitida honestamente |
+| `adb devices -l` | `SM-G998W` / Android 15 conectado |
+| `adb shell am instrument -w ...AndroidJUnitRunner` | PASS, `OK (24 tests)` con APKs instalados mediante `--no-streaming` |
+| `./gradlew connectedDebugAndroidTest` | Instalador streaming no concluye en este dispositivo; usar procedimiento manual documentado |
 
 La tarea Gradle de instalación por streaming no es fiable con este dispositivo.
 El procedimiento validado está documentado en `CONVENTIONS.md`: compilar ambos
@@ -334,12 +336,11 @@ git diff --cached --name-only
 
 ## Cola actual posterior a M16
 
-La única fase local restante es M16-C: cerrar `final-audit.md`, conservar la
-evidencia de los commits `2c63995` y `41cb11e`, y mantener explícitos los
-bloqueos de dispositivo/autorización. M12 (matriz de densidades) queda
-diferido por alcance. No actualizar PR, Linear o Notion ni hacer merge sin
-autorización explícita. El detalle de M8–M15 que sigue es histórico y no debe
-seleccionar trabajo nuevo.
+La fase local M16-C está cerrada: `final-audit.md` conserva la evidencia de
+`2c63995`, `41cb11e` y la validación física `24/24`. Lo que queda es el handoff
+externo, la decisión sobre la matriz de densidades (M12, diferida por alcance)
+y la autorización para PR, Linear, Notion o merge. El detalle de M8–M15 que
+sigue es histórico y no debe seleccionar trabajo nuevo.
 
 ## 5. Módulos pendientes (histórico previo a M16)
 

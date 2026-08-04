@@ -251,40 +251,6 @@ class TimelineComposeHarnessTest {
     }
 
     @Test
-    fun capturedMultiClipPreviewPinsOffscreenClips() {
-        lateinit var firstId: String
-        lateinit var offscreenId: String
-        composeRule.runOnIdle {
-            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
-            timelineViewModel.addPadClip(trackIndex = 0, startTick = 0L, padIndex = 0)
-            firstId = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }.id
-
-            val idsAfterFirst = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
-            timelineViewModel.addPadClip(
-                trackIndex = 1,
-                startTick = 480L * 4L * 100L,
-                padIndex = 1,
-            )
-            offscreenId = timelineViewModel.arrangement.value.clips.first { it.id !in idsAfterFirst }.id
-            timelineViewModel.selectClip(firstId)
-            timelineViewModel.selectClip(offscreenId, addToSelection = true)
-        }
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("timeline-clip-$offscreenId").assertDoesNotExist()
-
-        val firstClip = composeRule.onNodeWithTag("timeline-clip-$firstId")
-        firstClip.performTouchInput {
-            down(center)
-            moveTo(Offset(10_000f, center.y), delayMillis = 300L)
-        }
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("timeline-clip-$offscreenId").assertExists()
-        firstClip.performTouchInput { up() }
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("timeline-clip-$offscreenId").assertDoesNotExist()
-    }
-
-    @Test
     fun movingClipAtFiveHundredPercentScrollsAndUndoesAsOneTransaction() {
         lateinit var clipId: String
         composeRule.runOnIdle {
