@@ -355,6 +355,113 @@ class TimelineComposeHarnessTest {
     }
 
     @Test
+    fun leftResizeHandleCommitsOnceAndUndoRedoRestoreShortClip() {
+        lateinit var clipId: String
+        val originalStart = 960L
+        val originalDuration = 960L
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(
+                trackIndex = 0,
+                startTick = originalStart,
+                padIndex = 0,
+                durationTicks = originalDuration,
+            )
+            clipId = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }.id
+            timelineViewModel.selectClip(clipId)
+            timelineViewModel.setZoom(1f)
+            timelineViewModel.setSnap(TimelineViewModel.Snap.FREE)
+        }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle {
+            assertEquals(setOf(clipId), timelineViewModel.selectedClipIds.value)
+        }
+        composeRule.onNodeWithTag("timeline-clip-$clipId").performTouchInput { click(center) }
+        composeRule.waitForIdle()
+        val startHandle = composeRule.onNodeWithTag("timeline-clip-start-handle-$clipId", useUnmergedTree = true)
+        startHandle.assertExists()
+        val clipNode = composeRule.onNodeWithTag("timeline-clip-$clipId")
+        val clipBounds = clipNode.fetchSemanticsNode().boundsInRoot
+        clipNode.performTouchInput {
+            down(Offset(clipBounds.width * 0.05f, clipBounds.height * 0.1f))
+            moveBy(Offset(-200f, 0f), delayMillis = 350L)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            val resized = timelineViewModel.arrangement.value.clips.single { it.id == clipId }
+            val resizedStart = resized.startTick
+            val resizedDuration = resized.durationTicks
+            assertTrue(resizedStart < originalStart)
+            assertEquals(originalStart + originalDuration, resizedStart + resizedDuration)
+
+            timelineViewModel.undo()
+            val restored = timelineViewModel.arrangement.value.clips.single { it.id == clipId }
+            assertEquals(originalStart, restored.startTick)
+            assertEquals(originalDuration, restored.durationTicks)
+
+            timelineViewModel.redo()
+            val redone = timelineViewModel.arrangement.value.clips.single { it.id == clipId }
+            assertEquals(resizedStart, redone.startTick)
+            assertEquals(resizedDuration, redone.durationTicks)
+        }
+    }
+
+    @Test
+    fun rightResizeHandleCommitsOnceAndUndoRedoRestoreShortClip() {
+        lateinit var clipId: String
+        val originalStart = 960L
+        val originalDuration = 960L
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            timelineViewModel.addPadClip(
+                trackIndex = 0,
+                startTick = originalStart,
+                padIndex = 0,
+                durationTicks = originalDuration,
+            )
+            clipId = timelineViewModel.arrangement.value.clips.first { it.id !in existingIds }.id
+            timelineViewModel.selectClip(clipId)
+            timelineViewModel.setZoom(1f)
+            timelineViewModel.setSnap(TimelineViewModel.Snap.FREE)
+        }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle {
+            assertEquals(setOf(clipId), timelineViewModel.selectedClipIds.value)
+        }
+        composeRule.onNodeWithTag("timeline-clip-$clipId").performTouchInput { click(center) }
+        composeRule.waitForIdle()
+        val endHandle = composeRule.onNodeWithTag("timeline-clip-end-handle-$clipId", useUnmergedTree = true)
+        endHandle.assertExists()
+        val clipNode = composeRule.onNodeWithTag("timeline-clip-$clipId")
+        val clipBounds = clipNode.fetchSemanticsNode().boundsInRoot
+        clipNode.performTouchInput {
+            down(Offset(clipBounds.width * 0.95f, clipBounds.height * 0.1f))
+            moveBy(Offset(200f, 0f), delayMillis = 350L)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            val resized = timelineViewModel.arrangement.value.clips.single { it.id == clipId }
+            val resizedDuration = resized.durationTicks
+            assertEquals(originalStart, resized.startTick)
+            assertTrue(resizedDuration > originalDuration)
+
+            timelineViewModel.undo()
+            val restored = timelineViewModel.arrangement.value.clips.single { it.id == clipId }
+            assertEquals(originalStart, restored.startTick)
+            assertEquals(originalDuration, restored.durationTicks)
+
+            timelineViewModel.redo()
+            val redone = timelineViewModel.arrangement.value.clips.single { it.id == clipId }
+            assertEquals(originalStart, redone.startTick)
+            assertEquals(resizedDuration, redone.durationTicks)
+        }
+    }
+
+    @Test
     fun invalidPublicTimelineInputsAreRejectedOrClampedWithoutCrashing() {
         composeRule.runOnIdle {
             val initialCount = timelineViewModel.arrangement.value.clips.size

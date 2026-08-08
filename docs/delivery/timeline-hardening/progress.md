@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-07. State: `IMPLEMENT_PHASE` M17 post-merge baseline.
+Updated: 2026-08-07. State: `IMPLEMENT_PHASE` M19 multi-delete coverage.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -115,3 +115,19 @@ Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
 - M17 REVIEW: `/root/m17_review` PASS after correcting the stale no-streaming
   documentation reference; no P0–P3 findings remain.
 - M17 CLOSE_PHASE: complete; M18 is next.
+
+## M18 — Resize Compose coverage
+
+- M18 IMPLEMENT: complete — added deterministic Compose coverage for successful
+  left- and right-handle resize gestures on short PadClips. Each test verifies
+  the musical edge invariant and one undo/redo restoration transaction.
+- M18 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, and `compileDebugAndroidTestKotlin` PASS. `adb devices -l`
+  found `emulator-5554` (CoC-API35, Android 15/API 35); the full
+  `connectedDebugAndroidTest` suite passes 26/26, including both new resize
+  tests. No production Timeline code changed.
+- M18 REVIEW: PASS — `/root/m18_review`; the initial P2 test-integrity finding
+  was resolved by using clip-relative, density-independent edge coordinates.
+  Focused API 35 resize coverage is 2/2 and `git diff --check` passes. See
+  `phase-18-review.md`.
+- M18 CLOSE_PHASE: complete — AC-Q1 is covered; M19 is next.
