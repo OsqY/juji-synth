@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-07. State: `IMPLEMENT_PHASE` M19 multi-delete coverage.
+Updated: 2026-08-07. State: `IMPLEMENT_PHASE` M20 audio metadata validation.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -131,3 +131,20 @@ Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
   Focused API 35 resize coverage is 2/2 and `git diff --check` passes. See
   `phase-18-review.md`.
 - M18 CLOSE_PHASE: complete — AC-Q1 is covered; M19 is next.
+
+## M19 — Atomic multi-delete Compose coverage
+
+- M19 IMPLEMENT: complete — added a deterministic Delete-tool stroke over
+  three clips, crossing one target twice while keeping a fourth clip on another
+  row outside the stroke.
+- M19 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, and `compileDebugAndroidTestKotlin` PASS. Focused API 35
+  coverage is 1/1; the full `connectedDebugAndroidTest` suite is 27/27. The
+  assertions require exactly three trash entries, preserve the unrelated clip,
+  and restore/reapply all targets with one undo/redo. No production Timeline
+  code changed.
+- M19 REVIEW: PASS — `/root/m18_review`; the initial P1 coverage gap was
+  resolved by adding the non-target clip, repeated crossing, exact trash-size
+  assertions, and delete/undo/redo preservation checks. `git diff --check`
+  passes; no P0–P3 findings remain. See `phase-19-review.md`.
+- M19 CLOSE_PHASE: complete — AC-Q2 is covered; M20 is next.

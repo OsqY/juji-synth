@@ -151,6 +151,73 @@ class TimelineComposeHarnessTest {
     }
 
     @Test
+    fun deleteStrokeRemovesMultipleClipsAndUndoRedoCommitOnce() {
+        lateinit var clipIds: List<String>
+        lateinit var untouchedClipId: String
+        composeRule.runOnIdle {
+            val existingIds = timelineViewModel.arrangement.value.clips.mapTo(hashSetOf()) { it.id }
+            listOf(1920L, 3840L, 5760L).forEach { startTick ->
+                timelineViewModel.addPadClip(
+                    trackIndex = 0,
+                    startTick = startTick,
+                    padIndex = 0,
+                    durationTicks = 480L,
+                )
+            }
+            timelineViewModel.addPadClip(
+                trackIndex = 1,
+                startTick = 3840L,
+                padIndex = 1,
+                durationTicks = 480L,
+            )
+            timelineViewModel.setZoom(0.5f)
+            val addedClips = timelineViewModel.arrangement.value.clips.filter { it.id !in existingIds }
+            clipIds = addedClips.filter { it.trackIndex == 0 }.sortedBy { it.startTick }.map { it.id }
+            untouchedClipId = addedClips.single { it.trackIndex == 1 }.id
+            timelineViewModel.setTool(TimelineTool.DELETE)
+        }
+        composeRule.waitForIdle()
+        assertEquals(3, clipIds.size)
+
+        val deleteTool = composeRule.onNodeWithTag("timeline-delete-tool").assertIsDisplayed()
+        val deleteBounds = deleteTool.fetchSemanticsNode().boundsInRoot
+        val points =
+            clipIds.map { clipId ->
+                val clipBounds = composeRule.onNodeWithTag("timeline-clip-$clipId").fetchSemanticsNode().boundsInRoot
+                Offset(clipBounds.center.x - deleteBounds.left, clipBounds.center.y - deleteBounds.top)
+            }
+        deleteTool.performTouchInput {
+            down(points.first())
+            moveTo(points[1], delayMillis = 250L)
+            moveTo(points.first(), delayMillis = 250L)
+            moveTo(points.last(), delayMillis = 250L)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            val deletedIds = timelineViewModel.arrangement.value.clips.map { it.id }.toSet()
+            assertTrue(clipIds.none { it in deletedIds })
+            assertTrue(untouchedClipId in deletedIds)
+            assertEquals(3, timelineViewModel.deletedClips.value.size)
+            assertEquals(clipIds.toSet(), timelineViewModel.deletedClips.value.map { it.id }.toSet())
+
+            timelineViewModel.undo()
+            val restoredIds = timelineViewModel.arrangement.value.clips.map { it.id }.toSet()
+            assertTrue(clipIds.all { it in restoredIds })
+            assertTrue(untouchedClipId in restoredIds)
+            assertTrue(timelineViewModel.deletedClips.value.none { it.id in clipIds })
+
+            timelineViewModel.redo()
+            val redoneIds = timelineViewModel.arrangement.value.clips.map { it.id }.toSet()
+            assertTrue(clipIds.none { it in redoneIds })
+            assertTrue(untouchedClipId in redoneIds)
+            assertEquals(3, timelineViewModel.deletedClips.value.size)
+            assertEquals(clipIds.toSet(), timelineViewModel.deletedClips.value.map { it.id }.toSet())
+        }
+    }
+
+    @Test
     fun capturedMultiClipMoveKeepsOffsetsAndUndoesAsOneTransaction() {
         lateinit var firstId: String
         lateinit var secondId: String

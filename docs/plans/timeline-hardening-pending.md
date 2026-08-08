@@ -1,7 +1,7 @@
 # Timeline Hardening — Plan ejecutable de pendientes
 
 > **Fuente de verdad actual.** Actualizado para `feat/timeline-followup-hardening`
-> después del merge de PR #1 (`72fb813`) y de cerrar M18 para ejecutar M19 el 2026-08-07. El SHA queda registrado por el commit
+> después del merge de PR #1 (`72fb813`) y de cerrar M19 para ejecutar M20 el 2026-08-07. El SHA queda registrado por el commit
 > independiente de la fase. El contenido histórico posterior a esta cabecera se
 > conserva como referencia de arquitectura, pero no debe usarse para elegir el
 > siguiente módulo ni para ejecutar Git. `AGENTS.md` y `CONVENTIONS.md` definen
@@ -18,25 +18,25 @@ publicar cada fase.
 | --- | --- |
 | Rama de trabajo | `feat/timeline-followup-hardening` |
 | Commit base | `2b350d6` — `fix(timeline): prevent zoom layout overflow` |
-| Último hito funcional validado | M18 Compose resize; API 35 `26/26`; PR #1 mergeada en `72fb813` |
-| Módulos terminados | M10, M11, M13, M14, M15-security, M16-A/B, M17 y M18; M12 queda diferido por dispositivos |
-| Próxima fase | M19 — Delete múltiple; después M20 audio, M21 aritmética, M22 Follow Playhead y M23 auditoría |
+| Último hito funcional validado | M19 multi-delete Compose; API 35 `27/27`; PR #1 mergeada en `72fb813` |
+| Módulos terminados | M10, M11, M13, M14, M15-security, M16-A/B, M17, M18 y M19; M12 queda diferido por dispositivos |
+| Próxima fase | M20 — validación de metadatos/rutas de audio; después M21 aritmética, M22 Follow Playhead y M23 auditoría |
 | Rama remota | No publicada todavía |
 | Pull request | #1 mergeada; crear una PR nueva al cerrar M23 y con autorización |
 | Linear | `OSQ-5` Done; crear seguimiento nuevo sin reabrirlo |
 | Notion | Tarea original Realizada; crear seguimiento nuevo si se autoriza |
 
-Validación más reciente registrada para M18:
+Validación más reciente registrada para M19:
 
 | Comando | Resultado |
 | --- | --- |
-| `./gradlew testDebugUnitTest` | PASS en M18 |
-| `./gradlew compileDebugKotlin` | PASS en M18 |
-| `./gradlew lintDebug` | PASS en M18 |
-| `./gradlew assembleDebug` | PASS en M18 |
-| `./gradlew compileDebugAndroidTestKotlin` | PASS en M18 |
+| `./gradlew testDebugUnitTest` | PASS en M19 |
+| `./gradlew compileDebugKotlin` | PASS en M19 |
+| `./gradlew lintDebug` | PASS en M19 |
+| `./gradlew assembleDebug` | PASS en M19 |
+| `./gradlew compileDebugAndroidTestKotlin` | PASS en M19 |
 | `adb devices -l` | `emulator-5554`, CoC-API35 / Android 15 conectado |
-| `./gradlew connectedDebugAndroidTest` | PASS, `26/26`, incluyendo ambos resize Compose |
+| `./gradlew connectedDebugAndroidTest` | PASS, `27/27`, incluyendo multi-delete Compose |
 
 Para la evidencia histórica de M16 en `SM-G998W`, la tarea Gradle de
 instalación por streaming no fue fiable. El procedimiento validado quedó
@@ -338,8 +338,8 @@ git diff --cached --name-only
 ## Cola actual posterior al merge
 
 M16-C y el handoff externo están cerrados mediante PR #1. M17 documentación
-post-merge y M18 resize Compose están cerrados. La nueva cola es M19 Delete múltiple, M20
-datos de audio, M21 aritmética de exportación, M22 Follow Playhead y M23
+post-merge, M18 resize Compose y M19 Delete múltiple están cerrados. La nueva
+cola es M20 datos de audio, M21 aritmética de exportación, M22 Follow Playhead y M23
 auditoría/handoff. M12 continúa diferida. El detalle de M8–M16 que sigue es
 histórico y no debe seleccionar trabajo nuevo.
 
