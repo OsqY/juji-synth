@@ -7,27 +7,22 @@ REVIEW → CLOSE_PHASE`. Four Gradle gates and independent review are required.
 
 R1 `e1c2f71`, R2 `8f25d30`, R3 `5d93af4`, and R4 `1c7e6e2` are closed.
 
-## Remaining phases
+## Follow-up phases
 
 | Phase | Objective | Commit | Closure |
 | --- | --- | --- | --- |
-| M10 | Edge auto-scroll while moving clips; 100%/500%, bounds, cancel, one undo | `feat(timeline): add edge auto-scroll while moving clips` | AC-F1–F4, gates, device, review PASS |
-| M11 | Non-intercepting editing-state indicators | `feat(timeline): add editing state indicators` | AC-V1, gates, review PASS |
-| M12 | Device/density validation matrix | `test(timeline): add device density validation matrix` | AC-D1, evidence review |
-| M13 | Measured viewport performance/recomposition work | `perf(timeline): reduce viewport recomposition overhead` | AC-P1, before/after evidence |
-| M14 | Document viewport/tick model and constraints | `docs(timeline): document viewport-based rendering model` | AC-C1, docs review |
-| M15 | Final audit and authorized handoff | optional `chore(timeline): finalize validation and review artifacts` | AC-O1, final-audit complete/blocked |
-| M16-A | Normalize audio paths and make save failures observable | `fix(project): preserve audio clips across save and rename` | AC-R1–R3, focused tests, gates, independent review |
-| M16-B | Keep every captured clip composed during auto-scroll | `fix(timeline): pin all clips during multi-drag preview` | AC-R4, unit/Compose coverage, gates, independent review |
-| M16-C | Re-audit the PR and update local handoff records | `docs(timeline): record PR remediation validation` | zero P0/P1 findings, final audit updated |
+| M17 | Record merged baseline and replace the stale execution queue | `docs(timeline): record post-merge follow-up baseline` | Docs agree on merge, external state, API 35 evidence, and deferred M12 |
+| M18 | Cover successful resize from both handles with one undo/redo transaction | `test(timeline): cover committed resize gestures` | AC-Q1, gates, API 35, review PASS |
+| M19 | Cover a multi-clip Delete stroke as one history transaction | `test(timeline): cover atomic multi-delete gestures` | AC-Q2, gates, API 35, review PASS |
+| M20 | Reject invalid audio metadata and project-external audio references | `fix(project): validate loaded audio clip data` | AC-S1, focused tests, gates, security review PASS |
+| M21 | Prevent clip-end and export-duration arithmetic overflow | `fix(project): prevent timeline export arithmetic overflow` | AC-S2, focused tests, gates, security review PASS |
+| M22 | Provide an explicit Follow Playhead control | `feat(timeline): add explicit playhead follow control` | AC-F5, Compose coverage, gates, API 35, review PASS |
+| M23 | Run the final audit and prepare the authorized external handoff | `docs(timeline): close follow-up hardening audit` | AC-O2, zero blocking findings, evidence current |
 
-Current phase: M16-C local final audit (blocked only on optional device and
-external handoff). M10 is closed in `22b0461`, M11 in
-`7f6de85`, M12 in `6f8f8d2`, M13 in `77a76f6`, and M14 is closed with AC-C1
-evidence in `phase-14-review.md`. M15 security remediation has passed review;
-M16-A is closed in `2c63995` and M16-B in `41cb11e`; remaining work is local
-final-audit evidence, the deferred density matrix, and explicitly authorized
-external handoff. No direct merge is permitted.
+Current phase: M17 on `feat/timeline-followup-hardening`, created from merge
+commit `72fb813`. The original PR #1, OSQ-5, and Notion handoff are closed.
+M12 remains explicitly deferred rather than passed. M18–M23 are new follow-up
+work and do not reopen the completed M0–M16 implementation.
 
 ## M16 — PR remediation plan
 

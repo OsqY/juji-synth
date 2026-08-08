@@ -1,7 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-03. State: `CLOSE_PHASE` M16-C local handoff next; M15 remains
-blocked on the full device matrix and external authorization.
+Updated: 2026-08-07. State: `IMPLEMENT_PHASE` M17 post-merge baseline.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -100,3 +99,19 @@ Gate status:
   by the deferred device evidence and explicit PR/Linear/Notion/merge authority.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
+
+## Post-merge follow-up
+
+- PR #1 is merged as `72fb813`; its reviewed head is `ad9c9a1`.
+- Linear OSQ-5 is Done and the Notion task is Realizada; neither is reopened.
+- `CoC-API35` (Android 15/API 35) passes `connectedDebugAndroidTest`, 24/24.
+- `Pixel_8` API 37 fails in Espresso infrastructure because
+  `InputManager.getInstance()` is unavailable; no Timeline assertion runs.
+- M17 IMPLEMENT: post-merge queue, specification, plan, final audit, progress,
+  and design contract now agree on the merged baseline and M17–M23 order.
+- M17 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, and `compileDebugAndroidTestKotlin` PASS; API 35 connected
+  instrumentation PASS, 24/24.
+- M17 REVIEW: `/root/m17_review` PASS after correcting the stale no-streaming
+  documentation reference; no P0–P3 findings remain.
+- M17 CLOSE_PHASE: complete; M18 is next.

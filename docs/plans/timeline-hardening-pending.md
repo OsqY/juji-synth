@@ -1,7 +1,7 @@
 # Timeline Hardening — Plan ejecutable de pendientes
 
-> **Fuente de verdad actual.** Actualizado para `feat/timeline-hardening`
-> después de completar M16-B el 2026-08-03. El SHA queda registrado por el commit
+> **Fuente de verdad actual.** Actualizado para `feat/timeline-followup-hardening`
+> después del merge de PR #1 (`72fb813`) y de iniciar M17 el 2026-08-07. El SHA queda registrado por el commit
 > independiente de la fase. El contenido histórico posterior a esta cabecera se
 > conserva como referencia de arquitectura, pero no debe usarse para elegir el
 > siguiente módulo ni para ejecutar Git. `AGENTS.md` y `CONVENTIONS.md` definen
@@ -16,15 +16,15 @@ publicar cada fase.
 
 | Propiedad | Estado |
 | --- | --- |
-| Rama de trabajo | `feat/timeline-hardening` |
+| Rama de trabajo | `feat/timeline-followup-hardening` |
 | Commit base | `2b350d6` — `fix(timeline): prevent zoom layout overflow` |
-| Último hito funcional validado | M16-B — pinning de todos los clips capturados durante el preview; `41cb11e` + cobertura de dispositivo validada |
+| Último hito funcional validado | PR #1 mergeada en `72fb813`; head revisado `ad9c9a1`; API 35 `24/24` |
 | Módulos terminados | M10, M11, M13, M14, M15-security y M16-A/B; M12 queda diferido por dispositivos |
-| Próxima fase | Handoff externo M15 — PR/Linear/Notion y decisión de matriz; sin merge mientras falte autorización |
-| Rama remota | Confirmar antes de publicar; no asumir su posición desde este documento |
-| Pull request | Existente: #1; actualizar solo con autorización explícita |
-| Linear | `OSQ-5`; comprobar y actualizar solo con autorización explícita |
-| Notion | Comprobar y actualizar solo con autorización explícita |
+| Próxima fase | M17 — línea base post-merge; después M18 resize y M19 Delete múltiple |
+| Rama remota | No publicada todavía |
+| Pull request | #1 mergeada; crear una PR nueva al cerrar M23 y con autorización |
+| Linear | `OSQ-5` Done; crear seguimiento nuevo sin reabrirlo |
+| Notion | Tarea original Realizada; crear seguimiento nuevo si se autoriza |
 
 Validación más reciente registrada para M16-A/B:
 
@@ -40,8 +40,9 @@ Validación más reciente registrada para M16-A/B:
 | `./gradlew connectedDebugAndroidTest` | Instalador streaming no concluye en este dispositivo; usar procedimiento manual documentado |
 
 La tarea Gradle de instalación por streaming no es fiable con este dispositivo.
-El procedimiento validado está documentado en `CONVENTIONS.md`: compilar ambos
-APK, instalarlos con `adb install --no-streaming -r` y ejecutar el runner con
+El procedimiento validado está documentado en
+`docs/timeline-device-validation/SM-G998W-android15.md`: compilar ambos APK,
+instalarlos con `adb install --no-streaming -r` y ejecutar el runner con
 `adb shell am instrument -w`.
 
 ### Archivos ajenos que deben preservarse
@@ -334,13 +335,13 @@ git diff --cached --name-only
    merge a `main` desde el agente.
 7. Actualizar este documento con commit, fecha, gates y limitaciones reales.
 
-## Cola actual posterior a M16
+## Cola actual posterior al merge
 
-La fase local M16-C está cerrada: `final-audit.md` conserva la evidencia de
-`2c63995`, `41cb11e` y la validación física `24/24`. Lo que queda es el handoff
-externo, la decisión sobre la matriz de densidades (M12, diferida por alcance)
-y la autorización para PR, Linear, Notion o merge. El detalle de M8–M15 que
-sigue es histórico y no debe seleccionar trabajo nuevo.
+M16-C y el handoff externo están cerrados mediante PR #1. La nueva cola es
+M17 documentación post-merge, M18 resize Compose, M19 Delete múltiple, M20
+datos de audio, M21 aritmética de exportación, M22 Follow Playhead y M23
+auditoría/handoff. M12 continúa diferida. El detalle de M8–M16 que sigue es
+histórico y no debe seleccionar trabajo nuevo.
 
 ## 5. Módulos pendientes (histórico previo a M16)
 
