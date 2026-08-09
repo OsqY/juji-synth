@@ -1,7 +1,7 @@
 # Timeline Hardening — Plan ejecutable de pendientes
 
 > **Fuente de verdad actual.** Actualizado para `feat/timeline-followup-hardening`
-> después del merge de PR #1 (`72fb813`) y de cerrar M21 para ejecutar M22 el 2026-08-08. El SHA queda registrado por el commit
+> después del merge de PR #1 (`72fb813`) y de cerrar M22 para ejecutar M23 el 2026-08-08. El SHA queda registrado por el commit
 > independiente de la fase. El contenido histórico posterior a esta cabecera se
 > conserva como referencia de arquitectura, pero no debe usarse para elegir el
 > siguiente módulo ni para ejecutar Git. `AGENTS.md` y `CONVENTIONS.md` definen
@@ -18,9 +18,9 @@ publicar cada fase.
 | --- | --- |
 | Rama de trabajo | `feat/timeline-followup-hardening` |
 | Commit base | `2b350d6` — `fix(timeline): prevent zoom layout overflow` |
-| Último hito funcional validado | M21 aritmética de exportación; gates Gradle PASS; PR #1 mergeada en `72fb813` |
-| Módulos terminados | M10, M11, M13, M14, M15-security, M16-A/B, M17, M18, M19, M20 y M21; M12 queda diferido por dispositivos |
-| Próxima fase | M22 — Follow Playhead; después M23 auditoría |
+| Último hito funcional validado | M22 Follow Playhead; gates Gradle PASS; PR #1 mergeada en `72fb813` |
+| Módulos terminados | M10, M11, M13, M14, M15-security, M16-A/B, M17, M18, M19, M20, M21 y M22; M12 queda diferido por dispositivos |
+| Próxima fase | M23 — auditoría final y handoff autorizado |
 | Rama remota | No publicada todavía |
 | Pull request | #1 mergeada; crear una PR nueva al cerrar M23 y con autorización |
 | Linear | `OSQ-5` Done; crear seguimiento nuevo sin reabrirlo |
@@ -338,9 +338,9 @@ git diff --cached --name-only
 ## Cola actual posterior al merge
 
 M16-C y el handoff externo están cerrados mediante PR #1. M17 documentación
-post-merge, M18 resize Compose, M19 Delete múltiple, M20 datos de audio y M21
-aritmética de exportación están cerrados. La nueva cola es M22 Follow Playhead
-y M23 auditoría/handoff. M12 continúa diferida. El detalle de M8–M16 que sigue es
+post-merge, M18 resize Compose, M19 Delete múltiple, M20 datos de audio, M21
+aritmética de exportación y M22 Follow Playhead están cerrados. La nueva cola
+es M23 auditoría/handoff. M12 continúa diferida. El detalle de M8–M16 que sigue es
 histórico y no debe seleccionar trabajo nuevo.
 
 ### M20 — Audio metadata and path validation (cerrado)
@@ -355,7 +355,8 @@ histórico y no debe seleccionar trabajo nuevo.
 - Revisión independiente: PASS (`/root/m20_followup`, `/root/m18_review`), sin
   hallazgos P0–P3 después de añadir casos de fade-out, `+Infinity` y symlink.
 - Seguridad: PASS; Oboe y `.commandcode/` permanecen fuera del cambio.
-- Próxima fase: M22 — control explícito Follow Playhead.
+- Próxima fase: M21 — prevenir overflow en duración de exportación y final de
+  clip.
 
 ### M21 — Safe export duration arithmetic (cerrado)
 
@@ -366,6 +367,15 @@ histórico y no debe seleccionar trabajo nuevo.
 - Sin dispositivo ADB conectado para instrumentación en esta fase.
 - Revisión independiente: PASS (`/root/m20_followup`), sin hallazgos P0–P3.
 - Próxima fase: M22 — control explícito Follow Playhead.
+
+### M22 — Explicit Follow Playhead control (cerrado)
+
+- AC-F5 cumplido: el estado compartido se desactiva en gestos manuales y el
+  control `timeline-follow-playhead` lo reactiva.
+- Tests Compose y gates Gradle: PASS; `git diff --check`: PASS.
+- Sin dispositivo ADB conectado para instrumentación en esta fase.
+- Revisión independiente: PASS (`/root/m20_followup`), sin hallazgos P0–P3.
+- Próxima fase: M23 — auditoría final y handoff autorizado.
 
 ## 5. Módulos pendientes (histórico previo a M16)
 

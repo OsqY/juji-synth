@@ -56,6 +56,44 @@ class TimelineComposeHarnessTest {
         composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-zoom-indicator").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-snap-indicator").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-follow-playhead").assertIsDisplayed()
+    }
+
+    @Test
+    fun manualScrollDisablesFollowAndControlReenablesIt() {
+        composeRule.runOnIdle { assertTrue(timelineViewModel.followPlayhead.value) }
+        composeRule.onNodeWithTag("timeline-viewport").performTouchInput {
+            swipeLeft(startX = width * 0.85f, endX = width * 0.15f, durationMillis = 250L)
+        }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertFalse(timelineViewModel.followPlayhead.value) }
+
+        composeRule.onNodeWithTag("timeline-follow-playhead").performTouchInput { click() }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertTrue(timelineViewModel.followPlayhead.value) }
+    }
+
+    @Test
+    fun drawAndDeleteToolsDisableFollowPlayhead() {
+        composeRule.runOnIdle {
+            timelineViewModel.setFollowPlayhead(true)
+            timelineViewModel.setTool(TimelineTool.DRAW_PAD)
+        }
+        composeRule.onNodeWithTag("timeline-viewport").performTouchInput {
+            click(Offset(180f, 120f))
+        }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertFalse(timelineViewModel.followPlayhead.value) }
+
+        composeRule.runOnIdle {
+            timelineViewModel.setFollowPlayhead(true)
+            timelineViewModel.setTool(TimelineTool.DELETE)
+        }
+        composeRule.onNodeWithTag("timeline-delete-tool").performTouchInput {
+            click(Offset(180f, 28f))
+        }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertFalse(timelineViewModel.followPlayhead.value) }
     }
 
     @Test

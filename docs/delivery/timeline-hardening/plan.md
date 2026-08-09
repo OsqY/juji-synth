@@ -19,9 +19,9 @@ R1 `e1c2f71`, R2 `8f25d30`, R3 `5d93af4`, and R4 `1c7e6e2` are closed.
 | M22 | Provide an explicit Follow Playhead control | `feat(timeline): add explicit playhead follow control` | AC-F5, Compose coverage, gates, API 35, review PASS |
 | M23 | Run the final audit and prepare the authorized external handoff | `docs(timeline): close follow-up hardening audit` | AC-O2, zero blocking findings, evidence current |
 
-Current phase: M22 on `feat/timeline-followup-hardening`, created from merge
-commit `72fb813`. M17–M21 are closed; M20 and M21 have passing gates,
-independent reviews, and documented security/overflow evidence. M12 remains
+Current phase: M23 on `feat/timeline-followup-hardening`, created from merge
+commit `72fb813`. M17–M22 are closed; M22 has shared Follow Playhead state,
+gesture coverage, passing gates, and independent review PASS. M12 remains
 explicitly deferred rather than passed. M19–M23 are new follow-up work and do
 not reopen the completed M0–M16 implementation.
 
@@ -37,6 +37,12 @@ validation and review evidence.
 AC-S2 is complete. Both export paths use checked timing arithmetic and reject
 overflow or invalid tempo values before native export. See
 `phase-21-review.md` for validation and review evidence.
+
+## M22 closure
+
+AC-F5 is complete. Follow Playhead is an explicit shared control, and all
+manual Timeline gesture paths disable it before editing or navigation. See
+`phase-22-review.md` for validation and review evidence.
 
 ## M16 — PR remediation plan
 

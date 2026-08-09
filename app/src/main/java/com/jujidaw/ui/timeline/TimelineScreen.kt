@@ -121,9 +121,9 @@ fun TimelineScreen(
     val deletedClipCount = viewModel.deletedClips.collectAsState().value.size
     val canUndo = viewModel.canUndo.collectAsState().value
     val canRedo = viewModel.canRedo.collectAsState().value
+    val followPlayhead = viewModel.followPlayhead.collectAsState().value
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    var followPlayhead by remember { mutableStateOf(true) }
     var showControls by rememberSaveable { mutableStateOf(true) }
     var showAutomation by rememberSaveable { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(persistedZoom) }
@@ -184,7 +184,7 @@ fun TimelineScreen(
             .horizontalScrollPx
         zoom = nextZoom
         viewModel.setZoom(nextZoom)
-        followPlayhead = false
+        viewModel.disableFollowPlayhead()
     }
 
     val playheadContentPx = timelineTransform.tickToContentPx(transport.position.toTicks())
@@ -351,6 +351,7 @@ fun TimelineScreen(
             zoom = zoom,
             compact = isLandscape,
             deletedClipCount = deletedClipCount,
+            followPlayhead = followPlayhead,
             onToggleLoop = { viewModel.toggleLoop() },
             onTogglePunch = { viewModel.togglePunch() },
             onLoopStart = { viewModel.setLoopStartToPlayhead() },
@@ -363,6 +364,7 @@ fun TimelineScreen(
             onNudge = { viewModel.nudgePlayhead(it) },
             onSnapChange = { viewModel.setSnap(it) },
             onZoomChange = { setZoomAtAnchor(it, viewportWidthPx / 2f) },
+            onFollowPlayheadChange = viewModel::setFollowPlayhead,
             onRestoreDeleted = { viewModel.restoreLastDeletedClip() },
         )
 
@@ -464,7 +466,7 @@ fun TimelineScreen(
                                     anchorTick =
                                         (centroid.x + gestureTransform.horizontalScrollPx) /
                                             gestureTransform.pixelsPerTick
-                                    followPlayhead = false
+                                    viewModel.disableFollowPlayhead()
                                 },
                                 onGesture = { centroid, absoluteScale ->
                                     if (gestureStateHolder.value != TimelineGestureState.Pinching) return@detectTwoFingerTransformGestures
@@ -497,7 +499,7 @@ fun TimelineScreen(
                                 onDragStart = {
                                     transitionGesture(TimelineGestureEvent.BeginScroll)
                                     gestureScrollX = currentScrollX
-                                    followPlayhead = false
+                                    viewModel.disableFollowPlayhead()
                                 },
                                 onHorizontalDrag = { change, dragAmount ->
                                     if (gestureStateHolder.value == TimelineGestureState.Scrolling && currentDraggedClipId == null) {
@@ -533,6 +535,7 @@ fun TimelineScreen(
                                     if (tool == TimelineTool.SELECT) {
                                         detectDragGesturesAfterLongPress(
                                             onDragStart = {
+                                                viewModel.disableFollowPlayhead()
                                                 marqueeStart = it
                                                 marqueeEnd = it
                                             },
@@ -678,7 +681,10 @@ fun TimelineScreen(
                                                 }
                                                 .width(with(density) { renderedWidth.toDp() })
                                                 .height(with(density) { trackHeightPx.toDp() }),
-                                        onTap = { viewModel.selectClip(clip.id) },
+                                        onTap = {
+                                            viewModel.disableFollowPlayhead()
+                                            viewModel.selectClip(clip.id)
+                                        },
                                         isSelected = clip.id in selectedClipIds,
                                         isDragging = isDragging,
                                         onDragStart = { pointerOffset ->
@@ -688,7 +694,7 @@ fun TimelineScreen(
                                                 TimelineGestureEvent.BeginMove(moveClipIds),
                                             )
                                             if (nextState == TimelineGestureState.MovingClip(moveClipIds)) {
-                                                followPlayhead = false
+                                                viewModel.disableFollowPlayhead()
                                                 draggedClipId = clip.id
                                                 draggedClipIds = moveClipIds
                                                 draggedClipOffset = Offset.Zero
@@ -740,6 +746,7 @@ fun TimelineScreen(
                                             }
                                         },
                                         onResizeStart = { edge ->
+                                            viewModel.disableFollowPlayhead()
                                             val nextState = transitionGesture(
                                                 when (edge) {
                                                     ClipResizeEdge.LEFT -> TimelineGestureEvent.BeginResizeStart(clip.id)
@@ -917,7 +924,7 @@ fun TimelineScreen(
                                             viewModel.seekToTick(
                                                 currentTimelineTransform.viewportPxToSnappedTick(it.x, currentSnap.ticks),
                                             )
-                                            followPlayhead = false
+                                            viewModel.disableFollowPlayhead()
                                             transitionGesture(TimelineGestureEvent.Finish)
                                         }
                                     }
@@ -930,7 +937,7 @@ fun TimelineScreen(
                                             viewModel.seekToTick(
                                                 currentTimelineTransform.viewportPxToSnappedTick(offset.x, currentSnap.ticks),
                                             )
-                                            followPlayhead = false
+                                            viewModel.disableFollowPlayhead()
                                         }
                                     },
                                     onHorizontalDrag = { change, _ ->
@@ -964,6 +971,7 @@ fun TimelineScreen(
                                 .height(with(density) { (trackHeightPx * 16f).toDp() })
                                 .pointerInput(tool) {
                                     detectTapGestures { offset ->
+                                        viewModel.disableFollowPlayhead()
                                         val track = (offset.y / trackHeightPx).toInt().coerceIn(0, 15)
                                         val tick = currentTimelineTransform.viewportPxToSnappedTick(offset.x, currentSnap.ticks)
                                         viewModel.placeSelectedSource(track, tick)
@@ -991,6 +999,7 @@ fun TimelineScreen(
                                             timelineClipIdsAtPoint(currentClips, track, tick, hitSlopTicks)
                                         },
                                         onPreview = {
+                                            viewModel.disableFollowPlayhead()
                                             transitionGesture(TimelineGestureEvent.BeginDelete(it))
                                             pendingDeleteClipIds = it
                                         },
@@ -1436,6 +1445,7 @@ private fun TransportStrip(
     zoom: Float,
     compact: Boolean,
     deletedClipCount: Int,
+    followPlayhead: Boolean,
     onToggleLoop: () -> Unit,
     onTogglePunch: () -> Unit,
     onLoopStart: () -> Unit,
@@ -1448,6 +1458,7 @@ private fun TransportStrip(
     onNudge: (Long) -> Unit,
     onSnapChange: (TimelineViewModel.Snap) -> Unit,
     onZoomChange: (Float) -> Unit,
+    onFollowPlayheadChange: (Boolean) -> Unit,
     onRestoreDeleted: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1497,6 +1508,7 @@ private fun TransportStrip(
                     modifier = Modifier.testTag("timeline-zoom-indicator"),
                 )
                 ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
+                FollowPlayheadButton(followPlayhead, onFollowPlayheadChange)
                 RestoreTrashButton(deletedClipCount, onRestoreDeleted)
             }
             return@Column
@@ -1563,6 +1575,7 @@ private fun TransportStrip(
                 ZoomStepButton(Icons.Outlined.ZoomOut) { onZoomChange(zoom - 0.2f) }
                 ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
             }
+            FollowPlayheadButton(followPlayhead, onFollowPlayheadChange)
             RestoreTrashButton(deletedClipCount, onRestoreDeleted)
         }
     }
@@ -1578,12 +1591,14 @@ fun TimelineLandscapeControls(
     val snap = viewModel.snap.collectAsState().value
     val zoom = viewModel.zoom.collectAsState().value
     val deletedClipCount = viewModel.deletedClips.collectAsState().value.size
+    val followPlayhead = viewModel.followPlayhead.collectAsState().value
     TransportStrip(
         transport = transport,
         snap = snap,
         zoom = zoom,
         compact = true,
         deletedClipCount = deletedClipCount,
+        followPlayhead = followPlayhead,
         onToggleLoop = viewModel::toggleLoop,
         onTogglePunch = viewModel::togglePunch,
         onLoopStart = viewModel::setLoopStartToPlayhead,
@@ -1596,8 +1611,23 @@ fun TimelineLandscapeControls(
         onNudge = viewModel::nudgePlayhead,
         onSnapChange = viewModel::setSnap,
         onZoomChange = viewModel::setZoom,
+        onFollowPlayheadChange = viewModel::setFollowPlayhead,
         onRestoreDeleted = viewModel::restoreLastDeletedClip,
         modifier = modifier,
+    )
+}
+
+@Composable
+private fun FollowPlayheadButton(
+    followPlayhead: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    TransportButton(
+        label = if (followPlayhead) "Follow: On" else "Follow: Off",
+        active = followPlayhead,
+        activeColor = Primary,
+        onClick = { onChange(!followPlayhead) },
+        modifier = Modifier.size(width = 88.dp, height = 36.dp).testTag("timeline-follow-playhead"),
     )
 }
 

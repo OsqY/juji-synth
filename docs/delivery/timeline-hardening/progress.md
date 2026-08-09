@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-08. State: `CLOSE_PHASE` M21 complete; M22 next.
+Updated: 2026-08-08. State: `CLOSE_PHASE` M22 complete; M23 next.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -179,3 +179,16 @@ Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
 - M21 REVIEW: PASS — `/root/m20_followup`; no P0–P3 findings. See
   `phase-21-review.md`.
 - M21 CLOSE_PHASE: complete — AC-S2 is covered; M22 is next.
+
+## M22 — Explicit Follow Playhead control
+
+- M22 IMPLEMENT: complete — Follow state is shared in `TimelineViewModel`,
+  exposed in portrait/landscape controls, and all manual Timeline gestures
+  disable it.
+- M22 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, `compileDebugAndroidTestKotlin`, and `git diff --check`
+  pass. `adb devices -l` found no device, so connected instrumentation was
+  skipped.
+- M22 REVIEW: PASS — `/root/m20_followup`; the initial P2 gesture coverage gap
+  was corrected and no P0–P3 findings remain. See `phase-22-review.md`.
+- M22 CLOSE_PHASE: complete — AC-F5 is covered; M23 is next.

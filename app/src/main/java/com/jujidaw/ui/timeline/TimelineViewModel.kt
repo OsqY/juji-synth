@@ -51,6 +51,9 @@ class TimelineViewModel(
     private val _zoom = MutableStateFlow(1f)
     val zoom: StateFlow<Float> = _zoom.asStateFlow()
 
+    private val _followPlayhead = MutableStateFlow(true)
+    val followPlayhead: StateFlow<Boolean> = _followPlayhead.asStateFlow()
+
     // A sixteenth is the most useful starting unit for drum programming and
     // keeps newly placed pads adjacent by default.
     private val _snap = MutableStateFlow(Snap.SIXTEENTH)
@@ -330,6 +333,14 @@ class TimelineViewModel(
 
     fun setZoom(z: Float) {
         _zoom.value = sanitizeTimelineZoom(z, fallback = _zoom.value)
+    }
+
+    fun setFollowPlayhead(enabled: Boolean) {
+        _followPlayhead.value = enabled
+    }
+
+    fun disableFollowPlayhead() {
+        _followPlayhead.value = false
     }
 
     fun setSnap(s: Snap) {
