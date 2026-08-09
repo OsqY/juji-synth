@@ -103,6 +103,31 @@ class ClipModelTest {
         assertEquals("samples/kick.wav", (decoded.clips[1] as AudioClip).audioFilePath)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun audioClipRejectsNegativeStartOffset() {
+        AudioClip("offset", 0, 0, PPQ.toLong(), audioFilePath = "samples/kick.wav", audioStartOffsetSamples = -1L)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun audioClipRejectsNegativeFades() {
+        AudioClip("fade", 0, 0, PPQ.toLong(), audioFilePath = "samples/kick.wav", fadeInSamples = -1)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun audioClipRejectsNegativeFadeOut() {
+        AudioClip("fade-out", 0, 0, PPQ.toLong(), audioFilePath = "samples/kick.wav", fadeOutSamples = -1)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun audioClipRejectsNonFiniteGain() {
+        AudioClip("gain", 0, 0, PPQ.toLong(), audioFilePath = "samples/kick.wav", gain = Float.NaN)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun audioClipRejectsInfiniteGain() {
+        AudioClip("infinite-gain", 0, 0, PPQ.toLong(), audioFilePath = "samples/kick.wav", gain = Float.POSITIVE_INFINITY)
+    }
+
     @Test
     fun clipsInRangeReturnsOverlappingClipsOnly() {
         val arrangement = Arrangement(

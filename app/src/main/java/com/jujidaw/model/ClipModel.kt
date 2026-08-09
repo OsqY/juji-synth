@@ -113,7 +113,10 @@ data class AudioClip(
         require(startTick >= 0) { "Clip start tick must be non-negative" }
         require(durationTicks > 0) { "Clip duration must be positive" }
         require(audioFilePath.isNotBlank()) { "Audio file path must not be blank" }
-        require(gain >= 0f) { "Gain must be non-negative" }
+        require(audioStartOffsetSamples >= 0) { "Audio start offset must be non-negative" }
+        require(fadeInSamples >= 0) { "Audio fade-in must be non-negative" }
+        require(fadeOutSamples >= 0) { "Audio fade-out must be non-negative" }
+        require(gain.isFinite() && gain >= 0f) { "Gain must be finite and non-negative" }
     }
 }
 

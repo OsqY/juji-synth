@@ -19,12 +19,19 @@ R1 `e1c2f71`, R2 `8f25d30`, R3 `5d93af4`, and R4 `1c7e6e2` are closed.
 | M22 | Provide an explicit Follow Playhead control | `feat(timeline): add explicit playhead follow control` | AC-F5, Compose coverage, gates, API 35, review PASS |
 | M23 | Run the final audit and prepare the authorized external handoff | `docs(timeline): close follow-up hardening audit` | AC-O2, zero blocking findings, evidence current |
 
-Current phase: M20 on `feat/timeline-followup-hardening`, created from merge
-commit `72fb813`. M17, M18, and M19 are closed; M19 has multi-delete Compose
-coverage, passing gates, API 35 evidence, and independent review PASS. The
-original PR #1, OSQ-5, and Notion handoff are closed. M12 remains explicitly
-deferred rather than passed. M19–M23 are new follow-up work and do not reopen
-the completed M0–M16 implementation.
+Current phase: M21 on `feat/timeline-followup-hardening`, created from merge
+commit `72fb813`. M17–M20 are closed; M20 has audio metadata/path validation,
+passing gates, API 35 evidence, security review PASS, and independent review
+PASS. The original PR #1, OSQ-5, and Notion handoff are closed. M12 remains
+explicitly deferred rather than passed. M19–M23 are new follow-up work and do
+not reopen the completed M0–M16 implementation.
+
+## M20 closure
+
+AC-S1 is complete. `AudioClip` validates persisted metadata, and project loads
+reject audio paths that are missing or outside their canonical project root
+before any native audio load can occur. See `phase-20-review.md` for the
+validation and review evidence.
 
 ## M16 — PR remediation plan
 

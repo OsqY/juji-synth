@@ -1,6 +1,7 @@
 package com.jujidaw.project
 
 import java.io.File
+import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -25,6 +26,20 @@ class ProjectPathPolicyTest {
         assertNull(ProjectPathPolicy.audioFile(projectDirectory, "../../escape.wav"))
         assertNull(ProjectPathPolicy.audioFile(projectDirectory, "/tmp/escape.wav"))
         assertNull(ProjectPathPolicy.audioFile(projectDirectory, "."))
+    }
+
+    @Test
+    fun audioFileRejectsSymlinkThatEscapesProject() {
+        val root = Files.createTempDirectory("juji-project-policy").toFile()
+        val project = root.resolve("demo").apply { mkdirs() }
+        val outside = root.resolve("outside.wav").apply { writeText("audio") }
+        val link = project.resolve("samples/outside.wav").apply { parentFile?.mkdirs() }
+        try {
+            Files.createSymbolicLink(link.toPath(), outside.toPath())
+            assertNull(ProjectPathPolicy.audioFile(project, "samples/outside.wav"))
+        } finally {
+            root.deleteRecursively()
+        }
     }
 
     @Test

@@ -137,7 +137,7 @@ class ProjectRepository(private val context: Context) {
             if (project.name != name) {
                 return@withContext Result.failure(IOException("Project name does not match its directory"))
             }
-            Result.success(project)
+            validateLoadedAudio(projectDir, project)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -276,6 +276,17 @@ class ProjectRepository(private val context: Context) {
                 samplePaths = relativePaths.distinct(),
             )
         )
+    }
+
+    private fun validateLoadedAudio(projectDir: File, project: Project): Result<Project> {
+        for (clip in project.arrangement.clips.filterIsInstance<AudioClip>()) {
+            val audioFile = ProjectPathPolicy.audioFile(projectDir, clip.audioFilePath)
+                ?: return Result.failure(IOException("Audio path is outside the project"))
+            if (!audioFile.isFile) {
+                return Result.failure(IOException("Audio file not found: ${clip.audioFilePath}"))
+            }
+        }
+        return Result.success(project)
     }
 
     // ── WAV Export ──────────────────────────────────────────────────

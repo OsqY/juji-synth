@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-07. State: `IMPLEMENT_PHASE` M20 audio metadata validation.
+Updated: 2026-08-08. State: `CLOSE_PHASE` M20 complete; M21 next.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -148,3 +148,21 @@ Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
   assertions, and delete/undo/redo preservation checks. `git diff --check`
   passes; no P0–P3 findings remain. See `phase-19-review.md`.
 - M19 CLOSE_PHASE: complete — AC-Q2 is covered; M20 is next.
+
+## M20 — Audio metadata and path validation
+
+- M20 IMPLEMENT: complete — `AudioClip` rejects negative offsets/fades,
+  negative or non-finite gains; project loading rejects missing or
+  project-external audio references before native loading.
+- M20 VALIDATE: all four Gradle gates, `compileDebugAndroidTestKotlin`,
+  focused external-path instrumentation (1/1), and API 35 connected
+  instrumentation (28/28) pass. The final unit-test-only correction retry had
+  no attached ADB device, so connected instrumentation was not rerun. `git
+  diff --check` passes.
+- M20 REVIEW: PASS — `/root/m20_followup` and `/root/m18_review`; the initial
+  coverage findings for fade-out, positive infinity, and symlink escape were
+  corrected. No P0–P3 findings remain. See `phase-20-review.md`.
+- M20 SECURITY: PASS — canonical path containment, symlink escape rejection,
+  metadata validation, and pre-native-load ordering reviewed; no secrets or
+  protected files changed.
+- M20 CLOSE_PHASE: complete — AC-S1 is covered; M21 is next.
