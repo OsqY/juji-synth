@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-08. State: `CLOSE_PHASE` M22 complete; M23 next.
+Updated: 2026-08-08. State: `CLOSE_PHASE` M23 local audit complete; external handoff pending authorization.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -192,3 +192,15 @@ Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
 - M22 REVIEW: PASS — `/root/m20_followup`; the initial P2 gesture coverage gap
   was corrected and no P0–P3 findings remain. See `phase-22-review.md`.
 - M22 CLOSE_PHASE: complete — AC-F5 is covered; M23 is next.
+
+## M23 — Final local audit
+
+- M23 AUDIT: complete — `final-audit.md`, specification, plan, pending queue,
+  and phase review record M17–M22 commits, validation, security verdict, and
+  residual risks.
+- M23 REVIEW: PASS locally; no P0–P3 findings remain. M12 density coverage and
+  API 37 runner compatibility remain deferred.
+- M23 HANDOFF: external PR/Linear/Notion publication, approval, and merge are
+  pending explicit authorization and were not performed.
+- M23 CLOSE_PHASE: local audit complete; repository is ready for authorized
+  external handoff.

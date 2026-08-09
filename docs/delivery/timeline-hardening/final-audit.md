@@ -1,8 +1,8 @@
 # Timeline Hardening — Final Audit
 
-Date: 2026-08-07
+Date: 2026-08-08
 Base: `2b350d6`
-Merged head: `ad9c9a1`; PR #1 merge commit: `72fb813`
+Follow-up head: `HEAD` (M23 audit commit); PR #1 merge commit: `72fb813`
 
 ## Acceptance checklist
 
@@ -16,7 +16,13 @@ Merged head: `ad9c9a1`; PR #1 merge commit: `72fb813`
 | Security remediation | PASS | `phase-15-review.md`, independent review no P0–P3 |
 | AC-R1–R3 audio persistence | PASS | `2c63995`, `phase-16a-review.md` |
 | AC-R4 multi-clip viewport pinning | PASS | `41cb11e`, `phase-16b-review.md` |
+| AC-Q1 resize transactions | PASS | `615044f`, `phase-18-review.md`, Compose coverage |
+| AC-Q2 atomic multi-delete | PASS | `003339e`, `phase-19-review.md`, Compose coverage |
+| AC-S1 audio metadata/path validation | PASS | `4f912a6`, `phase-20-review.md` |
+| AC-S2 export arithmetic overflow guards | PASS | `cd6e3b5`, `phase-21-review.md` |
+| AC-F5 explicit Follow Playhead | PASS | `27391d9`, `phase-22-review.md` |
 | AC-O1 final handoff | PASS | PR #1 merged; OSQ-5 Done; Notion task Realizada |
+| AC-O2 follow-up audit evidence | PASS locally | `phase-17`–`phase-23` reviews and this audit; external writes still require authorization |
 
 ## Security checklist
 
@@ -27,6 +33,10 @@ Merged head: `ad9c9a1`; PR #1 merge commit: `72fb813`
 - Audio paths/JNI: canonical paths are confined to the active project before
   save, restore, reconciliation, or native load; import, autosave, and rename
   persist project-relative paths and failed saves do not advance last-project.
+- Audio metadata/export: offsets, fades, gains, clip ends, duration arithmetic,
+  and native-export timing reject invalid or overflowing values before JNI.
+- Follow Playhead: manual scroll, zoom, selection, move, resize, scrub, draw,
+  and Delete disable following; only the explicit control re-enables it.
 - Rename/viewport lifecycle: staged project metadata has checked rollback, and
   captured multi-drag IDs are pinned only for the active preview.
 - Trash/history: IDs and complete snapshots remain transactionally restored.
@@ -36,25 +46,26 @@ Merged head: `ad9c9a1`; PR #1 merge commit: `72fb813`
 
 ## Rollback and protected state
 
-Each module is isolated in its own commit. Revert `2c63995` or `41cb11e`
+Each module is isolated in its own commit. Revert the affected M17–M22 commit
 without touching prior timeline phases if a regression appears. The dirty
 `app/src/main/cpp/oboe` submodule and untracked `.commandcode/` are excluded
 from staging and commits.
 
 ## Follow-up action
 
-The original hardening delivery is closed for the approved scope. M17–M23 are a
-new follow-up cycle for missing gesture coverage, audio-data validation,
-temporal arithmetic, and an explicit Follow Playhead control. The broader
-density matrix remains deferred.
+The original hardening delivery and the M17–M22 follow-up implementation are
+closed for the approved local scope. The broader density matrix remains
+deferred. M23 records the final local audit; PR/Linear/Notion publication and
+merge remain pending explicit authorization.
 
-Estado final: **complete for approved scope**
+Estado final: **complete for approved local scope; external handoff pending authorization**
 
-Cambios: Timeline hardening through M15 security remediation plus M16-A audio
-persistence and M16-B multi-clip viewport pinning.
+Cambios: Timeline hardening through M15 security remediation, M16-A/B
+remediation, and M17–M22 follow-up validation and safeguards.
 
-Evidencia: Four Gradle gates and independent M16 reviews pass; the physical
-SM-G998W manual suite and the API 35 AVD suite each report `OK (24 tests)`.
+Evidencia: M17–M22 gates pass; API 35 M20 instrumentation reports `28/28`.
+The final M21/M22 attempts had no attached ADB device, so no new device run is
+claimed.
 
 Hallazgos abiertos: The explicitly deferred density/orientation matrix and API
 37 Espresso compatibility; no P0/P1 implementation findings remain.
@@ -62,5 +73,5 @@ Hallazgos abiertos: The explicitly deferred density/orientation matrix and API
 Riesgos residuales: Legacy external audio references require manual migration;
 landscape/tablet behavior is not evidenced.
 
-Siguiente acción: Execute M17–M23 on `feat/timeline-followup-hardening`, keeping
-each phase independently validated, reviewed, and committed.
+Siguiente acción: authorize the external PR/Linear/Notion handoff, then run the
+final approval/merge workflow. No external write was performed in M23.

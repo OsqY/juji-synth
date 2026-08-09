@@ -2,7 +2,7 @@
 
 Task: `timeline-hardening`
 Baseline: `2b350d6`
-Current verified commit: `72fb813` (PR #1 merge; head `ad9c9a1`)
+Current verified commit: `HEAD` (M23 audit commit; PR #1 merge remains `72fb813`)
 
 ## Objective
 

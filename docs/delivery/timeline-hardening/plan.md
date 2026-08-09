@@ -17,13 +17,14 @@ R1 `e1c2f71`, R2 `8f25d30`, R3 `5d93af4`, and R4 `1c7e6e2` are closed.
 | M20 | Reject invalid audio metadata and project-external audio references | `fix(project): validate loaded audio clip data` | AC-S1, focused tests, gates, security review PASS |
 | M21 | Prevent clip-end and export-duration arithmetic overflow | `fix(project): prevent timeline export arithmetic overflow` | AC-S2, focused tests, gates, security review PASS |
 | M22 | Provide an explicit Follow Playhead control | `feat(timeline): add explicit playhead follow control` | AC-F5, Compose coverage, gates, API 35, review PASS |
-| M23 | Run the final audit and prepare the authorized external handoff | `docs(timeline): close follow-up hardening audit` | AC-O2, zero blocking findings, evidence current |
+| M23 | Run the final audit and prepare the authorized external handoff | `docs(timeline): close follow-up hardening audit` | AC-O2 local audit PASS; external authorization pending |
 
-Current phase: M23 on `feat/timeline-followup-hardening`, created from merge
-commit `72fb813`. M17–M22 are closed; M22 has shared Follow Playhead state,
-gesture coverage, passing gates, and independent review PASS. M12 remains
-explicitly deferred rather than passed. M19–M23 are new follow-up work and do
-not reopen the completed M0–M16 implementation.
+Current phase: M23 local audit on `feat/timeline-followup-hardening`, created
+from merge commit `72fb813`. M17–M22 are closed; M22 has shared Follow
+Playhead state, gesture coverage, passing gates, and independent review PASS.
+M12 remains explicitly deferred rather than passed. External PR/Linear/Notion
+writes remain pending authorization. M19–M23 are new follow-up work and do not
+reopen the completed M0–M16 implementation.
 
 ## M20 closure
 
@@ -43,6 +44,13 @@ overflow or invalid tempo values before native export. See
 AC-F5 is complete. Follow Playhead is an explicit shared control, and all
 manual Timeline gesture paths disable it before editing or navigation. See
 `phase-22-review.md` for validation and review evidence.
+
+## M23 closure
+
+AC-O2 is complete for the local audit: commits, gates, independent reviews,
+security findings, protected state, and residual risks are recorded in
+`final-audit.md` and `phase-23-review.md`. External publication and merge are
+intentionally pending explicit authorization.
 
 ## M16 — PR remediation plan
 
