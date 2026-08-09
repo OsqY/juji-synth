@@ -1,6 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-08. State: `CLOSE_PHASE` M20 complete; M21 next.
+Updated: 2026-08-08. State: `CLOSE_PHASE` M21 complete; M22 next.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -166,3 +166,16 @@ Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
   metadata validation, and pre-native-load ordering reviewed; no secrets or
   protected files changed.
 - M20 CLOSE_PHASE: complete — AC-S1 is covered; M21 is next.
+
+## M21 — Safe export duration arithmetic
+
+- M21 IMPLEMENT: complete — shared checked timing math protects `exportMix`
+  and `exportStems` from clip-end, duration, denominator, and wait overflow;
+  invalid tempos fail before native export.
+- M21 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, `compileDebugAndroidTestKotlin`, and `git diff --check`
+  pass. `adb devices -l` found no device, so connected instrumentation was
+  skipped.
+- M21 REVIEW: PASS — `/root/m20_followup`; no P0–P3 findings. See
+  `phase-21-review.md`.
+- M21 CLOSE_PHASE: complete — AC-S2 is covered; M22 is next.
