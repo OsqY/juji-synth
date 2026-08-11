@@ -45,16 +45,12 @@ empty Timeline background.
 - The pad and pattern selector owns its horizontal scroll and must not move the
   Timeline viewport.
 
-## Current phase order
+## Current delivery state
 
-The implementation phases through M13 are closed on `feat/timeline-hardening`:
-multi-clip moves, safe pinch cancellation, bounded timeline arithmetic,
-selector isolation, edge auto-scroll, editing indicators, physical-device
-evidence, and viewport composition work all have independent validation and
-review records under `docs/delivery/timeline-hardening/`.
-
-The remaining work is documentation (M14), then the final audit and explicitly
-authorized PR, security, Linear, and Notion handoff (M15).
+M0–M16 were merged through PR #1 (`72fb813`). The follow-up branch first adds
+missing Compose coverage for committed resize and multi-delete gestures, then
+hardens audio-data boundaries and temporal export arithmetic. Follow Playhead
+is added only after those verification and safety phases close.
 
 ## Known limitations
 
@@ -62,8 +58,8 @@ authorized PR, security, Linear, and Notion handoff (M15).
   SM-G998W evidence remain unvalidated.
 - The viewport tests demonstrate bounded composition, but do not claim a frame
   time or FPS improvement without a device profiler trace.
-- Final security review and external PR/Linear/Notion closure require the
-  authorized M15 handoff.
+- Android API 37 currently fails inside Espresso before Timeline assertions;
+  API 35 remains the connected validation target for this project.
 - The Oboe submodule is excluded from Timeline work.
 
 ## Validation

@@ -8,6 +8,8 @@ import com.jujidaw.data.SettingsDataStore
 import com.jujidaw.engine.TransportController
 import com.jujidaw.model.Arrangement
 import com.jujidaw.model.AudioClip
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -19,6 +21,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ProjectRepositoryAudioTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
+    private val json = Json { encodeDefaults = true; classDiscriminator = "type" }
 
     @Test
     fun autosaveAndRenameKeepAudioClipsProjectRelative() = runBlocking {
@@ -75,6 +78,23 @@ class ProjectRepositoryAudioTest {
             )
         } finally {
             repository.deleteProject(name)
+        }
+    }
+
+    @Test
+    fun loadRejectsProjectExternalAudioReference() = runBlocking {
+        val repository = ProjectRepository(context)
+        val name = "audio_external_${System.nanoTime()}"
+        val projectsDir = (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects")
+        val projectDir = projectsDir.resolve(name)
+        val outside = projectsDir.resolve("outside-${System.nanoTime()}.wav")
+        try {
+            projectDir.mkdirs()
+            projectDir.resolve("project.json").writeText(json.encodeToString(audioProject(name, outside.absolutePath)))
+            assertTrue(repository.loadProject(name).isFailure)
+        } finally {
+            repository.deleteProject(name)
+            outside.delete()
         }
     }
 

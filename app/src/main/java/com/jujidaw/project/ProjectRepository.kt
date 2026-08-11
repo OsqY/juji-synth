@@ -5,7 +5,6 @@ import android.net.Uri
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.engine.TransportController
 import com.jujidaw.model.AudioClip
-import com.jujidaw.model.PPQ
 import com.jujidaw.model.TransportPosition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -137,7 +136,7 @@ class ProjectRepository(private val context: Context) {
             if (project.name != name) {
                 return@withContext Result.failure(IOException("Project name does not match its directory"))
             }
-            Result.success(project)
+            validateLoadedAudio(projectDir, project)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -278,6 +277,17 @@ class ProjectRepository(private val context: Context) {
         )
     }
 
+    private fun validateLoadedAudio(projectDir: File, project: Project): Result<Project> {
+        for (clip in project.arrangement.clips.filterIsInstance<AudioClip>()) {
+            val audioFile = ProjectPathPolicy.audioFile(projectDir, clip.audioFilePath)
+                ?: return Result.failure(IOException("Audio path is outside the project"))
+            if (!audioFile.isFile) {
+                return Result.failure(IOException("Audio file not found: ${clip.audioFilePath}"))
+            }
+        }
+        return Result.success(project)
+    }
+
     // ── WAV Export ──────────────────────────────────────────────────
 
     /**
@@ -294,13 +304,8 @@ class ProjectRepository(private val context: Context) {
         try {
             val arrangement = transportController.arrangement
             val bpm = transportController.transportState.tempoBpm
-            val sampleRate = 48000
-
-            // Calculate approximate duration in samples.
-            val maxEndTick = arrangement.clips.maxOfOrNull {
-                it.startTick + it.durationTicks
-            } ?: PPQ * 4L
-            val totalSamples = (maxEndTick * sampleRate * 60L) / (PPQ * bpm.toLong())
+            val timing = calculateProjectExportTiming(arrangement, bpm)
+                .getOrElse { return@withContext Result.failure(it) }
 
             onProgress(0f)
 
@@ -308,7 +313,7 @@ class ProjectRepository(private val context: Context) {
             transportController.seek(TransportPosition())
 
             // Start offline render.
-            if (!SynthEngine.startOfflineRender(outputPath, totalSamples)) {
+            if (!SynthEngine.startOfflineRender(outputPath, timing.totalSamples)) {
                 return@withContext Result.failure(IOException("Failed to start offline render"))
             }
             onProgress(0.1f)
@@ -317,8 +322,7 @@ class ProjectRepository(private val context: Context) {
             transportController.play()
 
             // Wait for the arrangement to finish.
-            val totalMs = (maxEndTick * 60_000L) / (PPQ * bpm.toLong())
-            delay(totalMs + 500L)
+            delay(timing.waitMillis)
             onProgress(0.8f)
 
             transportController.stop()
@@ -356,24 +360,19 @@ class ProjectRepository(private val context: Context) {
             val trackCount = 16
             val arrangement = transportController.arrangement
             val bpm = transportController.transportState.tempoBpm
-            val sampleRate = 48000
-
-            val maxEndTick = arrangement.clips.maxOfOrNull {
-                it.startTick + it.durationTicks
-            } ?: PPQ * 4L
-            val totalSamples = (maxEndTick * sampleRate * 60L) / (PPQ * bpm.toLong())
+            val timing = calculateProjectExportTiming(arrangement, bpm)
+                .getOrElse { return@withContext Result.failure(it) }
 
             transportController.seek(TransportPosition())
 
             for (track in 0 until trackCount) {
                 val stemPath = File(outputDir, "stem_track_${track + 1}.wav").absolutePath
-                if (!SynthEngine.startOfflineRenderForTrack(stemPath, track, totalSamples)) {
+                if (!SynthEngine.startOfflineRenderForTrack(stemPath, track, timing.totalSamples)) {
                     continue
                 }
 
                 transportController.play()
-                val totalMs = (maxEndTick * 60_000L) / (PPQ * bpm.toLong())
-                delay(totalMs + 500L)
+                delay(timing.waitMillis)
                 transportController.stop()
 
                 SynthEngine.stop()

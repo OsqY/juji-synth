@@ -1,7 +1,6 @@
 # Timeline Hardening — Progress
 
-Updated: 2026-08-03. State: `CLOSE_PHASE` M16-C local handoff next; M15 remains
-blocked on the full device matrix and external authorization.
+Updated: 2026-08-08. State: `CLOSE_PHASE` M23 local audit complete; external handoff pending authorization.
 
 The required `.codex/tasks` location is read-only in this environment, so this
 equivalent record lives under `docs/delivery/timeline-hardening/`.
@@ -100,3 +99,108 @@ Gate status:
   by the deferred device evidence and explicit PR/Linear/Notion/merge authority.
 
 Protected state: `app/src/main/cpp/oboe` and `.commandcode/` remain excluded.
+
+## Post-merge follow-up
+
+- PR #1 is merged as `72fb813`; its reviewed head is `ad9c9a1`.
+- Linear OSQ-5 is Done and the Notion task is Realizada; neither is reopened.
+- `CoC-API35` (Android 15/API 35) passes `connectedDebugAndroidTest`, 24/24.
+- `Pixel_8` API 37 fails in Espresso infrastructure because
+  `InputManager.getInstance()` is unavailable; no Timeline assertion runs.
+- M17 IMPLEMENT: post-merge queue, specification, plan, final audit, progress,
+  and design contract now agree on the merged baseline and M17–M23 order.
+- M17 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, and `compileDebugAndroidTestKotlin` PASS; API 35 connected
+  instrumentation PASS, 24/24.
+- M17 REVIEW: `/root/m17_review` PASS after correcting the stale no-streaming
+  documentation reference; no P0–P3 findings remain.
+- M17 CLOSE_PHASE: complete; M18 is next.
+
+## M18 — Resize Compose coverage
+
+- M18 IMPLEMENT: complete — added deterministic Compose coverage for successful
+  left- and right-handle resize gestures on short PadClips. Each test verifies
+  the musical edge invariant and one undo/redo restoration transaction.
+- M18 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, and `compileDebugAndroidTestKotlin` PASS. `adb devices -l`
+  found `emulator-5554` (CoC-API35, Android 15/API 35); the full
+  `connectedDebugAndroidTest` suite passes 26/26, including both new resize
+  tests. No production Timeline code changed.
+- M18 REVIEW: PASS — `/root/m18_review`; the initial P2 test-integrity finding
+  was resolved by using clip-relative, density-independent edge coordinates.
+  Focused API 35 resize coverage is 2/2 and `git diff --check` passes. See
+  `phase-18-review.md`.
+- M18 CLOSE_PHASE: complete — AC-Q1 is covered; M19 is next.
+
+## M19 — Atomic multi-delete Compose coverage
+
+- M19 IMPLEMENT: complete — added a deterministic Delete-tool stroke over
+  three clips, crossing one target twice while keeping a fourth clip on another
+  row outside the stroke.
+- M19 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, and `compileDebugAndroidTestKotlin` PASS. Focused API 35
+  coverage is 1/1; the full `connectedDebugAndroidTest` suite is 27/27. The
+  assertions require exactly three trash entries, preserve the unrelated clip,
+  and restore/reapply all targets with one undo/redo. No production Timeline
+  code changed.
+- M19 REVIEW: PASS — `/root/m18_review`; the initial P1 coverage gap was
+  resolved by adding the non-target clip, repeated crossing, exact trash-size
+  assertions, and delete/undo/redo preservation checks. `git diff --check`
+  passes; no P0–P3 findings remain. See `phase-19-review.md`.
+- M19 CLOSE_PHASE: complete — AC-Q2 is covered; M20 is next.
+
+## M20 — Audio metadata and path validation
+
+- M20 IMPLEMENT: complete — `AudioClip` rejects negative offsets/fades,
+  negative or non-finite gains; project loading rejects missing or
+  project-external audio references before native loading.
+- M20 VALIDATE: all four Gradle gates, `compileDebugAndroidTestKotlin`,
+  focused external-path instrumentation (1/1), and API 35 connected
+  instrumentation (28/28) pass. The final unit-test-only correction retry had
+  no attached ADB device, so connected instrumentation was not rerun. `git
+  diff --check` passes.
+- M20 REVIEW: PASS — `/root/m20_followup` and `/root/m18_review`; the initial
+  coverage findings for fade-out, positive infinity, and symlink escape were
+  corrected. No P0–P3 findings remain. See `phase-20-review.md`.
+- M20 SECURITY: PASS — canonical path containment, symlink escape rejection,
+  metadata validation, and pre-native-load ordering reviewed; no secrets or
+  protected files changed.
+- M20 CLOSE_PHASE: complete — AC-S1 is covered; M21 is next.
+
+## M21 — Safe export duration arithmetic
+
+- M21 IMPLEMENT: complete — shared checked timing math protects `exportMix`
+  and `exportStems` from clip-end, duration, denominator, and wait overflow;
+  invalid tempos fail before native export.
+- M21 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, `compileDebugAndroidTestKotlin`, and `git diff --check`
+  pass. `adb devices -l` found no device, so connected instrumentation was
+  skipped.
+- M21 REVIEW: PASS — `/root/m20_followup`; no P0–P3 findings. See
+  `phase-21-review.md`.
+- M21 CLOSE_PHASE: complete — AC-S2 is covered; M22 is next.
+
+## M22 — Explicit Follow Playhead control
+
+- M22 IMPLEMENT: complete — Follow state is shared in `TimelineViewModel`,
+  exposed in portrait/landscape controls, and all manual Timeline gestures
+  disable it.
+- M22 VALIDATE: `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`,
+  `assembleDebug`, `compileDebugAndroidTestKotlin`, and `git diff --check`
+  pass. `adb devices -l` found no device, so connected instrumentation was
+  skipped.
+- M22 REVIEW: PASS — `/root/m20_followup`; the initial P2 gesture coverage gap
+  was corrected and no P0–P3 findings remain. See `phase-22-review.md`.
+- M22 CLOSE_PHASE: complete — AC-F5 is covered; M23 is next.
+
+## M23 — Final local audit
+
+- M23 AUDIT: complete — `final-audit.md`, specification, plan, pending queue,
+  and phase review record M17–M22 commits, validation, security verdict, and
+  residual risks.
+- M23 REVIEW: PASS locally; no P0–P3 findings remain. M12 density coverage and
+  API 37 runner compatibility remain deferred.
+- M23 HANDOFF: external PR/Linear/Notion publication, approval, and merge are
+  pending explicit authorization and were not performed.
+- M23 CLOSE_PHASE: local audit complete; repository is ready for authorized
+  external handoff.
