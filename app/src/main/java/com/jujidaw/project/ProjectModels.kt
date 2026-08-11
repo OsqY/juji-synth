@@ -71,8 +71,7 @@ data class PadParamValues(
  * Persisted per-pad state: the sample file path backing the pad, the display
  * name, and the cached parameter snapshot.
  *
- * `samplePath` is stored absolute so a reload finds the file again; empty
- * means an unloaded pad.
+ * `samplePath` is project-relative in saved JSON; empty means an unloaded pad.
  */
 @Serializable
 data class PadSettings(
@@ -115,6 +114,7 @@ data class MixerState(
     val busA: BusState = BusState(),
     val busB: BusState = BusState(),
     val masterFaderDb: Float = 0.0f,
+    val masterInsertFx: List<InsertFxSlot> = emptyList(),
 )
 
 /**

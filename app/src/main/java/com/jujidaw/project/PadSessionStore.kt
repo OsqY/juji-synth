@@ -92,6 +92,27 @@ object PadSynthSessionStore {
     }
 }
 
+/** App-level bridge for the serializable synth snapshot of each MIDI track. */
+object TrackSynthSessionStore {
+    private val _state = MutableStateFlow<Map<Int, SynthState>>(emptyMap())
+    val state: StateFlow<Map<Int, SynthState>> = _state
+
+    fun snapshot(): Map<Int, SynthState> = _state.value
+
+    fun setState(trackIndex: Int, synthState: SynthState) {
+        if (trackIndex !in 0 until 16) return
+        _state.update { it + (trackIndex to synthState) }
+    }
+
+    fun replace(states: Map<Int, SynthState>) {
+        _state.value = states.filterKeys { it in 0 until 16 }
+    }
+
+    fun clear() {
+        _state.value = emptyMap()
+    }
+}
+
 /** The pad currently selected for performance/editing, addressed globally (0..31). */
 object PadSelectionStore {
     private val _selectedPad = MutableStateFlow(0)

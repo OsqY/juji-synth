@@ -10,12 +10,15 @@ import com.jujidaw.model.SynthState
 import com.jujidaw.model.defaultTrackSynthState
 import com.jujidaw.model.toParamsArray
 import com.jujidaw.ui.pads.PadParamIds
+import com.jujidaw.ui.synth.SynthViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,6 +47,9 @@ object ProjectAutosave {
     /** Outstanding debounce job; replaced on every new schedule. */
     private var debounceJob: Job? = null
 
+    /** Serialize disk saves with project loads so a stale snapshot cannot win. */
+    private val projectIoMutex = Mutex()
+
     /**
      * True while [autoLoad] is applying a saved project to the engine. Prevents
      * a change-triggered save from clobbering the autosave file with pre-load
@@ -53,7 +59,8 @@ object ProjectAutosave {
 
     /** Build a [MixerState] snapshot from the live engine (16 channels + buses + master). */
     fun captureMixerState(): MixerState {
-        if (!SynthEngine.isLoaded) return MixerState()
+        val stored = MixerSessionStore.snapshot()
+        if (!SynthEngine.isLoaded) return stored
         val tracks =
             (0 until 16).map { i ->
                 TrackState(
@@ -64,14 +71,18 @@ object ProjectAutosave {
                     arm = SynthEngine.isChannelArm(i),
                     sendALevel = SynthEngine.getSendLevel(i, 0),
                     sendBLevel = SynthEngine.getSendLevel(i, 1),
+                    insertFx = stored.tracks.getOrNull(i)?.insertFx.orEmpty(),
                 )
             }
-        return MixerState(
+        val snapshot = MixerState(
             tracks = tracks,
-            busA = BusState(faderDb = SynthEngine.getBusFaderDb(0)),
-            busB = BusState(faderDb = SynthEngine.getBusFaderDb(1)),
+            busA = stored.busA.copy(faderDb = SynthEngine.getBusFaderDb(0)),
+            busB = stored.busB.copy(faderDb = SynthEngine.getBusFaderDb(1)),
             masterFaderDb = SynthEngine.getMasterFaderDb(),
+            masterInsertFx = stored.masterInsertFx,
         )
+        MixerSessionStore.set(snapshot)
+        return snapshot
     }
 
     /** Build a full [Project] from the live transport + engine state. */
@@ -87,6 +98,9 @@ object ProjectAutosave {
             patterns = tc.patterns,
             arrangement = tc.arrangement,
             mixerState = captureMixerState(),
+            midiMappings = JujiDawApp.instance.midiRouter.mappings.value,
+            automation = tc.automationClips.toList(),
+            trackSynthStates = TrackSynthSessionStore.snapshot(),
             // Pad sample paths + cached params live in PadsViewModel; the
             // store is the bridge that keeps them available here.
             pads = normalizePads(PadSessionStore.snapshot()),
@@ -106,13 +120,17 @@ object ProjectAutosave {
             ) ?: return
         (context.applicationContext as? JujiDawApp)?.currentProjectName = project.name
         tc.setTempo(project.bpm)
+        tc.setTimeSignature(project.timeSignature)
         tc.setSwing(project.swing)
         tc.loadPatterns(project.patterns)
         tc.loadArrangement(project.arrangement)
+        tc.loadAutomation(project.automation)
         val loopStartSample = tickToSample(project.arrangement.loopStartTick, project.bpm)
         val loopEndSample = tickToSample(project.arrangement.loopEndTick, project.bpm)
         SynthEngine.setLoop(project.arrangement.loopEnabled, loopStartSample, loopEndSample)
         applyMixerState(project.mixerState)
+        JujiDawApp.instance.midiRouter.replaceMappings(project.midiMappings)
+        applyTrackSynthStates(project.trackSynthStates)
         for (clip in project.arrangement.clips) {
             if (clip is AudioClip) {
                 val full = ProjectPathPolicy.audioFile(projectsBase, clip.audioFilePath)
@@ -124,7 +142,7 @@ object ProjectAutosave {
         // used as the fallback for an older project with no padSynthStates.
         PadSynthSessionStore.replace(project.padSynthStates)
         // Re-hydrate pad samplers + cached params so pads survive restart.
-        applyPadSettings(project.pads)
+        applyPadSettings(project.pads, projectsBase)
         applyPadSynthStates(project.padSynthStates)
     }
 
@@ -133,11 +151,26 @@ object ProjectAutosave {
      * the snapshot to [PadSessionStore] so [PadsViewModel] can sync its UI
      * state (including when it is created after this load).
      */
-    fun applyPadSettings(pads: List<PadSettings>) {
-        val normalized = normalizePads(pads)
+    fun applyPadSettings(
+        pads: List<PadSettings>,
+        projectDirectory: File? = null,
+    ) {
+        val normalized = normalizePads(pads).map { pad ->
+            if (pad.samplePath.isBlank() || projectDirectory == null) {
+                pad
+            } else {
+                pad.copy(
+                    samplePath = ProjectPathPolicy.audioFile(projectDirectory, pad.samplePath)?.absolutePath.orEmpty(),
+                )
+            }
+        }
         for ((globalIndex, pad) in normalized.withIndex()) {
+            if (SynthEngine.isLoaded) {
+                SynthEngine.releasePad(globalIndex)
+                SynthEngine.clearPad(globalIndex)
+            }
             val path = pad.samplePath
-            if (path.isNotEmpty() && File(path).exists()) {
+            if (path.isNotEmpty() && File(path).isFile) {
                 SynthEngine.loadSampleToPad(path, globalIndex)
             }
             val params = pad.params
@@ -179,8 +212,10 @@ object ProjectAutosave {
     }
 
     fun applyMixerState(state: MixerState) {
+        MixerSessionStore.set(state)
         if (!SynthEngine.isLoaded) return
         for (i in 0 until 16) {
+            repeat(MAX_INSERTS) { slot -> SynthEngine.removeInsertEffect(i, slot) }
             val track = state.tracks.getOrNull(i) ?: continue
             SynthEngine.setChannelFader(i, track.faderDb)
             SynthEngine.setChannelPan(i, track.pan)
@@ -189,10 +224,68 @@ object ProjectAutosave {
             SynthEngine.setChannelArm(i, track.arm)
             SynthEngine.setSendLevel(i, 0, track.sendALevel)
             SynthEngine.setSendLevel(i, 1, track.sendBLevel)
+            applyInsertChain(i, track.insertFx)
         }
+        repeat(MAX_INSERTS) { slot ->
+            SynthEngine.removeBusInsertEffect(0, slot)
+            SynthEngine.removeBusInsertEffect(1, slot)
+            SynthEngine.removeInsertEffect(MASTER_INSERT_TRACK, slot)
+        }
+        applyBusInsertChain(0, state.busA.insertFx)
+        applyBusInsertChain(1, state.busB.insertFx)
+        applyMasterInsertChain(state.masterInsertFx)
         SynthEngine.setMasterFader(state.masterFaderDb)
         SynthEngine.setBusFader(0, state.busA.faderDb)
         SynthEngine.setBusFader(1, state.busB.faderDb)
+    }
+
+    private fun applyInsertChain(trackIndex: Int, inserts: List<InsertFxSlot>) {
+        inserts.forEach { slot ->
+            val type = SynthEngine.EffectType.values().firstOrNull { it.value == slot.effectType }
+                ?: return@forEach
+            if (type == SynthEngine.EffectType.None) return@forEach
+            SynthEngine.addInsertEffect(trackIndex, slot.slotIndex, type)
+            slot.params.forEach { (paramId, value) ->
+                SynthEngine.setInsertParam(trackIndex, slot.slotIndex, paramId, value)
+            }
+            SynthEngine.setInsertBypass(trackIndex, slot.slotIndex, slot.bypass)
+        }
+    }
+
+    private fun applyBusInsertChain(busIndex: Int, inserts: List<InsertFxSlot>) {
+        inserts.forEach { slot ->
+            val type = SynthEngine.EffectType.values().firstOrNull { it.value == slot.effectType }
+                ?: return@forEach
+            if (type == SynthEngine.EffectType.None) return@forEach
+            SynthEngine.addBusInsertEffect(busIndex, slot.slotIndex, type)
+            slot.params.forEach { (paramId, value) ->
+                SynthEngine.setBusInsertParam(busIndex, slot.slotIndex, paramId, value)
+            }
+            SynthEngine.setBusInsertBypass(busIndex, slot.slotIndex, slot.bypass)
+        }
+    }
+
+    private fun applyMasterInsertChain(inserts: List<InsertFxSlot>) {
+        inserts.forEach { slot ->
+            val type = SynthEngine.EffectType.values().firstOrNull { it.value == slot.effectType }
+                ?: return@forEach
+            if (type == SynthEngine.EffectType.None) return@forEach
+            SynthEngine.addInsertEffect(MASTER_INSERT_TRACK, slot.slotIndex, type)
+            slot.params.forEach { (paramId, value) ->
+                SynthEngine.setInsertParam(MASTER_INSERT_TRACK, slot.slotIndex, paramId, value)
+            }
+            SynthEngine.setInsertBypass(MASTER_INSERT_TRACK, slot.slotIndex, slot.bypass)
+        }
+    }
+
+    /** Restore the active track synth and native modulation snapshots. */
+    fun applyTrackSynthStates(states: Map<Int, SynthState>) {
+        val normalized = states.filterKeys { it in 0 until NUM_TRACKS }
+        val effective = normalized + (0 to (normalized[0] ?: defaultTrackSynthState()))
+        TrackSynthSessionStore.replace(effective)
+        if (SynthEngine.isLoaded) {
+            SynthViewModel.applySynthStateToEngine(effective.getValue(0))
+        }
     }
 
     /** Restore the complete synth snapshots only after pad modes are restored. */
@@ -245,55 +338,58 @@ object ProjectAutosave {
         name: String = AUTOSAVE_NAME,
     ): Result<Unit> {
         return withContext(Dispatchers.IO) {
-            val repo = ProjectRepository(context.applicationContext)
-            val project = buildProjectFromEngine(name, tc)
-            val result = repo.saveProject(project, JujiDawApp.instance.currentProjectName)
-            if (result.isSuccess) {
-                SettingsDataStore(context.applicationContext).setLastProjectName(name)
+            projectIoMutex.withLock {
+                val repo = ProjectRepository(context.applicationContext)
+                val project = buildProjectFromEngine(name, tc)
+                val result = repo.saveProject(project, JujiDawApp.instance.currentProjectName)
+                if (result.isSuccess) {
+                    SettingsDataStore(context.applicationContext).setLastProjectName(name)
+                }
+                result
             }
-            result
         }
     }
 
     /**
      * Load the last project (if any) and apply it to the engine.
      * Returns the loaded project name, or null if there was nothing to load.
+     * Failures are returned to the caller so startup can offer recovery.
      */
     suspend fun autoLoad(
         context: Context,
         tc: TransportController,
-    ): String? {
+    ): Result<String?> {
         return withContext(Dispatchers.IO) {
-            // Cancel any debounce scheduled during composition (e.g. from a
-            // ViewModel init) and block change-triggered saves until the loaded
-            // state is applied, so the autosave file is not overwritten with
-            // pre-load state.
-            cancelPendingAutoSave()
-            loadInProgress.set(true)
-            try {
-                val settings = SettingsDataStore(context.applicationContext)
-                val lastName = settings.getLastProjectName()
-                val repo = ProjectRepository(context.applicationContext)
-                val nameToLoad =
-                    lastName ?: run {
-                        val list = runCatching { repo.listProjects() }.getOrDefault(emptyList())
-                        list.firstOrNull()?.name
-                    } ?: return@withContext null
-                val result =
-                    runCatching { repo.loadProject(nameToLoad) }.getOrNull()
-                        ?: return@withContext null
-                result.onSuccess { project ->
-                    applyProjectToEngine(project, tc, context.applicationContext)
-                    settings.setLastProjectName(project.name)
+            projectIoMutex.withLock {
+                // Cancel any debounce scheduled during composition before
+                // applying the loaded state.
+                cancelPendingAutoSave()
+                loadInProgress.set(true)
+                try {
+                    val settings = SettingsDataStore(context.applicationContext)
+                    val lastName = settings.getLastProjectName()
+                    val repo = ProjectRepository(context.applicationContext)
+                    val nameToLoad =
+                        lastName ?: run {
+                            val list = repo.listProjects()
+                            list.firstOrNull()?.name
+                        } ?: return@withContext Result.success(null)
+                    repo.loadProject(nameToLoad).map { project ->
+                        applyProjectToEngine(project, tc, context.applicationContext)
+                        settings.setLastProjectName(project.name)
+                        nameToLoad
+                    }
+                } finally {
+                    loadInProgress.set(false)
                 }
-                nameToLoad
-            } finally {
-                loadInProgress.set(false)
             }
         }
     }
 
     private const val NUM_PADS = 32
+    private const val NUM_TRACKS = 16
+    private const val MAX_INSERTS = 4
+    private const val MASTER_INSERT_TRACK = 16
 
     private fun tickToSample(tick: Long, bpm: Float): Long =
         (tick * (60.0 / bpm) * 48000 / com.jujidaw.model.PPQ).toLong()

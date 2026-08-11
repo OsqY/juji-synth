@@ -7,6 +7,7 @@ import com.jujidaw.model.MidiTarget
 import com.jujidaw.ui.keyboard.KeyboardTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,7 @@ class MidiRouter(
 
     // ── Mappings ───────────────────────────────────────────────────────────
     private val _mappings = MutableStateFlow<List<MidiMapping>>(emptyList())
+    private var mappingsJob: Job? = null
 
     /** Reactive stream of all active MIDI CC→target mappings. */
     val mappings: StateFlow<List<MidiMapping>> = _mappings.asStateFlow()
@@ -92,10 +94,21 @@ class MidiRouter(
 
     /** Load persisted mappings from [MidiMappingStore] and start observing. */
     fun load() {
-        ioScope.launch {
+        mappingsJob?.cancel()
+        mappingsJob = ioScope.launch {
             mappingStore.mappingsFlow.collect { list ->
                 _mappings.value = list
             }
+        }
+    }
+
+    /** Replace mappings while loading a project and persist the new snapshot. */
+    fun replaceMappings(mappings: List<MidiMapping>) {
+        mappingsJob?.cancel()
+        _mappings.value = mappings
+        ioScope.launch {
+            mappingStore.saveMappings(mappings)
+            load()
         }
     }
 

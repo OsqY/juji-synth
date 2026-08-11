@@ -73,9 +73,14 @@ void Bus::setInsertParam(int slot, int paramId, float value) {
 void Bus::applyCommand(const MixerCommand& cmd) {
     switch (cmd.type) {
         case MixerCommandType::SetBusFader: setFader(cmd.value); break;
-        case MixerCommandType::SetInsertBypass: setInsertBypass(cmd.slot, cmd.booleanValue); break;
-        case MixerCommandType::AddInsertEffect: addInsertEffect(cmd.slot, cmd.effectType); break;
-        case MixerCommandType::RemoveInsertEffect: removeInsertEffect(cmd.slot); break;
+        case MixerCommandType::SetInsertBypass:
+        case MixerCommandType::SetBusInsertBypass: setInsertBypass(cmd.slot, cmd.booleanValue); break;
+        case MixerCommandType::AddInsertEffect:
+        case MixerCommandType::AddBusInsertEffect: addInsertEffect(cmd.slot, cmd.effectType); break;
+        case MixerCommandType::RemoveInsertEffect:
+        case MixerCommandType::RemoveBusInsertEffect: removeInsertEffect(cmd.slot); break;
+        case MixerCommandType::SetInsertParam:
+        case MixerCommandType::SetBusInsertParam: setInsertParam(cmd.slot, cmd.paramId, cmd.value); break;
         default: break;
     }
 }

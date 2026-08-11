@@ -87,11 +87,12 @@ class ProjectSerializationTest {
                         },
                     busA = BusState(faderDb = -6f),
                     masterFaderDb = -1.2f,
+                    masterInsertFx = listOf(InsertFxSlot(slotIndex = 0, effectType = 1, bypass = true)),
                 ),
             pads =
                 listOf(
                     PadSettings(
-                        samplePath = "/sdcard/pad/kick.wav",
+                        samplePath = "samples/kick.wav",
                         name = "Kick",
                         params =
                             PadParamValues(
@@ -100,7 +101,7 @@ class ProjectSerializationTest {
                                 volume = 0.9f,
                             ),
                     ),
-                    PadSettings(samplePath = "/sdcard/pad/snare.wav", name = "Snare"),
+                    PadSettings(samplePath = "samples/snare.wav", name = "Snare"),
                 ) + List(14) { PadSettings() } +
                     PadSettings(
                         name = "Bank B Lead",
@@ -161,7 +162,7 @@ class ProjectSerializationTest {
         // 4. Pad state (sample path + cached params incl. synth mode).
         assertEquals(32, decoded.pads.size)
         val pad0 = decoded.pads[0]
-        assertEquals("/sdcard/pad/kick.wav", pad0.samplePath)
+        assertEquals("samples/kick.wav", pad0.samplePath)
         assertTrue(pad0.params.synthMode)
         assertEquals(48, pad0.params.synthRootNote)
 

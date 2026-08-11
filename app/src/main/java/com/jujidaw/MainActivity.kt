@@ -25,7 +25,13 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 // Auto-load the last project on first composition.
                 val app = application as JujiDawApp
-                ProjectAutosave.autoLoad(app, app.transportController)
+                ProjectAutosave.autoLoad(app, app.transportController).onFailure {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Could not restore the last project: ${it.message ?: "unknown error"}",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
             }
 
             JujiDawTheme {

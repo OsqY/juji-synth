@@ -9,6 +9,10 @@ import com.jujidaw.model.MidiTarget
 import com.jujidaw.model.TimeSignature
 import com.jujidaw.model.TransportPosition
 import com.jujidaw.project.AutomationPoint
+import com.jujidaw.project.InsertFxSlot
+import com.jujidaw.project.MixerSessionStore
+import com.jujidaw.project.MixerState
+import com.jujidaw.project.TrackState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +38,7 @@ enum class PerformFxType(
 data class InsertSlot(
     val type: SynthEngine.EffectType = SynthEngine.EffectType.None,
     val bypass: Boolean = false,
+    val params: Map<Int, Float> = emptyMap(),
 )
 
 /** State of one mixer channel (track). */
@@ -71,6 +76,33 @@ data class MixerUiState(
     val midiLearnTarget: MidiTarget? = null,
 )
 
+private fun mixerUiState(state: MixerState): MixerUiState =
+    MixerUiState(
+        channels = List(16) { index ->
+            val track = state.tracks.getOrNull(index) ?: TrackState()
+            ChannelState(
+                faderDb = track.faderDb,
+                pan = track.pan,
+                mute = track.mute,
+                solo = track.solo,
+                arm = track.arm,
+                sendA = track.sendALevel,
+                sendB = track.sendBLevel,
+                inserts = List(4) { slot ->
+                    track.insertFx.firstOrNull { it.slotIndex == slot }?.let { stored ->
+                        InsertSlot(
+                            type = SynthEngine.EffectType.values().firstOrNull { it.value == stored.effectType }
+                                ?: SynthEngine.EffectType.None,
+                            bypass = stored.bypass,
+                            params = stored.params,
+                        )
+                    } ?: InsertSlot()
+                },
+            )
+        },
+        master = MasterState(faderDb = state.masterFaderDb),
+    )
+
 /**
  * ViewModel for the mixer / FX screen.
  *
@@ -88,13 +120,25 @@ data class MixerUiState(
  * - MIDI Learn: [startLearn], [stopLearn], [midiRouter]
  */
 class MixerViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(MixerUiState())
+    private val _uiState = MutableStateFlow(mixerUiState(MixerSessionStore.snapshot()))
     val uiState: StateFlow<MixerUiState> = _uiState.asStateFlow()
 
     /** Application-wide MIDI router reference.  null until app is initialised. */
     var midiRouter: MidiRouter? = null
 
     init {
+        viewModelScope.launch {
+            MixerSessionStore.state.collect { state ->
+                val current = _uiState.value
+                val restored = mixerUiState(state)
+                _uiState.value = current.copy(
+                    channels = restored.channels.mapIndexed { index, channel ->
+                        channel.copy(level = current.channels.getOrNull(index)?.level ?: 0f)
+                    },
+                    master = restored.master.copy(level = current.master.level),
+                )
+            }
+        }
         startLevelPolling()
     }
 
@@ -203,6 +247,7 @@ class MixerViewModel : ViewModel() {
         val clamped = db.coerceIn(-60f, 12f)
         SynthEngine.setMasterFader(clamped)
         _uiState.value = _uiState.value.copy(master = _uiState.value.master.copy(faderDb = clamped))
+        publishMixerState()
     }
 
     // ---- Insert FX ----
@@ -386,7 +431,41 @@ class MixerViewModel : ViewModel() {
         if (trackIndex in channels.indices) {
             channels[trackIndex] = transform(channels[trackIndex])
             _uiState.value = _uiState.value.copy(channels = channels)
+            publishMixerState()
         }
+    }
+
+    private fun publishMixerState() {
+        val current = MixerSessionStore.snapshot()
+        val tracks = _uiState.value.channels.map { channel ->
+            TrackState(
+                faderDb = channel.faderDb,
+                pan = channel.pan,
+                mute = channel.mute,
+                solo = channel.solo,
+                arm = channel.arm,
+                sendALevel = channel.sendA,
+                sendBLevel = channel.sendB,
+                insertFx = channel.inserts.mapIndexedNotNull { slot, insert ->
+                    if (insert.type == SynthEngine.EffectType.None) {
+                        null
+                    } else {
+                        InsertFxSlot(
+                            slotIndex = slot,
+                            effectType = insert.type.value,
+                            bypass = insert.bypass,
+                            params = insert.params,
+                        )
+                    }
+                },
+            )
+        }
+        MixerSessionStore.set(
+            current.copy(
+                tracks = tracks,
+                masterFaderDb = _uiState.value.master.faderDb,
+            ),
+        )
     }
 
     private fun showToast(msg: String) {
