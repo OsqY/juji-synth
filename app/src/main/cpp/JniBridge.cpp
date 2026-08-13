@@ -411,6 +411,11 @@ Java_com_jujidaw_audio_SynthEngine_nativeReleasePad(JNIEnv* env, jclass /*clazz*
 }
 
 JNIEXPORT void JNICALL
+Java_com_jujidaw_audio_SynthEngine_nativeClearPad(JNIEnv* /*env*/, jclass /*clazz*/, jint padIndex) {
+    SynthEngine::getInstance().getAudioEngine().getSampler().clearPad(padIndex);
+}
+
+JNIEXPORT void JNICALL
 Java_com_jujidaw_audio_SynthEngine_nativeSetPadParam(JNIEnv* env, jclass /*clazz*/,
                                                       jint padIndex, jint paramId, jfloat value) {
     auto& sampler = SynthEngine::getInstance().getAudioEngine().getSampler();
@@ -888,6 +893,51 @@ Java_com_jujidaw_audio_SynthEngine_nativeSetInsertParam(JNIEnv* /*env*/, jclass 
     MixerCommand cmd;
     cmd.type = MixerCommandType::SetInsertParam;
     cmd.track = static_cast<uint8_t>(trackIndex);
+    cmd.slot = static_cast<uint8_t>(slot);
+    cmd.paramId = static_cast<uint8_t>(paramId);
+    cmd.value = value;
+    SynthEngine::getInstance().getAudioEngine().pushMixerCommand(cmd);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujidaw_audio_SynthEngine_nativeAddBusInsertEffect(JNIEnv* /*env*/, jclass /*clazz*/,
+                                                             jint busIndex, jint slot, jint type) {
+    MixerCommand cmd;
+    cmd.type = MixerCommandType::AddBusInsertEffect;
+    cmd.track = static_cast<uint8_t>(busIndex);
+    cmd.slot = static_cast<uint8_t>(slot);
+    cmd.effectType = static_cast<EffectType>(type);
+    SynthEngine::getInstance().getAudioEngine().pushMixerCommand(cmd);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujidaw_audio_SynthEngine_nativeRemoveBusInsertEffect(JNIEnv* /*env*/, jclass /*clazz*/,
+                                                                jint busIndex, jint slot) {
+    MixerCommand cmd;
+    cmd.type = MixerCommandType::RemoveBusInsertEffect;
+    cmd.track = static_cast<uint8_t>(busIndex);
+    cmd.slot = static_cast<uint8_t>(slot);
+    SynthEngine::getInstance().getAudioEngine().pushMixerCommand(cmd);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujidaw_audio_SynthEngine_nativeSetBusInsertBypass(JNIEnv* /*env*/, jclass /*clazz*/,
+                                                             jint busIndex, jint slot, jboolean bypass) {
+    MixerCommand cmd;
+    cmd.type = MixerCommandType::SetBusInsertBypass;
+    cmd.track = static_cast<uint8_t>(busIndex);
+    cmd.slot = static_cast<uint8_t>(slot);
+    cmd.booleanValue = static_cast<bool>(bypass);
+    SynthEngine::getInstance().getAudioEngine().pushMixerCommand(cmd);
+}
+
+JNIEXPORT void JNICALL
+Java_com_jujidaw_audio_SynthEngine_nativeSetBusInsertParam(JNIEnv* /*env*/, jclass /*clazz*/,
+                                                            jint busIndex, jint slot, jint paramId,
+                                                            jfloat value) {
+    MixerCommand cmd;
+    cmd.type = MixerCommandType::SetBusInsertParam;
+    cmd.track = static_cast<uint8_t>(busIndex);
     cmd.slot = static_cast<uint8_t>(slot);
     cmd.paramId = static_cast<uint8_t>(paramId);
     cmd.value = value;

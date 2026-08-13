@@ -279,6 +279,13 @@ void AudioEngine::processMixerQueue() {
             if (cmd.track < NUM_BUSES) {
                 buses_[cmd.track].applyCommand(cmd);
             }
+        } else if (cmd.type == MixerCommandType::SetBusInsertBypass ||
+                   cmd.type == MixerCommandType::AddBusInsertEffect ||
+                   cmd.type == MixerCommandType::RemoveBusInsertEffect ||
+                   cmd.type == MixerCommandType::SetBusInsertParam) {
+            if (cmd.track < NUM_BUSES) {
+                buses_[cmd.track].applyCommand(cmd);
+            }
         } else if (cmd.type == MixerCommandType::SetMasterFader) {
             masterBus_.applyCommand(cmd);
         } else if (cmd.type == MixerCommandType::SetInsertBypass ||

@@ -138,6 +138,8 @@ object SynthEngine {
 
     external fun nativeReleasePad(padIndex: Int)
 
+    external fun nativeClearPad(padIndex: Int)
+
     // Transport and scheduled events
     external fun nativeScheduleNoteOn(
         trackIndex: Int,
@@ -361,6 +363,8 @@ object SynthEngine {
     ) = nativeWritePadToWav(padIndex, path)
 
     fun releasePad(padIndex: Int) = nativeReleasePad(padIndex)
+
+    fun clearPad(padIndex: Int) = nativeClearPad(padIndex)
 
     // ---- Per-pad synth convenience wrappers ----
     fun synthNoteOn(
@@ -602,6 +606,30 @@ object SynthEngine {
         value: Float,
     )
 
+    external fun nativeAddBusInsertEffect(
+        busIndex: Int,
+        slot: Int,
+        type: Int,
+    )
+
+    external fun nativeRemoveBusInsertEffect(
+        busIndex: Int,
+        slot: Int,
+    )
+
+    external fun nativeSetBusInsertBypass(
+        busIndex: Int,
+        slot: Int,
+        bypass: Boolean,
+    )
+
+    external fun nativeSetBusInsertParam(
+        busIndex: Int,
+        slot: Int,
+        paramId: Int,
+        value: Float,
+    )
+
     external fun nativeGetChannelLevel(trackIndex: Int): Float
 
     external fun nativeGetChannelFaderDb(trackIndex: Int): Float
@@ -711,6 +739,24 @@ object SynthEngine {
         paramId: Int,
         value: Float,
     ) = nativeSetInsertParam(trackIndex, slot, paramId, value)
+
+    fun addBusInsertEffect(
+        busIndex: Int,
+        slot: Int,
+        type: EffectType,
+    ) = nativeAddBusInsertEffect(busIndex, slot, type.value)
+
+    fun removeBusInsertEffect(busIndex: Int, slot: Int) = nativeRemoveBusInsertEffect(busIndex, slot)
+
+    fun setBusInsertBypass(busIndex: Int, slot: Int, bypass: Boolean) =
+        nativeSetBusInsertBypass(busIndex, slot, bypass)
+
+    fun setBusInsertParam(
+        busIndex: Int,
+        slot: Int,
+        paramId: Int,
+        value: Float,
+    ) = nativeSetBusInsertParam(busIndex, slot, paramId, value)
 
     fun getChannelLevel(trackIndex: Int): Float = nativeGetChannelLevel(trackIndex)
 

@@ -15,6 +15,7 @@ import com.jujidaw.model.defaultTrackSynthState
 import com.jujidaw.model.toParamsArray
 import com.jujidaw.project.PadSynthSessionStore
 import com.jujidaw.project.PadSessionStore
+import com.jujidaw.project.TrackSynthSessionStore
 import com.jujidaw.ui.pads.PadParamIds
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,7 +66,10 @@ class SynthViewModel(
     private val presetJson = Json { encodeDefaults = true }
 
     /** Per-track SynthState map for multi-timbral routing. */
-    var trackStates: MutableMap<Int, SynthState> = mutableMapOf(0 to defaultTrackSynthState())
+    var trackStates: MutableMap<Int, SynthState> =
+        TrackSynthSessionStore.snapshot().toMutableMap().ifEmpty {
+            mutableMapOf(0 to defaultTrackSynthState())
+        }
 
     /** External MIDI mapping store; injected from the UI layer because it needs a [Context]. */
     var midiMappingStore: MidiMappingStore? = null
@@ -74,6 +78,18 @@ class SynthViewModel(
     init {
         viewModelScope.launch {
             presetDao.getAllPresets().collect { _presets.value = it }
+        }
+        viewModelScope.launch {
+            TrackSynthSessionStore.state.collect { states ->
+                trackStates = states.toMutableMap().ifEmpty {
+                    mutableMapOf(0 to defaultTrackSynthState())
+                }
+                if (_uiState.value.selectedPadIndex < 0) {
+                    trackStates[_uiState.value.selectedTrack]?.let { state ->
+                        _uiState.value = _uiState.value.copy(synthState = state)
+                    }
+                }
+            }
         }
     }
 
@@ -85,6 +101,7 @@ class SynthViewModel(
     fun selectTrack(index: Int) {
         if (index !in 0..15) return
         val state = trackStates.getOrPut(index) { defaultTrackSynthState() }
+        TrackSynthSessionStore.setState(index, state)
         _uiState.value =
             _uiState.value.copy(
                 selectedTrack = index,
@@ -131,6 +148,7 @@ class SynthViewModel(
             // Route to global synth (channel 0)
             val track = _uiState.value.selectedTrack
             trackStates[track] = newState
+            TrackSynthSessionStore.setState(track, newState)
             applySynthStateToEngine(newState)
         }
     }

@@ -1,6 +1,7 @@
 package com.jujidaw.engine
 
 import com.jujidaw.model.Arrangement
+import com.jujidaw.model.AutomationPoint
 import com.jujidaw.model.AudioClip
 import com.jujidaw.model.NoteEvent
 import com.jujidaw.model.PPQ
@@ -11,6 +12,7 @@ import com.jujidaw.model.PadGateMode
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.model.TimeSignature
 import com.jujidaw.model.TransportPosition
+import com.jujidaw.project.AutomationClip
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import org.junit.Assert.assertEquals
@@ -95,6 +97,57 @@ class TransportControllerTest {
         assertTrue(state.punchEnabled)
         assertEquals(PPQ * 2L, state.punchIn.toTicks())
         assertEquals(PPQ * 3L, state.punchOut.toTicks())
+    }
+
+    @Test
+    fun arrangementAutomationUsesCanonicalTimelinePointsForScheduling() {
+        controller.loadArrangement(
+            Arrangement(
+                automation = listOf(
+                    AutomationPoint(
+                        paramId = "track.2.synth.filter.cutoff",
+                        tick = PPQ.toLong(),
+                        value = 0.75f,
+                    ),
+                ),
+            ),
+        )
+
+        controller.scheduleAutomationEvents(0L, controller.tickToSample(PPQ * 2L, 120f), 120f)
+
+        assertEquals(1, fakeScheduler.scheduledAutomation.size)
+        val event = fakeScheduler.scheduledAutomation.single()
+        assertEquals(2, event.trackIndex)
+        assertEquals(com.jujidaw.model.ParamIds.FILTER_CUTOFF, event.paramIndex)
+        assertEquals(0.75f, event.value)
+    }
+
+    @Test
+    fun canonicalAndLegacyAutomationBothRemainSchedulable() {
+        controller.loadArrangement(
+            Arrangement(
+                automation = listOf(
+                    AutomationPoint(
+                        paramId = "track.0.synth.filter.cutoff",
+                        tick = PPQ.toLong(),
+                        value = 0.75f,
+                    ),
+                ),
+            ),
+        )
+        controller.loadAutomation(
+            listOf(
+                AutomationClip(
+                    trackIndex = 1,
+                    paramIndex = 5,
+                    points = listOf(com.jujidaw.project.AutomationPoint(PPQ * 2L, 0.25f)),
+                ),
+            ),
+        )
+
+        controller.scheduleAutomationEvents(0L, controller.tickToSample(PPQ * 3L, 120f), 120f)
+
+        assertEquals(2, fakeScheduler.scheduledAutomation.size)
     }
 
     // ================================================================
