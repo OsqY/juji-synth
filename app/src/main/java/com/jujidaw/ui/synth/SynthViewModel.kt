@@ -13,6 +13,7 @@ import com.jujidaw.model.ModulationRoute
 import com.jujidaw.model.SynthState
 import com.jujidaw.model.defaultTrackSynthState
 import com.jujidaw.model.toParamsArray
+import com.jujidaw.model.withParamValue
 import com.jujidaw.project.PadSynthSessionStore
 import com.jujidaw.project.PadSessionStore
 import com.jujidaw.project.TrackSynthSessionStore
@@ -240,12 +241,8 @@ class SynthViewModel(
                 com.jujidaw.data.MidiMapping(ccNumber = ccNumber, paramId = paramId),
             )
         }
-        val padIdx = _uiState.value.selectedPadIndex
-        if (padIdx >= 0) {
-            SynthEngine.setPadSynthParam(padIdx, paramId, value)
-        } else {
-            SynthEngine.setParam(paramId, value)
-        }
+        val updated = _uiState.value.synthState.withParamValue(paramId, value) ?: return
+        updateSynthState(updated)
         _uiState.value =
             _uiState.value.copy(
                 midiLearnState = MidiLearnState(mode = MidiLearnMode.LEARN_ACTIVE, selectedParamId = null),
