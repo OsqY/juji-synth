@@ -514,13 +514,16 @@ class TransportController(
 
             if (noteEndSample < currentSample || noteStartSample > windowEnd) continue
 
-            // Resolve effective padIndex: note-level > clip-level > legacy noteOn.
+            // Resolve effective padIndex: note-level > clip-level > legacy note % 16.
             // Pass the absolute noteStartSample/noteEndSample as targetSample so
             // the C++ EventQueue fires sample-accurately when the playhead
             // reaches the event, instead of firing immediately on the next
             // audio buffer (which would cluster every note in the lookahead
             // window onto a single buffer and fire them early).
-            val effectivePadIndex = if (note.padIndex >= 0) note.padIndex else padIndex
+            val effectivePadIndex =
+                if (note.padIndex >= 0) note.padIndex
+                else if (padIndex >= 0) padIndex
+                else note.note % 16
             if (effectivePadIndex >= 0) {
                 // De-duplicate: a pad trigger whose start sample was already
                 // pushed in a previous scheduler tick must not fire again.

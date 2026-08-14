@@ -80,7 +80,7 @@ data class PatternClip(
     override val mute: Boolean = false,
     val patternId: Int,
     val transpose: Int = 0,
-    val padIndex: Int = -1, // global pad to trigger (-1 = use note's padIndex, then legacy noteOn)
+    val padIndex: Int = -1, // global pad to trigger (-1 = use note's padIndex, then note % 16)
     /** Position in the source pattern used at this clip's left edge. */
     val contentOffsetTicks: Long = 0,
 ) : Clip() {

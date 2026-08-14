@@ -172,19 +172,19 @@ class TransportControllerTest {
 
         controller.schedulePatternClip(clip, 0L, windowEnd, 120f)
 
-        // Exactly 2 note-ons (one per rep) — no ghost third
+        // Exactly 2 pad triggers (one per rep) — no ghost third
         assertEquals(
-            "Should schedule exactly 2 note-on events for 2 reps",
+            "Should schedule exactly 2 pad triggers for 2 reps",
             2,
-            fakeScheduler.noteOnEvents.size,
+            fakeScheduler.padTriggers.size,
         )
         assertEquals(
-            "Should schedule exactly 2 note-off events",
+            "Should schedule exactly 2 pad releases",
             2,
-            fakeScheduler.noteOffEvents.size,
+            fakeScheduler.padReleases.size,
         )
-        assertEquals("Note-on rep 0", 60, fakeScheduler.noteOnEvents[0].note)
-        assertEquals("Note-on rep 1", 60, fakeScheduler.noteOnEvents[1].note)
+        assertEquals("Pad-trigger rep 0", 12, fakeScheduler.padTriggers[0].padIndex)
+        assertEquals("Pad-trigger rep 1", 12, fakeScheduler.padTriggers[1].padIndex)
     }
 
     // ================================================================
@@ -223,21 +223,21 @@ class TransportControllerTest {
         // Rep 0: both notes (60 and 64) play fully.
         // Rep 1 (partial 480 ticks): note 60 at local tick 0 (global 960) fits within 1440 (end=1440>960),
         //   note 64 at local tick 480 (global 1440) has maxEndTick=1440 => end=1440 => noteEndTick==startTick => skipped.
-        // Expected: 3 note-ons, 3 note-offs.
+        // Expected: 3 pad triggers, 3 pad releases.
         assertEquals(
-            "Expected 3 note-ons (2 full + 1 truncated)",
+            "Expected 3 pad triggers (2 full + 1 truncated)",
             3,
-            fakeScheduler.noteOnEvents.size,
+            fakeScheduler.padTriggers.size,
         )
         assertEquals(
-            "Expected 3 note-offs",
+            "Expected 3 pad releases",
             3,
-            fakeScheduler.noteOffEvents.size,
+            fakeScheduler.padReleases.size,
         )
 
-        assertEquals("Full rep note 60", 60, fakeScheduler.noteOnEvents[0].note)
-        assertEquals("Full rep note 64", 64, fakeScheduler.noteOnEvents[1].note)
-        assertEquals("Partial rep only note 60 fits", 60, fakeScheduler.noteOnEvents[2].note)
+        assertEquals("Full rep note 60 maps to pad 12", 12, fakeScheduler.padTriggers[0].padIndex)
+        assertEquals("Full rep note 64 maps to pad 0", 0, fakeScheduler.padTriggers[1].padIndex)
+        assertEquals("Partial rep note 60 maps to pad 12", 12, fakeScheduler.padTriggers[2].padIndex)
     }
 
     // ================================================================
@@ -257,16 +257,16 @@ class TransportControllerTest {
         assertTrue("Pattern should be activated", controller.activePatternId >= 0)
         assertEquals("Active pattern should be 0", 0, controller.activePatternId)
 
-        // 2 notes in the pattern
+        // 2 pad triggers in the pattern
         assertEquals(
-            "Should schedule 2 note-ons",
+            "Should schedule 2 pad triggers",
             2,
-            fakeScheduler.noteOnEvents.size,
+            fakeScheduler.padTriggers.size,
         )
         assertEquals(
-            "Should schedule 2 note-offs",
+            "Should schedule 2 pad releases",
             2,
-            fakeScheduler.noteOffEvents.size,
+            fakeScheduler.padReleases.size,
         )
     }
 
@@ -303,9 +303,6 @@ class TransportControllerTest {
             controller.activePatternId,
         )
 
-        // Note-ons from pattern 0 scheduled in first 2 blocks
-        val noteOnsBeforeSwitch = fakeScheduler.noteOnEvents.size
-
         // Advance playhead past the bar boundary to trigger the switch
         fakeScheduler.controlledPlayheadSample = 96000
         controller.scheduleNextBlock()
@@ -319,10 +316,10 @@ class TransportControllerTest {
             controller.transportState.position.bar,
         )
 
-        // A note-off should have been sent for the previously held note 60
+        // A pad release should have been scheduled for the previously triggered note 60.
         assertTrue(
-            "At least one note-off should have been sent for held notes",
-            fakeScheduler.noteOffEvents.any { it.trackIndex == 0 && it.note == 60 },
+            "At least one pad release should have been scheduled",
+            fakeScheduler.padReleases.any { it.trackIndex == 0 && it.padIndex == 12 },
         )
     }
 
@@ -665,6 +662,7 @@ class TransportControllerTest {
                 startTick = 0L,
                 durationTicks = 960L,
                 patternId = 0,
+                padIndex = 5,
             )
         val windowEnd = controller.tickToSample(9600, 120f)
         controller.schedulePatternClip(clip, 0L, windowEnd, 120f)
@@ -675,7 +673,7 @@ class TransportControllerTest {
             fakeScheduler.padTriggers.size,
         )
         assertEquals(
-            "Pad index should be 3",
+            "Note pad index should override clip pad index",
             3,
             fakeScheduler.padTriggers[0].padIndex,
         )
@@ -693,8 +691,8 @@ class TransportControllerTest {
     }
 
     @Test
-    fun schedulePatternClip_legacyPadIndex_fallsBackToNoteOn() {
-        // NoteEvent with padIndex = -1 (legacy) should use noteOn path
+    fun schedulePatternClip_legacyPadIndex_migratesToNoteModuloPadTrigger() {
+        // NoteEvent with padIndex = -1 (legacy) maps to note % 16.
         val pattern =
             Pattern(
                 id = 0,
@@ -718,21 +716,13 @@ class TransportControllerTest {
         val windowEnd = controller.tickToSample(9600, 120f)
         controller.schedulePatternClip(clip, 0L, windowEnd, 120f)
 
+        assertEquals("Should schedule 1 pad trigger", 1, fakeScheduler.padTriggers.size)
         assertEquals(
-            "Should schedule 1 noteOn",
-            1,
-            fakeScheduler.noteOnEvents.size,
+            "Legacy note 60 should map to pad 12",
+            12,
+            fakeScheduler.padTriggers[0].padIndex,
         )
-        assertEquals(
-            "Note should be 60",
-            60,
-            fakeScheduler.noteOnEvents[0].note,
-        )
-        assertEquals(
-            "No pad triggers should be scheduled",
-            0,
-            fakeScheduler.padTriggers.size,
-        )
+        assertEquals("No noteOn events should be scheduled", 0, fakeScheduler.noteOnEvents.size)
     }
 
     @Test
@@ -876,24 +866,24 @@ class TransportControllerTest {
         val startSample = controller.tickToSample(0L, 120f)
         val windowEnd = startSample + 24000L // 500ms lookahead at 48kHz
 
-        // First tick schedules one pad trigger and one note-on.
+        // First tick schedules two pad triggers.
         controller.schedulePatternNotes(pattern, startSample, windowEnd, 120f)
-        assertEquals("First tick schedules 1 pad trigger", 1, fakeScheduler.padTriggers.size)
-        assertEquals("First tick schedules 1 note-on", 1, fakeScheduler.noteOnEvents.size)
-        assertEquals("First tick schedules 1 note-off", 1, fakeScheduler.noteOffEvents.size)
+        assertEquals("First tick schedules 2 pad triggers", 2, fakeScheduler.padTriggers.size)
+        assertEquals("First tick schedules 2 pad releases", 2, fakeScheduler.padReleases.size)
+        assertTrue(fakeScheduler.padTriggers.any { it.padIndex == 2 })
+        assertTrue(fakeScheduler.padTriggers.any { it.padIndex == 0 })
 
         // Second tick, same overlapping window — must NOT re-trigger anything.
         controller.schedulePatternNotes(pattern, startSample, windowEnd, 120f)
-        assertEquals("Second tick must not re-trigger the pad", 1, fakeScheduler.padTriggers.size)
-        assertEquals("Second tick must not re-trigger note-on", 1, fakeScheduler.noteOnEvents.size)
-        assertEquals("Second tick must not re-trigger note-off", 1, fakeScheduler.noteOffEvents.size)
+        assertEquals("Second tick must not re-trigger pads", 2, fakeScheduler.padTriggers.size)
+        assertEquals("Second tick must not re-trigger releases", 2, fakeScheduler.padReleases.size)
 
         // After a stop() (which clears the de-dup set alongside the engine
         // queue), the same note may legitimately fire again.
         controller.stop()
         controller.schedulePatternNotes(pattern, startSample, windowEnd, 120f)
-        assertEquals("After clear, pad fires again", 2, fakeScheduler.padTriggers.size)
-        assertEquals("After clear, note-on fires again", 2, fakeScheduler.noteOnEvents.size)
+        assertEquals("After clear, pads fire again", 4, fakeScheduler.padTriggers.size)
+        assertEquals("After clear, releases fire again", 4, fakeScheduler.padReleases.size)
     }
 
     @Test
@@ -918,12 +908,12 @@ class TransportControllerTest {
 
         controller.scheduleNextBlock()
 
-        // Only the launcher's single note-on should fire; the arrangement clip
+        // Only the launcher's single pad trigger should fire; the arrangement clip
         // referencing the same pattern is suppressed in sequencer mode.
         assertEquals(
             "Sequencer mode must not double-fire arrangement clips",
             1,
-            fakeScheduler.noteOnEvents.size,
+            fakeScheduler.padTriggers.size,
         )
     }
 
@@ -1049,8 +1039,8 @@ class TransportControllerTest {
 
         controller.schedulePatternNotes(pattern, 0L, controller.tickToSample(960L, 120f), 120f)
 
-        assertEquals(controller.tickToSample(150L, 120f), fakeScheduler.noteOnEvents.single().targetSample)
-        assertEquals(controller.tickToSample(270L, 120f), fakeScheduler.noteOffEvents.single().targetSample)
+        assertEquals(controller.tickToSample(150L, 120f), fakeScheduler.padTriggers.single().targetSample)
+        assertEquals(controller.tickToSample(270L, 120f), fakeScheduler.padReleases.single().targetSample)
     }
 
     @Test
@@ -1065,7 +1055,7 @@ class TransportControllerTest {
 
         controller.schedulePatternNotes(pattern, 0L, controller.tickToSample(960L, 120f), 120f)
 
-        assertEquals(controller.tickToSample(121L, 120f), fakeScheduler.noteOnEvents.single().targetSample)
+        assertEquals(controller.tickToSample(121L, 120f), fakeScheduler.padTriggers.single().targetSample)
     }
 
     @Test
@@ -1118,9 +1108,9 @@ class TransportControllerTest {
 
         controller.schedulePatternClip(clip, 0L, controller.tickToSample(2000L, 120f), 120f)
 
-        assertEquals(1, fakeScheduler.noteOnEvents.size)
-        assertEquals(64, fakeScheduler.noteOnEvents.single().note)
-        assertEquals(controller.tickToSample(1000L, 120f), fakeScheduler.noteOnEvents.single().targetSample)
+        assertEquals(1, fakeScheduler.padTriggers.size)
+        assertEquals(0, fakeScheduler.padTriggers.single().padIndex)
+        assertEquals(controller.tickToSample(1000L, 120f), fakeScheduler.padTriggers.single().targetSample)
     }
 
     // ================================================================
