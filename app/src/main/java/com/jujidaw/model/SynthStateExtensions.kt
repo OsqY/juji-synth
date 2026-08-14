@@ -1,5 +1,7 @@
 package com.jujidaw.model
 
+import kotlin.math.roundToInt
+
 /**
  * Extension that serialises a [SynthState] into the 39-element float array
  * expected by [com.jujidaw.audio.SynthEngine.applySynthState].
@@ -39,6 +41,54 @@ fun SynthState.toParamsArray(): FloatArray {
         // Master (1)
         masterVolume
     )
+}
+
+/** Return a copy with one native parameter reflected in the persisted state. */
+fun SynthState.withParamValue(
+    paramId: Int,
+    value: Float,
+): SynthState? = when (paramId) {
+    ParamIds.OSC1_LEVEL -> copy(osc1Level = value)
+    ParamIds.OSC2_LEVEL -> copy(osc2Level = value)
+    ParamIds.OSC1_WAVE -> copy(osc1Waveform = value.roundToInt())
+    ParamIds.OSC2_WAVE -> copy(osc2Waveform = value.roundToInt())
+    ParamIds.OSC_DETUNE -> copy(oscDetune = value)
+    ParamIds.SUB_OSC_LEVEL -> copy(subOscLevel = value)
+    ParamIds.NOISE_LEVEL -> copy(noiseLevel = value)
+    ParamIds.OSC_MIX -> copy(oscMix = value)
+    ParamIds.OSC_SYNC -> copy(oscSync = value > 0.5f)
+    ParamIds.FILTER_CUTOFF -> copy(filterCutoff = value)
+    ParamIds.FILTER_RESONANCE -> copy(filterResonance = value)
+    ParamIds.FILTER_MODE -> copy(filterMode = value.roundToInt())
+    ParamIds.FILTER_ENV_AMOUNT -> copy(filterEnvAmount = value)
+    ParamIds.AMP_ATTACK -> copy(ampAttack = value)
+    ParamIds.AMP_DECAY -> copy(ampDecay = value)
+    ParamIds.AMP_SUSTAIN -> copy(ampSustain = value)
+    ParamIds.AMP_RELEASE -> copy(ampRelease = value)
+    ParamIds.FILTER_ATTACK -> copy(filterAttack = value)
+    ParamIds.FILTER_DECAY -> copy(filterDecay = value)
+    ParamIds.FILTER_SUSTAIN -> copy(filterSustain = value)
+    ParamIds.FILTER_RELEASE -> copy(filterRelease = value)
+    ParamIds.LFO1_RATE -> copy(lfo1Rate = value)
+    ParamIds.LFO1_DEPTH -> copy(lfo1Depth = value)
+    ParamIds.LFO1_WAVE -> copy(lfo1Waveform = value.roundToInt())
+    ParamIds.LFO2_RATE -> copy(lfo2Rate = value)
+    ParamIds.LFO2_DEPTH -> copy(lfo2Depth = value)
+    ParamIds.LFO2_WAVE -> copy(lfo2Waveform = value.roundToInt())
+    ParamIds.REVERB_MIX -> copy(reverbMix = value)
+    ParamIds.REVERB_DECAY -> copy(reverbDecay = value)
+    ParamIds.DELAY_MIX -> copy(delayMix = value)
+    ParamIds.DELAY_TIME -> copy(delayTime = value)
+    ParamIds.DELAY_FEEDBACK -> copy(delayFeedback = value)
+    ParamIds.DIST_DRIVE -> copy(distortionDrive = value)
+    ParamIds.DIST_MIX -> copy(distortionMix = value)
+    ParamIds.EFFECTS_BYPASS -> copy(effectsBypass = value > 0.5f)
+    ParamIds.CHORUS_RATE -> copy(chorusRate = value)
+    ParamIds.CHORUS_DEPTH -> copy(chorusDepth = value)
+    ParamIds.CHORUS_MIX -> copy(chorusMix = value)
+    ParamIds.MASTER_VOLUME -> copy(masterVolume = value)
+    ParamIds.PITCH_BEND -> copy(pitchBend = value)
+    else -> null
 }
 
 /** Default SynthState used for new tracks (based on the 'Bright Lead' factory preset). */

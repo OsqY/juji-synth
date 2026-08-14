@@ -4,6 +4,7 @@ import com.jujidaw.data.MidiMapping
 import com.jujidaw.model.Arrangement
 import com.jujidaw.model.AudioClip
 import com.jujidaw.model.NoteEvent
+import com.jujidaw.model.ParamIds
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
 import com.jujidaw.model.PatternClip
@@ -12,6 +13,7 @@ import com.jujidaw.model.TimeSignature
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -176,5 +178,76 @@ class ProjectSerializationTest {
         val bankBSynth = decoded.padSynthStates.getValue(16)
         assertEquals(0.42f, bankBSynth.osc1Level)
         assertEquals(0.31f, bankBSynth.filterCutoff)
+    }
+
+    @Test
+    fun samplePadsDoNotRestoreSavedSynthVoices() {
+        PadSessionStore.set(
+            listOf(
+                PadSettings(params = PadParamValues(synthMode = false)),
+                PadSettings(params = PadParamValues(synthMode = true)),
+            ) + List(30) { PadSettings() },
+        )
+        try {
+            ProjectAutosave.applyPadSynthStates(
+                mapOf(
+                    0 to SynthState(osc1Level = 0.2f),
+                    1 to SynthState(osc1Level = 0.8f),
+                ),
+            )
+
+            assertFalse(0 in PadSynthSessionStore.snapshot())
+            assertTrue(1 in PadSynthSessionStore.snapshot())
+        } finally {
+            PadSessionStore.clear()
+            PadSynthSessionStore.clear()
+        }
+    }
+
+    @Test
+    fun legacyPatternNotesMigrateAtTheProjectLoadBoundary() {
+        val legacyJson =
+            """
+            {
+              "name": "legacy",
+              "patterns": [{
+                "id": 0,
+                "lengthSteps": 16,
+                "lengthTicks": 960,
+                "notes": [{
+                  "note": 60,
+                  "velocity": 0.8,
+                  "startTick": 0,
+                  "durationTicks": 120
+                }]
+              }]
+            }
+            """.trimIndent()
+
+        val migrated = migrateLegacyPatternNotes(json.decodeFromString<Project>(legacyJson))
+
+        assertEquals(12, migrated.patterns.single().notes.single().padIndex)
+    }
+
+    @Test
+    fun mixerAutosaveUsesTheSerializableSessionSnapshot() {
+        val expected = MixerState(tracks = List(16) { TrackState(faderDb = -12f) })
+        MixerSessionStore.set(expected)
+        try {
+            assertEquals(expected, ProjectAutosave.captureMixerState())
+        } finally {
+            MixerSessionStore.clear()
+        }
+    }
+
+    @Test
+    fun midiSynthParameterUpdatesAreIncludedInTheTrackSnapshot() {
+        TrackSynthSessionStore.clear()
+        TrackSynthSessionStore.updateParam(0, ParamIds.FILTER_CUTOFF, 0.25f)
+        try {
+            assertEquals(0.25f, TrackSynthSessionStore.snapshot().getValue(0).filterCutoff)
+        } finally {
+            TrackSynthSessionStore.clear()
+        }
     }
 }

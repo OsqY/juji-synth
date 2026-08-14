@@ -28,9 +28,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * close. A single implicit "autosave" project is persisted under the standard
  * projects dir, and its name is remembered in [SettingsDataStore].
  *
- * The mixer state is captured by reading the C++ engine getters so a save
- * actually reflects what the user hears (the legacy [ProjectViewModel]
- * [captureMixerState] returned an empty [MixerState]).
+ * MixerSessionStore is the persistence authority for control state. Native
+ * mixer commands are asynchronous, so reading C++ fields during a save can
+ * race the audio thread and capture an older value.
  */
 object ProjectAutosave {
     const val AUTOSAVE_NAME = "autosave"
@@ -57,33 +57,8 @@ object ProjectAutosave {
      */
     private val loadInProgress = AtomicBoolean(false)
 
-    /** Build a [MixerState] snapshot from the live engine (16 channels + buses + master). */
-    fun captureMixerState(): MixerState {
-        val stored = MixerSessionStore.snapshot()
-        if (!SynthEngine.isLoaded) return stored
-        val tracks =
-            (0 until 16).map { i ->
-                TrackState(
-                    faderDb = SynthEngine.getChannelFaderDb(i),
-                    pan = SynthEngine.getChannelPan(i),
-                    mute = SynthEngine.isChannelMute(i),
-                    solo = SynthEngine.isChannelSolo(i),
-                    arm = SynthEngine.isChannelArm(i),
-                    sendALevel = SynthEngine.getSendLevel(i, 0),
-                    sendBLevel = SynthEngine.getSendLevel(i, 1),
-                    insertFx = stored.tracks.getOrNull(i)?.insertFx.orEmpty(),
-                )
-            }
-        val snapshot = MixerState(
-            tracks = tracks,
-            busA = stored.busA.copy(faderDb = SynthEngine.getBusFaderDb(0)),
-            busB = stored.busB.copy(faderDb = SynthEngine.getBusFaderDb(1)),
-            masterFaderDb = SynthEngine.getMasterFaderDb(),
-            masterInsertFx = stored.masterInsertFx,
-        )
-        MixerSessionStore.set(snapshot)
-        return snapshot
-    }
+    /** Build a [MixerState] snapshot from the serializable session store. */
+    fun captureMixerState(): MixerState = MixerSessionStore.snapshot()
 
     /** Build a full [Project] from the live transport + engine state. */
     fun buildProjectFromEngine(
@@ -292,7 +267,11 @@ object ProjectAutosave {
 
     /** Restore the complete synth snapshots only after pad modes are restored. */
     fun applyPadSynthStates(states: Map<Int, SynthState>) {
-        val normalized = states.filterKeys { it in 0 until NUM_PADS }
+        val enabledPads =
+            PadSessionStore.snapshot()
+                .mapIndexedNotNull { index, pad -> index.takeIf { pad.params.synthMode } }
+                .toSet()
+        val normalized = states.filterKeys { it in 0 until NUM_PADS && it in enabledPads }
         PadSynthSessionStore.replace(normalized)
         if (!SynthEngine.isLoaded) return
         normalized.forEach { (globalIndex, state) ->

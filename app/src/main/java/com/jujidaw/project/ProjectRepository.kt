@@ -144,7 +144,7 @@ class ProjectRepository(private val context: Context) {
                 return@withContext Result.failure(IOException("Project not found: $name"))
             }
             val jsonString = jsonFile.readText()
-            val project = json.decodeFromString<Project>(jsonString)
+            val project = migrateLegacyPatternNotes(json.decodeFromString<Project>(jsonString))
             if (project.name != name) {
                 return@withContext Result.failure(IOException("Project name does not match its directory"))
             }
@@ -323,7 +323,7 @@ class ProjectRepository(private val context: Context) {
                     ?.takeIf { File(pad.samplePath).isAbsolute },
             ).filterNotNull().firstOrNull { it.isFile }
                 ?: return Result.failure(IOException("Pad sample not found: ${pad.samplePath}"))
-            val relativePath = "samples/pad_${index}_${sourceFile.name}"
+            val relativePath = projectPadPath(index, sourceFile.name)
             val destination = ProjectPathPolicy.audioFile(targetDir, relativePath)
                 ?: return Result.failure(IOException("Pad sample path is outside the target project"))
             destination.parentFile?.mkdirs()
@@ -370,7 +370,7 @@ class ProjectRepository(private val context: Context) {
             val relativePath = if (projectFile != null) {
                 ProjectPathPolicy.relativeAudioPath(projectDir, sourceFile.absolutePath)
             } else {
-                val migratedPath = "samples/pad_${index}_${sourceFile.name}"
+                val migratedPath = projectPadPath(index, sourceFile.name)
                 val destination = ProjectPathPolicy.audioFile(projectDir, migratedPath)
                     ?: return Result.failure(IOException("Pad sample path is outside the project"))
                 destination.parentFile?.mkdirs()
@@ -390,6 +390,10 @@ class ProjectRepository(private val context: Context) {
             )
         )
     }
+
+    private fun projectPadPath(index: Int, fileName: String): String =
+        if (fileName.startsWith("pad_${index}_")) "samples/$fileName"
+        else "samples/pad_${index}_$fileName"
 
     // ── WAV Export ──────────────────────────────────────────────────
 
