@@ -99,6 +99,48 @@ class ProjectRepositoryAudioTest {
     }
 
     @Test
+    fun corruptAudioRestoreLeavesCurrentArrangementUntouched() = runBlocking {
+        val name = "audio_corrupt_${System.nanoTime()}"
+        val projectsDir = (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects")
+        val corrupt = projectsDir.resolve(name).resolve("samples/corrupt.wav")
+        corrupt.parentFile?.mkdirs()
+        corrupt.writeBytes(byteArrayOf(1, 2, 3))
+        val transport = TransportController()
+        val previous = Arrangement(loopEnabled = true, loopEndTick = 960L)
+        transport.arrangement = previous
+        try {
+            val result = ProjectAutosave.applyProjectToEngine(
+                audioProject(name, "samples/corrupt.wav"),
+                transport,
+                context,
+            )
+            assertTrue(result.isFailure)
+            assertEquals(previous, transport.arrangement)
+        } finally {
+            transport.release()
+            corrupt.parentFile?.parentFile?.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun invalidProjectScalarLeavesCurrentArrangementUntouched() = runBlocking {
+        val transport = TransportController()
+        val previous = Arrangement(loopEnabled = true, loopEndTick = 960L)
+        transport.arrangement = previous
+        try {
+            val result = ProjectAutosave.applyProjectToEngine(
+                Project(name = "invalid_${System.nanoTime()}", swing = 2f),
+                transport,
+                context,
+            )
+            assertTrue(result.isFailure)
+            assertEquals(previous, transport.arrangement)
+        } finally {
+            transport.release()
+        }
+    }
+
+    @Test
     fun failedAutosaveDoesNotAdvanceLastProjectSetting() = runBlocking {
         val app = JujiDawApp.instance
         val settings = SettingsDataStore(context)
@@ -128,6 +170,82 @@ class ProjectRepositoryAudioTest {
         } finally {
             app.currentProjectName = previousProjectName
             settings.setLastProjectName(previousLastProject)
+        }
+    }
+
+    @Test
+    fun failedSaveDoesNotModifyExistingProjectAssets() = runBlocking {
+        val repository = ProjectRepository(context)
+        val name = "save_rollback_${System.nanoTime()}"
+        val projectsDir = (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects")
+        val source = projectsDir.resolve("source-${System.nanoTime()}.wav")
+        source.writeBytes(byteArrayOf(1, 2, 3))
+        try {
+            assertTrue(
+                repository.saveProject(
+                    Project(name = name, pads = listOf(PadSettings(samplePath = source.absolutePath))),
+                ).isSuccess,
+            )
+            val projectDir = projectsDir.resolve(name)
+            val asset = projectDir.resolve("samples/pad_0_${source.name}")
+            val originalJson = projectDir.resolve("project.json").readText()
+
+            assertTrue(
+                repository.saveProject(
+                    Project(
+                        name = name,
+                        pads = listOf(
+                            PadSettings(samplePath = source.absolutePath),
+                            PadSettings(samplePath = projectsDir.resolve("missing.wav").absolutePath),
+                        ),
+                    ),
+                ).isFailure,
+            )
+            assertEquals(originalJson, projectDir.resolve("project.json").readText())
+            assertEquals(listOf<Byte>(1, 2, 3), asset.readBytes().toList())
+        } finally {
+            source.delete()
+            repository.deleteProject(name)
+        }
+    }
+
+    @Test
+    fun interruptedSaveBackupIsRecoveredAndHiddenFromProjectList() = runBlocking {
+        val repository = ProjectRepository(context)
+        val name = "save_recovery_${System.nanoTime()}"
+        val projectsDir = (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects")
+        val projectDir = projectsDir.resolve(name)
+        val backupDir = projectsDir.resolve(".$name.123.bak")
+        try {
+            assertTrue(repository.saveProject(Project(name = name)).isSuccess)
+            assertTrue(projectDir.renameTo(backupDir))
+
+            assertTrue(repository.listProjects().any { it.name == name })
+            assertTrue(projectDir.resolve("project.json").isFile)
+            assertFalse(repository.listProjects().any { it.name == backupDir.name })
+        } finally {
+            repository.deleteProject(name)
+            backupDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun interruptedRenameCompletesWhenTargetWasInstalled() = runBlocking {
+        val repository = ProjectRepository(context)
+        val oldName = "rename_old_${System.nanoTime()}"
+        val newName = "rename_new_${System.nanoTime()}"
+        val projectsDir = (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects")
+        try {
+            assertTrue(repository.saveProject(Project(name = oldName)).isSuccess)
+            assertTrue(repository.saveProject(Project(name = newName)).isSuccess)
+            projectsDir.resolve(".rename.123.txn").writeText("$oldName\n$newName")
+
+            val names = repository.listProjects().map { it.name }
+            assertFalse(oldName in names)
+            assertTrue(newName in names)
+        } finally {
+            repository.deleteProject(oldName)
+            repository.deleteProject(newName)
         }
     }
 
@@ -187,6 +305,69 @@ class ProjectRepositoryAudioTest {
             val loaded = repository.loadProject(name).getOrThrow()
             assertEquals("samples/pad_0_${source.name}", loaded.pads[0].samplePath)
             assertTrue(projectDir.resolve(loaded.pads[0].samplePath).isFile)
+            source.delete()
+            val reloaded = repository.loadProject(name).getOrThrow()
+            assertEquals(loaded.pads[0].samplePath, reloaded.pads[0].samplePath)
+            assertFalse(projectDir.resolve("project.json").readText().contains(source.absolutePath))
+        } finally {
+            source.delete()
+            repository.deleteProject(name)
+        }
+    }
+
+    @Test
+    fun failedLegacyPadMigrationDoesNotCopyEarlierPads() = runBlocking {
+        val repository = ProjectRepository(context)
+        val name = "pad_migration_failure_${System.nanoTime()}"
+        val filesDir = context.getExternalFilesDir(null) ?: context.filesDir
+        val source = filesDir.resolve("legacy-valid-${System.nanoTime()}.wav")
+        val missing = filesDir.resolve("legacy-missing-${System.nanoTime()}.wav")
+        val projectDir = filesDir.resolve("projects/$name")
+        source.writeBytes(byteArrayOf(7, 8, 9))
+        try {
+            projectDir.mkdirs()
+            projectDir.resolve("project.json").writeText(
+                json.encodeToString(
+                    Project(
+                        name = name,
+                        pads = listOf(
+                            PadSettings(samplePath = source.absolutePath),
+                            PadSettings(samplePath = missing.absolutePath),
+                        ),
+                    ),
+                ),
+            )
+
+            assertTrue(repository.loadProject(name).isFailure)
+            assertFalse(projectDir.resolve("samples/pad_0_${source.name}").exists())
+        } finally {
+            source.delete()
+            repository.deleteProject(name)
+        }
+    }
+
+    @Test
+    fun movingPadAssetDoesNotAccumulateIndexPrefixes() = runBlocking {
+        val repository = ProjectRepository(context)
+        val name = "pad_move_${System.nanoTime()}"
+        val source = (context.getExternalFilesDir(null) ?: context.filesDir)
+            .resolve("pad-move-${System.nanoTime()}.wav")
+        source.writeBytes(byteArrayOf(4, 5, 6))
+        try {
+            assertTrue(
+                repository.saveProject(
+                    Project(name = name, pads = listOf(PadSettings(samplePath = source.absolutePath))),
+                ).isSuccess,
+            )
+            val firstPath = repository.loadProject(name).getOrThrow().pads[0].samplePath
+            assertTrue(
+                repository.saveProject(
+                    Project(name = name, pads = listOf(PadSettings(), PadSettings(samplePath = firstPath))),
+                    sourceProjectName = name,
+                ).isSuccess,
+            )
+
+            assertEquals("samples/pad_1_${source.name}", repository.loadProject(name).getOrThrow().pads[1].samplePath)
         } finally {
             source.delete()
             repository.deleteProject(name)

@@ -189,14 +189,23 @@ class ProjectViewModel(
     fun loadProject(projectInfo: ProjectInfo) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val result = repository?.loadProject(projectInfo.name)
-            result?.onSuccess { project ->
+            val repo = repository
+            if (repo == null) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    toastMessage = "Failed to load: repository unavailable",
+                )
+                return@launch
+            }
+            val result = repo.loadProject(projectInfo.name).mapCatching { project ->
                 ProjectAutosave.applyProjectToEngine(
                     project,
                     transportController,
                     JujiDawApp.instance.applicationContext,
-                )
-
+                ).getOrThrow()
+                project
+            }
+            result?.onSuccess { project ->
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     currentProjectName = project.name,

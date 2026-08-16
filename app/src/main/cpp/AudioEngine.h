@@ -210,6 +210,7 @@ private:
     TimeStretchWorker timeStretchWorker_;
     jujidaw::Transport transport_;
     jujidaw::EventQueue eventQueue_;
+    std::mutex audioClipsMutex_;
     std::unordered_map<std::string, std::shared_ptr<SampleBuffer>> audioClips_;
     std::array<std::unique_ptr<AudioClipPlayer>, MAX_TRACKS> audioClipPlayers_;
     std::atomic<int> activeTrackCount_{2}; // Channel 0 synth, channel 1 sampler

@@ -9,29 +9,42 @@ void AudioClipPlayer::init(double sampleRate) {
 }
 
 void AudioClipPlayer::setBuffer(std::shared_ptr<SampleBuffer> buffer) {
-    buffer_ = std::move(buffer);
+    std::atomic_store_explicit(&pendingBuffer_, std::move(buffer), std::memory_order_release);
 }
 
 void AudioClipPlayer::start(int64_t startOffsetInBuffer, int fadeInSamples, int fadeOutSamples) {
-    if (!buffer_ || !buffer_->isLoaded()) return;
-    readPos_ = static_cast<double>(startOffsetInBuffer);
-    if (readPos_ < 0.0) readPos_ = 0.0;
-    if (buffer_->getSampleRate() > 0 && sampleRate_ > 0.0) {
-        speed_ = static_cast<float>(buffer_->getSampleRate()) / static_cast<float>(sampleRate_);
-    } else {
-        speed_ = 1.0f;
-    }
-    fadeInSamples_ = std::max(0, fadeInSamples);
-    fadeOutSamples_ = std::max(0, fadeOutSamples);
-    samplesPlayed_ = 0;
-    active_.store(true, std::memory_order_release);
+    stopPending_.store(false, std::memory_order_relaxed);
+    pendingStartOffset_.store(startOffsetInBuffer, std::memory_order_relaxed);
+    pendingFadeInSamples_.store(fadeInSamples, std::memory_order_relaxed);
+    pendingFadeOutSamples_.store(fadeOutSamples, std::memory_order_relaxed);
+    startPending_.store(true, std::memory_order_release);
 }
 
 void AudioClipPlayer::stop() {
+    startPending_.store(false, std::memory_order_release);
+    stopPending_.store(true, std::memory_order_release);
     active_.store(false, std::memory_order_release);
 }
 
 float AudioClipPlayer::process() {
+    if (startPending_.exchange(false, std::memory_order_acquire)) {
+        buffer_ = std::atomic_load_explicit(&pendingBuffer_, std::memory_order_acquire);
+        if (!buffer_ || !buffer_->isLoaded()) {
+            active_.store(false, std::memory_order_release);
+            return 0.0f;
+        }
+        readPos_ = std::max(0.0, static_cast<double>(pendingStartOffset_.load(std::memory_order_relaxed)));
+        speed_ = buffer_->getSampleRate() > 0 && sampleRate_ > 0.0
+            ? static_cast<float>(buffer_->getSampleRate()) / static_cast<float>(sampleRate_)
+            : 1.0f;
+        fadeInSamples_ = std::max(0, pendingFadeInSamples_.load(std::memory_order_relaxed));
+        fadeOutSamples_ = std::max(0, pendingFadeOutSamples_.load(std::memory_order_relaxed));
+        samplesPlayed_ = 0;
+        active_.store(true, std::memory_order_release);
+    }
+    if (stopPending_.exchange(false, std::memory_order_acquire)) {
+        active_.store(false, std::memory_order_release);
+    }
     if (!active_.load(std::memory_order_acquire) || !buffer_) return 0.0f;
 
     int frames = buffer_->getNumFrames();
@@ -61,7 +74,7 @@ float AudioClipPlayer::process() {
         sample *= static_cast<float>(remaining) / static_cast<float>(fadeOutSamples_);
     }
 
-    sample *= gain_;
+    sample *= gain_.load(std::memory_order_acquire);
     readPos_ += speed_;
     samplesPlayed_++;
 

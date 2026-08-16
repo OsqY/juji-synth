@@ -120,8 +120,8 @@ float MixerChannel::processInput(float input, float& sendA, float& sendB) {
     if (mute_) return 0.0f;
 
     float sample = input;
-    if (clipPlayer_ != nullptr) {
-        sample += clipPlayer_->process();
+    if (auto* clipPlayer = clipPlayer_.load(std::memory_order_acquire)) {
+        sample += clipPlayer->process();
     }
 
     // Continue processing insert state with a silent source so delay/reverb

@@ -26,7 +26,7 @@ public:
 
     // Optional audio clip player mixed on top of the instrument. Does not
     // take ownership. Setting nullptr disables clip playback on this channel.
-    void setClipPlayer(AudioClipPlayer* player) { clipPlayer_ = player; }
+    void setClipPlayer(AudioClipPlayer* player) { clipPlayer_.store(player, std::memory_order_release); }
 
     // Mixer controls (may be called from UI thread; values are atomic or queued).
     void setFader(float db);
@@ -75,7 +75,7 @@ public:
 
 private:
     Instrument* instrument_ = nullptr;
-    AudioClipPlayer* clipPlayer_ = nullptr;
+    std::atomic<AudioClipPlayer*> clipPlayer_{nullptr};
 
     double sampleRate_ = 48000.0;
 

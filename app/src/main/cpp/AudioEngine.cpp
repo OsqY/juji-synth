@@ -24,6 +24,7 @@ void AudioEngine::init(double sampleRate) {
     // Initialize mixer graph
     for (auto& ch : channels_) {
         ch.init(sampleRate);
+        ch.setClipPlayer(nullptr);
     }
     for (auto& bus : buses_) {
         bus.init(sampleRate);
@@ -57,6 +58,11 @@ void AudioEngine::init(double sampleRate) {
 
     // Initialize the DAW transport/sample clock.
     transport_.init(static_cast<int>(sampleRate));
+
+    for (auto& player : audioClipPlayers_) {
+        player = std::make_unique<AudioClipPlayer>();
+        player->init(sampleRate_);
+    }
 
     // Precompute master peak decay factor for ~10ms falloff
     masterPeakDecayFactor_ = std::exp(-1.0f / static_cast<float>(sampleRate * 0.01));
@@ -322,27 +328,28 @@ bool AudioEngine::loadAudioClip(const std::string& clipId, const std::string& pa
         LOGE("Failed to load audio clip %s from %s", clipId.c_str(), path.c_str());
         return false;
     }
+    std::lock_guard<std::mutex> lock(audioClipsMutex_);
     audioClips_[clipId] = std::move(buffer);
     return true;
 }
 
 void AudioEngine::unloadAudioClip(const std::string& clipId) {
+    std::lock_guard<std::mutex> lock(audioClipsMutex_);
     audioClips_.erase(clipId);
 }
 
 bool AudioEngine::startAudioClip(const std::string& clipId, int trackIndex, int startOffsetInBuffer) {
     if (trackIndex < 0 || trackIndex >= MAX_TRACKS) return false;
-    auto it = audioClips_.find(clipId);
-    if (it == audioClips_.end() || !it->second || !it->second->isLoaded()) return false;
-
-    // Lazily create an AudioClipPlayer for this channel if needed.
-    if (!audioClipPlayers_[trackIndex]) {
-        audioClipPlayers_[trackIndex] = std::make_unique<AudioClipPlayer>();
-        audioClipPlayers_[trackIndex]->init(sampleRate_);
+    std::shared_ptr<SampleBuffer> buffer;
+    {
+        std::lock_guard<std::mutex> lock(audioClipsMutex_);
+        auto it = audioClips_.find(clipId);
+        if (it == audioClips_.end() || !it->second || !it->second->isLoaded()) return false;
+        buffer = it->second;
     }
 
     auto* player = audioClipPlayers_[trackIndex].get();
-    player->setBuffer(it->second);
+    player->setBuffer(std::move(buffer));
     player->start(startOffsetInBuffer);
     channels_[trackIndex].setClipPlayer(player);
 

@@ -4,7 +4,6 @@ import com.jujidaw.model.Arrangement
 import com.jujidaw.model.AudioClip
 import com.jujidaw.model.Clip
 import com.jujidaw.model.NoteEvent
-import com.jujidaw.model.ParamIds
 import com.jujidaw.model.PadGateMode
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
@@ -23,6 +22,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 import kotlin.math.roundToLong
 
@@ -49,6 +49,8 @@ class TransportController(
     private var sampleRate: Int = sampleRate
 
     private var schedulerJob: Job? = null
+    private val schedulingLock = Any()
+    private val schedulingGeneration = AtomicLong(0L)
 
     // Mutable state (must be accessed from the scheduler thread only, except
     // for the public control methods which post changes to pending state).
@@ -144,32 +146,38 @@ class TransportController(
      * notes are released.
      */
     fun stop() {
-        transportState = transportState.copy(playing = false)
+        schedulingGeneration.incrementAndGet()
         schedulerJob?.cancel()
         schedulerJob = null
-        currentStep = 0
-        clearScheduledEventKeys()
-        stopAllHeldNotes()
-        startedClips.clear()
-        scheduler.resetTransport(scheduler.getPlayheadSample(), false, false)
-        scheduler.setSequencerEnabled(true)
+        synchronized(schedulingLock) {
+            transportState = transportState.copy(playing = false)
+            currentStep = 0
+            clearScheduledEventKeys()
+            stopAllHeldNotes()
+            startedClips.clear()
+            scheduler.resetTransport(scheduler.getPlayheadSample(), false, false)
+            scheduler.setSequencerEnabled(true)
+        }
     }
 
     /** Stop all playback and return the transport to the first tick. */
     fun restart() {
+        schedulingGeneration.incrementAndGet()
         schedulerJob?.cancel()
         schedulerJob = null
-        transportState = transportState.copy(
-            playing = false,
-            recording = false,
-            position = TransportPosition(),
-        )
-        currentStep = 0
-        clearScheduledEventKeys()
-        stopAllHeldNotes()
-        startedClips.clear()
-        scheduler.resetTransport(0L, false, false)
-        scheduler.setSequencerEnabled(true)
+        synchronized(schedulingLock) {
+            transportState = transportState.copy(
+                playing = false,
+                recording = false,
+                position = TransportPosition(),
+            )
+            currentStep = 0
+            clearScheduledEventKeys()
+            stopAllHeldNotes()
+            startedClips.clear()
+            scheduler.resetTransport(0L, false, false)
+            scheduler.setSequencerEnabled(true)
+        }
     }
 
     /**
@@ -302,16 +310,11 @@ class TransportController(
 
     private fun startScheduler() {
         schedulerJob?.cancel()
+        val generation = schedulingGeneration.incrementAndGet()
         schedulerJob =
             coroutineScope.launch {
                 while (isActive && transportState.playing) {
-                    val currentSample = scheduler.getPlayheadSample()
-                    val tick = sampleToTick(currentSample, transportState.tempoBpm)
-                    currentStep = (tick / TICKS_PER_STEP).toInt()
-                    transportState = transportState.copy(
-                        position = TransportPosition.fromTicks(tick, transportState.timeSignature),
-                    )
-                    scheduleNextBlock()
+                    scheduleNextBlock(generation)
                     delay(schedulingIntervalMs)
                 }
             }
@@ -321,13 +324,23 @@ class TransportController(
      * Main scheduling tick — exposed as internal so that tests can drive
      * the scheduling logic without running the real coroutine loop.
      */
-    internal fun scheduleNextBlock() {
+    internal fun scheduleNextBlock() = scheduleNextBlock(null)
+
+    private fun scheduleNextBlock(generation: Long?) = synchronized(schedulingLock) {
+        if (generation != null && generation != schedulingGeneration.get()) return@synchronized
         val currentSample = scheduler.getPlayheadSample()
         val lookaheadSamples = (sampleRate * lookaheadMs) / 1000
         val windowEnd = currentSample + lookaheadSamples
 
         val bpm = transportState.tempoBpm
         val timeSignature = transportState.timeSignature
+        if (generation != null) {
+            val tick = sampleToTick(currentSample, bpm)
+            currentStep = (tick / TICKS_PER_STEP).toInt()
+            transportState = transportState.copy(
+                position = TransportPosition.fromTicks(tick, timeSignature),
+            )
+        }
 
         // 1. Pattern launcher / chaining (live sequencer pattern playback).
         schedulePatternLauncher(currentSample, windowEnd, bpm, timeSignature)
@@ -636,9 +649,9 @@ class TransportController(
         val track = match.groupValues[1].toIntOrNull()?.takeIf { it in 0..15 } ?: return null
         val nativeParam =
             when (match.groupValues[2]) {
-                "filter.cutoff" -> ParamIds.FILTER_CUTOFF
-                "amp.level", "master.volume" -> ParamIds.MASTER_VOLUME
-                "lfo1.rate" -> ParamIds.LFO1_RATE
+                "filter.cutoff" -> 9
+                "lfo1.rate" -> 21
+                "amp.level", "master.volume" -> 38
                 else -> return null
             }
         return track to nativeParam

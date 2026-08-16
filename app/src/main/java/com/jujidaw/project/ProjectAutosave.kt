@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -89,13 +90,49 @@ object ProjectAutosave {
         project: Project,
         tc: TransportController,
         context: Context,
+    ): Result<Unit> =
+        ProjectRepository.withProjectLock {
+            val projectsDir = (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects")
+            val projectsBase = ProjectPathPolicy.projectDirectory(projectsDir, project.name)
+                ?: return@withProjectLock Result.failure(IOException("Invalid project name"))
+            runCatching {
+                validateProjectState(project)
+                preflightAudioAssets(project, projectsBase)
+            }.exceptionOrNull()?.let { return@withProjectLock Result.failure(it) }
+
+            val app = context.applicationContext as? JujiDawApp
+            val previousName = app?.currentProjectName
+            val previousProject = buildProjectFromEngine(previousName ?: AUTOSAVE_NAME, tc)
+            val previousBase = ProjectPathPolicy.projectDirectory(projectsDir, previousProject.name)
+                ?: return@withProjectLock Result.failure(IOException("Invalid current project name"))
+            val result = runCatching { applyProjectState(project, tc, projectsBase) }
+            val failure = result.exceptionOrNull()
+            if (failure != null) {
+                runCatching {
+                    validateProjectState(previousProject)
+                    preflightAudioAssets(previousProject, previousBase)
+                    applyProjectState(previousProject, tc, previousBase)
+                    app?.currentProjectName = previousName
+                }.exceptionOrNull()?.let(failure::addSuppressed)
+                return@withProjectLock Result.failure(failure)
+            }
+            app?.currentProjectName = project.name
+            result
+        }
+
+    private fun validateProjectState(project: Project) {
+        if (project.bpm !in 30f..300f) throw IOException("Tempo must be between 30 and 300 BPM")
+        if (project.swing !in 0f..1f) throw IOException("Swing must be between 0 and 1")
+    }
+
+    private fun applyProjectState(
+        project: Project,
+        tc: TransportController,
+        projectsBase: File,
     ) {
-        val projectsBase =
-            ProjectPathPolicy.projectDirectory(
-                (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects"),
-                project.name,
-            ) ?: return
-        (context.applicationContext as? JujiDawApp)?.currentProjectName = project.name
+        val previousAudioClipIds = tc.arrangement.clips.filterIsInstance<AudioClip>().map { it.id }
+        tc.restart()
+        repeat(NUM_TRACKS, SynthEngine::stopAudioClip)
         tc.setTempo(project.bpm)
         tc.setTimeSignature(project.timeSignature)
         tc.setSwing(project.swing)
@@ -108,11 +145,14 @@ object ProjectAutosave {
         applyMixerState(project.mixerState)
         JujiDawApp.instance.midiRouter.replaceMappings(project.midiMappings)
         applyTrackSynthStates(project.trackSynthStates)
-        for (clip in project.arrangement.clips) {
-            if (clip is AudioClip) {
-                val full = ProjectPathPolicy.audioFile(projectsBase, clip.audioFilePath)
-                if (full?.isFile == true) SynthEngine.loadAudioClip(clip.id, full.absolutePath)
+        val loadedAudioClipIds = mutableSetOf<String>()
+        for (clip in project.arrangement.clips.filterIsInstance<AudioClip>()) {
+            val full = ProjectPathPolicy.audioFile(projectsBase, clip.audioFilePath)
+                ?: throw IOException("Audio path is outside the project")
+            if (!SynthEngine.loadAudioClip(clip.id, full.absolutePath)) {
+                throw IOException("Could not load audio file: ${clip.audioFilePath}")
             }
+            loadedAudioClipIds += clip.id
         }
         // Make the incoming snapshots authoritative before mode restoration.
         // This prevents a synth state from the previously open project being
@@ -121,6 +161,29 @@ object ProjectAutosave {
         // Re-hydrate pad samplers + cached params so pads survive restart.
         applyPadSettings(project.pads, projectsBase)
         applyPadSynthStates(project.padSynthStates)
+        previousAudioClipIds.filterNot(loadedAudioClipIds::contains).forEach(SynthEngine::unloadAudioClip)
+    }
+
+    private fun preflightAudioAssets(project: Project, projectDirectory: File) {
+        val paths =
+            project.arrangement.clips.filterIsInstance<AudioClip>().map { it.audioFilePath } +
+                normalizePads(project.pads).map { it.samplePath }.filter(String::isNotBlank)
+        val loadedIds = mutableListOf<String>()
+        val nonce = System.nanoTime()
+        try {
+            paths.forEachIndexed { index, relativePath ->
+                val file = ProjectPathPolicy.audioFile(projectDirectory, relativePath)
+                    ?.takeIf { it.isFile }
+                    ?: throw IOException("Audio file not found: $relativePath")
+                val validationId = "__project_preflight_${nonce}_$index"
+                if (!SynthEngine.loadAudioClip(validationId, file.absolutePath)) {
+                    throw IOException("Could not decode audio file: $relativePath")
+                }
+                loadedIds += validationId
+            }
+        } finally {
+            loadedIds.forEach(SynthEngine::unloadAudioClip)
+        }
     }
 
     /**
@@ -148,7 +211,9 @@ object ProjectAutosave {
             }
             val path = pad.samplePath
             if (path.isNotEmpty() && File(path).isFile) {
-                SynthEngine.loadSampleToPad(path, globalIndex)
+                if (SynthEngine.isLoaded && !SynthEngine.loadSampleToPad(path, globalIndex)) {
+                    throw IOException("Could not load pad sample: $path")
+                }
             }
             val params = pad.params
             applyPadParam(globalIndex, PadParamIds.PITCH, params.pitch)
@@ -355,8 +420,8 @@ object ProjectAutosave {
                             val list = repo.listProjects()
                             list.firstOrNull()?.name
                         } ?: return@withContext Result.success(null)
-                    repo.loadProject(nameToLoad).map { project ->
-                            applyProjectToEngine(project, tc, context.applicationContext)
+                    repo.loadProject(nameToLoad).mapCatching { project ->
+                            applyProjectToEngine(project, tc, context.applicationContext).getOrThrow()
                             settings.setLastProjectName(project.name)
                             nameToLoad
                         }

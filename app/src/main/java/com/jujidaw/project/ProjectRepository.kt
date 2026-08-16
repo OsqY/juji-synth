@@ -15,6 +15,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import java.io.File
 import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * Summary of a saved project shown in the project browser list.
@@ -52,6 +55,14 @@ data class ProjectInfo(
  */
 class ProjectRepository(private val context: Context) {
 
+    companion object {
+        private val projectLock = Any()
+        private val transactionDirectory = Regex("^\\..+\\.\\d+\\.(tmp|bak)$")
+        private val renameTransaction = Regex("^\\.rename\\.\\d+\\.txn$")
+
+        internal fun <T> withProjectLock(block: () -> T): T = synchronized(projectLock) { block() }
+    }
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -69,11 +80,12 @@ class ProjectRepository(private val context: Context) {
     // ── Project CRUD ────────────────────────────────────────────────
 
     /** Return all saved projects, newest first. */
-    fun listProjects(): List<ProjectInfo> {
+    fun listProjects(): List<ProjectInfo> = withProjectLock {
+        recoverInterruptedSaves()
         val dir = projectsDir
-        if (!dir.exists()) return emptyList()
-        return dir.listFiles()
-            ?.filter { it.isDirectory && File(it, "project.json").exists() }
+        if (!dir.exists()) return@withProjectLock emptyList()
+        dir.listFiles()
+            ?.filter { !transactionDirectory.matches(it.name) && it.isDirectory && File(it, "project.json").exists() }
             ?.map { dir ->
                 val jsonFile = File(dir, "project.json")
                 ProjectInfo(
@@ -93,143 +105,233 @@ class ProjectRepository(private val context: Context) {
      * subdirectory. The [Project.samplePaths] list is updated with
      * relative paths.
      */
-    suspend fun saveProject(project: Project, sourceProjectName: String? = null): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
+    suspend fun saveProject(project: Project, sourceProjectName: String? = null): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            withProjectLock {
+                recoverInterruptedSaves()
+                saveProjectLocked(project, sourceProjectName)
+            }
+        }
+
+    private fun saveProjectLocked(project: Project, sourceProjectName: String?): Result<Unit> {
+        var stagingDir: File? = null
+        return try {
             val projectDir =
                 ProjectPathPolicy.projectDirectory(projectsDir, project.name)
-                    ?: return@withContext Result.failure(IOException("Invalid project name"))
-            projectDir.mkdirs()
+                    ?: return Result.failure(IOException("Invalid project name"))
             val sourceDir = if (sourceProjectName == null) {
-                projectDir
+                projectDir.apply { mkdirs() }
             } else {
                 ProjectPathPolicy.projectDirectory(projectsDir, sourceProjectName)
             }
             if (sourceDir == null || !sourceDir.isDirectory) {
-                return@withContext Result.failure(IOException("Invalid source project name"))
+                return Result.failure(IOException("Invalid source project name"))
             }
+            val stage = projectsDir.resolve(".${project.name}.${System.nanoTime()}.tmp")
+            stagingDir = stage
+            stage.mkdirs()
             val normalizedProject =
-                normalizeAudioPaths(project, sourceDir, projectDir).getOrElse {
-                    return@withContext Result.failure(it)
+                normalizeAudioPaths(project, sourceDir, stage).getOrElse {
+                    stage.deleteRecursively()
+                    return Result.failure(it)
                 }
 
             // Copy referenced samples into the project samples directory.
-            projectDir.resolve("samples").mkdirs()
+            stage.resolve("samples").mkdirs()
             for (clip in normalizedProject.arrangement.clips.filterIsInstance<AudioClip>()) {
                 val srcFile = ProjectPathPolicy.audioFile(sourceDir, clip.audioFilePath)
-                    ?: return@withContext Result.failure(IOException("Audio path is outside the source project"))
-                val destFile = ProjectPathPolicy.audioFile(projectDir, clip.audioFilePath)
-                    ?: return@withContext Result.failure(IOException("Audio path is outside the target project"))
+                    ?: throw IOException("Audio path is outside the source project")
+                val destFile = ProjectPathPolicy.audioFile(stage, clip.audioFilePath)
+                    ?: throw IOException("Audio path is outside the staging project")
                 destFile.parentFile?.mkdirs()
                 if (srcFile.canonicalFile != destFile.canonicalFile) {
                     srcFile.copyTo(destFile, overwrite = true)
                 }
             }
 
-            val jsonString = json.encodeToString(normalizedProject)
-            File(projectDir, "project.json").writeText(jsonString)
+            writeProjectJson(stage, json.encodeToString(normalizedProject))
+            installStagedProject(stage, projectDir)
             Result.success(Unit)
         } catch (e: Exception) {
+            stagingDir?.deleteRecursively()
             Result.failure(e)
+        }
+    }
+
+    private fun installStagedProject(stagingDir: File, projectDir: File) {
+        val parentDir = projectDir.parentFile ?: throw IOException("Project has no parent directory")
+        val backupDir = parentDir.resolve(".${projectDir.name}.${System.nanoTime()}.bak")
+        val hadExistingProject = projectDir.exists()
+        if (hadExistingProject && !projectDir.renameTo(backupDir)) {
+            throw IOException("Unable to stage existing project")
+        }
+        if (!stagingDir.renameTo(projectDir)) {
+            if (hadExistingProject && !backupDir.renameTo(projectDir)) {
+                throw IOException("Project install failed and rollback was unsuccessful")
+            }
+            throw IOException("Unable to install staged project")
+        }
+        if (hadExistingProject) backupDir.deleteRecursively()
+    }
+
+    private fun writeProjectJson(projectDir: File, jsonString: String) {
+        val projectFile = projectDir.resolve("project.json")
+        val temporaryFile = projectDir.resolve("project.json.${System.nanoTime()}.tmp")
+        try {
+            temporaryFile.writeText(jsonString)
+            try {
+                Files.move(
+                    temporaryFile.toPath(),
+                    projectFile.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(
+                    temporaryFile.toPath(),
+                    projectFile.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            }
+        } finally {
+            temporaryFile.delete()
         }
     }
 
     /** Load a saved project by name. Returns [IOException] if not found. */
     suspend fun loadProject(name: String): Result<Project> = withContext(Dispatchers.IO) {
-        try {
-            val projectDir =
-                ProjectPathPolicy.projectDirectory(projectsDir, name)
-                    ?: return@withContext Result.failure(IOException("Invalid project name"))
-            val jsonFile = projectDir.resolve("project.json")
-            if (!jsonFile.exists()) {
-                return@withContext Result.failure(IOException("Project not found: $name"))
+        withProjectLock {
+            try {
+                recoverInterruptedSaves()
+                val projectDir =
+                    ProjectPathPolicy.projectDirectory(projectsDir, name)
+                        ?: return@withProjectLock Result.failure(IOException("Invalid project name"))
+                val jsonFile = projectDir.resolve("project.json")
+                if (!jsonFile.exists()) {
+                    return@withProjectLock Result.failure(IOException("Project not found: $name"))
+                }
+                val jsonString = jsonFile.readText()
+                val project = migrateLegacyPatternNotes(json.decodeFromString<Project>(jsonString))
+                if (project.name != name) {
+                    return@withProjectLock Result.failure(IOException("Project name does not match its directory"))
+                }
+                val normalized = validateLoadedAudio(projectDir, project).getOrElse {
+                    return@withProjectLock Result.failure(it)
+                }
+                if (normalized != project) {
+                    saveProjectLocked(project, name).getOrElse {
+                        return@withProjectLock Result.failure(it)
+                    }
+                }
+                Result.success(normalized)
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-            val jsonString = jsonFile.readText()
-            val project = migrateLegacyPatternNotes(json.decodeFromString<Project>(jsonString))
-            if (project.name != name) {
-                return@withContext Result.failure(IOException("Project name does not match its directory"))
-            }
-            validateLoadedAudio(projectDir, project)
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
     /** Delete a saved project and all its files. */
     suspend fun deleteProject(name: String): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val projectDir =
-                ProjectPathPolicy.projectDirectory(projectsDir, name)
-                    ?: return@withContext Result.failure(IOException("Invalid project name"))
-            if (projectDir.exists()) {
-                projectDir.deleteRecursively()
+        withProjectLock {
+            try {
+                recoverInterruptedSaves()
+                val projectDir =
+                    ProjectPathPolicy.projectDirectory(projectsDir, name)
+                        ?: return@withProjectLock Result.failure(IOException("Invalid project name"))
+                if (projectDir.exists() && !projectDir.deleteRecursively()) {
+                    return@withProjectLock Result.failure(IOException("Unable to delete project: $name"))
+                }
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
     /** Rename a project. Fails if a project with [newName] already exists. */
     suspend fun renameProject(oldName: String, newName: String): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val oldDir =
-                ProjectPathPolicy.projectDirectory(projectsDir, oldName)
-                    ?: return@withContext Result.failure(IOException("Invalid project name"))
-            val newDir =
-                ProjectPathPolicy.projectDirectory(projectsDir, newName)
-                    ?: return@withContext Result.failure(IOException("Invalid project name"))
-            if (!oldDir.exists()) {
-                return@withContext Result.failure(IOException("Project not found: $oldName"))
-            }
-            if (newDir.exists()) {
-                return@withContext Result.failure(IOException("Project already exists: $newName"))
-            }
-            val oldJsonFile = oldDir.resolve("project.json")
-            val originalJson = oldJsonFile.readBytes()
-            val jsonString = originalJson.toString(Charsets.UTF_8)
-            val project = json.decodeFromString<Project>(jsonString)
-            val normalized =
-                normalizeAudioPaths(project, oldDir, oldDir).getOrElse {
-                    return@withContext Result.failure(it)
-                }
-            val suffix = System.nanoTime().toString()
-            val stagedJson = oldDir.resolve("project.json.rename.$suffix.tmp")
-            val backupJson = oldDir.resolve("project.json.rename.$suffix.bak")
+        withProjectLock {
             try {
-                stagedJson.writeText(json.encodeToString(normalized.copy(name = newName)))
+                recoverInterruptedSaves()
+                val oldDir =
+                    ProjectPathPolicy.projectDirectory(projectsDir, oldName)
+                        ?: return@withProjectLock Result.failure(IOException("Invalid project name"))
+                val newDir =
+                    ProjectPathPolicy.projectDirectory(projectsDir, newName)
+                        ?: return@withProjectLock Result.failure(IOException("Invalid project name"))
+                if (!oldDir.exists()) {
+                    return@withProjectLock Result.failure(IOException("Project not found: $oldName"))
+                }
+                if (newDir.exists()) {
+                    return@withProjectLock Result.failure(IOException("Project already exists: $newName"))
+                }
+                val project = json.decodeFromString<Project>(oldDir.resolve("project.json").readText())
+                val renameMarker = projectsDir.resolve(".rename.${System.nanoTime()}.txn")
+                renameMarker.writeText("$oldName\n$newName")
+                saveProjectLocked(project.copy(name = newName), oldName).getOrElse {
+                    renameMarker.delete()
+                    return@withProjectLock Result.failure(it)
+                }
+                if (oldDir.deleteRecursively()) renameMarker.delete()
+                Result.success(Unit)
             } catch (e: Exception) {
-                stagedJson.delete()
-                throw e
+                Result.failure(e)
             }
-            if (!oldJsonFile.renameTo(backupJson)) {
-                stagedJson.delete()
-                return@withContext Result.failure(IOException("Unable to stage project metadata"))
-            }
-            if (!stagedJson.renameTo(oldJsonFile)) {
-                val restored = backupJson.renameTo(oldJsonFile)
-                stagedJson.delete()
-                if (!restored) {
-                    throw IOException("Rename failed and metadata rollback was unsuccessful")
-                }
-                return@withContext Result.failure(IOException("Unable to install renamed project metadata"))
-            }
-            if (!oldDir.renameTo(newDir)) {
-                val restored = runCatching {
-                    if (!oldJsonFile.delete() || !backupJson.renameTo(oldJsonFile)) {
-                        throw IOException("Unable to restore original project metadata")
-                    }
-                }.isSuccess
-                if (!restored) {
-                    throw IOException("Rename failed and metadata rollback was unsuccessful")
-                }
-                return@withContext Result.failure(IOException("Unable to rename project"))
-            }
-            newDir.resolve(backupJson.name).delete()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
+
+    private fun recoverInterruptedSaves() {
+        recoverInterruptedRenames()
+        val transactionDirs = projectsDir.listFiles()?.filter {
+            it.isDirectory && transactionDirectory.matches(it.name)
+        }.orEmpty()
+        transactionDirs.filter { it.name.endsWith(".bak") }
+            .groupBy { transactionProjectName(it) }
+            .forEach { (projectName, backups) ->
+            val projectDir = ProjectPathPolicy.projectDirectory(projectsDir, projectName) ?: return@forEach
+                val newest = backups.maxBy { transactionSequence(it) }
+                if (!projectDir.exists() && !newest.renameTo(projectDir)) {
+                    throw IOException("Unable to recover interrupted save: $projectName")
+                }
+                backups.filter { it.exists() }.forEach {
+                    if (!it.deleteRecursively()) throw IOException("Unable to remove stale save backup: ${it.name}")
+                }
+            }
+        transactionDirs.filter { it.name.endsWith(".tmp") }.forEach {
+            if (!it.deleteRecursively()) throw IOException("Unable to remove interrupted save: ${it.name}")
+        }
+    }
+
+    private fun recoverInterruptedRenames() {
+        projectsDir.listFiles()?.filter { it.isFile && renameTransaction.matches(it.name) }?.forEach { marker ->
+            val names = marker.readLines()
+            if (names.size != 2) throw IOException("Invalid interrupted rename marker")
+            val sourceDir = ProjectPathPolicy.projectDirectory(projectsDir, names[0])
+                ?: throw IOException("Invalid interrupted rename source")
+            val targetName = names[1]
+            val targetDir = ProjectPathPolicy.projectDirectory(projectsDir, targetName)
+                ?: throw IOException("Invalid interrupted rename target")
+            if (targetDir == sourceDir) throw IOException("Interrupted rename target matches source")
+            if (!targetDir.exists()) {
+                marker.delete()
+                return@forEach
+            }
+            val targetProject = runCatching {
+                json.decodeFromString<Project>(targetDir.resolve("project.json").readText())
+            }.getOrNull()
+            if (targetProject?.name != targetName) throw IOException("Interrupted rename target is invalid")
+            if (sourceDir.exists() && !sourceDir.deleteRecursively()) {
+                throw IOException("Unable to complete interrupted rename")
+            }
+            marker.delete()
+        }
+    }
+
+    private fun transactionProjectName(directory: File): String =
+        directory.name.removeSuffix(".bak").substringBeforeLast('.').removePrefix(".")
+
+    private fun transactionSequence(directory: File): Long =
+        directory.name.removeSuffix(".bak").substringAfterLast('.').toLongOrNull() ?: Long.MIN_VALUE
 
     // ── Audio Import ────────────────────────────────────────────────
 
@@ -240,10 +342,12 @@ class ProjectRepository(private val context: Context) {
      * @return the project-relative file path on success.
      */
     suspend fun importAudioClip(uri: Uri, projectName: String): Result<String> = withContext(Dispatchers.IO) {
+        withProjectLock {
         try {
+            recoverInterruptedSaves()
             val projectDir =
                 ProjectPathPolicy.projectDirectory(projectsDir, projectName)
-                    ?: return@withContext Result.failure(IOException("Invalid project name"))
+                    ?: return@withProjectLock Result.failure(IOException("Invalid project name"))
             val samplesDir = projectDir.resolve("samples").apply { mkdirs() }
             val ext = context.contentResolver.getType(uri)?.let { type ->
                 when {
@@ -261,41 +365,48 @@ class ProjectRepository(private val context: Context) {
                 outFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
-            } ?: return@withContext Result.failure(IOException("Cannot open content URI"))
+            } ?: return@withProjectLock Result.failure(IOException("Cannot open content URI"))
 
             // Notify the engine about the new audio clip.
-            SynthEngine.loadAudioClip(outFile.nameWithoutExtension, outFile.absolutePath)
+            if (!SynthEngine.loadAudioClip(outFile.nameWithoutExtension, outFile.absolutePath)) {
+                outFile.delete()
+                return@withProjectLock Result.failure(IOException("Audio file could not be loaded"))
+            }
 
-            Result.success(ProjectPathPolicy.relativeAudioPath(projectDir, outFile.absolutePath) ?: return@withContext Result.failure(IOException("Cannot normalize imported audio path")))
+            Result.success(ProjectPathPolicy.relativeAudioPath(projectDir, outFile.absolutePath) ?: return@withProjectLock Result.failure(IOException("Cannot normalize imported audio path")))
         } catch (e: Exception) {
             Result.failure(e)
+        }
         }
     }
 
     /** Decode and package a pad sample directly under the active project. */
     suspend fun importPadSample(uri: Uri, projectName: String, padIndex: Int): Result<String> =
         withContext(Dispatchers.IO) {
+            withProjectLock {
             try {
-                if (padIndex !in 0..31) return@withContext Result.failure(IOException("Invalid pad index"))
+                recoverInterruptedSaves()
+                if (padIndex !in 0..31) return@withProjectLock Result.failure(IOException("Invalid pad index"))
                 val projectDir =
                     ProjectPathPolicy.projectDirectory(projectsDir, projectName)
-                        ?: return@withContext Result.failure(IOException("Invalid project name"))
+                        ?: return@withProjectLock Result.failure(IOException("Invalid project name"))
                 val wavFile = projectDir.resolve("samples/pad_${padIndex}_${System.currentTimeMillis()}.wav")
                 wavFile.parentFile?.mkdirs()
                 if (!AudioConverter.convertToWav(context, uri, wavFile.absolutePath)) {
                     wavFile.delete()
-                    return@withContext Result.failure(IOException("Cannot decode audio format"))
+                    return@withProjectLock Result.failure(IOException("Cannot decode audio format"))
                 }
                 if (!SynthEngine.loadSampleToPad(wavFile.absolutePath, padIndex)) {
                     wavFile.delete()
-                    return@withContext Result.failure(IOException("Audio file could not be loaded"))
+                    return@withProjectLock Result.failure(IOException("Audio file could not be loaded"))
                 }
                 Result.success(
                     ProjectPathPolicy.relativeAudioPath(projectDir, wavFile.absolutePath)
-                        ?: return@withContext Result.failure(IOException("Cannot normalize imported pad path")),
+                        ?: return@withProjectLock Result.failure(IOException("Cannot normalize imported pad path")),
                 )
             } catch (e: Exception) {
                 Result.failure(e)
+            }
             }
         }
 
@@ -356,6 +467,18 @@ class ProjectRepository(private val context: Context) {
             relativePaths += relativePath
             clip.copy(audioFilePath = relativePath)
         }
+        project.pads.forEach { pad ->
+            if (pad.samplePath.isBlank()) return@forEach
+            val projectFile = ProjectPathPolicy.audioFile(projectDir, pad.samplePath)?.takeIf { it.isFile }
+            val legacyFile = if (File(pad.samplePath).isAbsolute) {
+                ProjectPathPolicy.audioFile(appFilesDirectory, pad.samplePath)?.takeIf { it.isFile }
+            } else {
+                null
+            }
+            if (projectFile == null && legacyFile == null) {
+                return Result.failure(IOException("Pad sample not found: ${pad.samplePath}"))
+            }
+        }
         val pads = project.pads.mapIndexed { index, pad ->
             if (pad.samplePath.isBlank()) return@mapIndexed pad
             val projectFile = ProjectPathPolicy.audioFile(projectDir, pad.samplePath)
@@ -371,12 +494,8 @@ class ProjectRepository(private val context: Context) {
                 ProjectPathPolicy.relativeAudioPath(projectDir, sourceFile.absolutePath)
             } else {
                 val migratedPath = projectPadPath(index, sourceFile.name)
-                val destination = ProjectPathPolicy.audioFile(projectDir, migratedPath)
+                ProjectPathPolicy.audioFile(projectDir, migratedPath)
                     ?: return Result.failure(IOException("Pad sample path is outside the project"))
-                destination.parentFile?.mkdirs()
-                if (sourceFile.canonicalFile != destination.canonicalFile) {
-                    sourceFile.copyTo(destination, overwrite = true)
-                }
                 migratedPath
             } ?: return Result.failure(IOException("Cannot normalize pad sample: ${pad.samplePath}"))
             relativePaths += relativePath
@@ -392,8 +511,7 @@ class ProjectRepository(private val context: Context) {
     }
 
     private fun projectPadPath(index: Int, fileName: String): String =
-        if (fileName.startsWith("pad_${index}_")) "samples/$fileName"
-        else "samples/pad_${index}_$fileName"
+        "samples/pad_${index}_${fileName.replace(Regex("^(pad_\\d+_)+"), "")}"
 
     // ── WAV Export ──────────────────────────────────────────────────
 

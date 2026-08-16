@@ -100,7 +100,7 @@ class TransportControllerTest {
     }
 
     @Test
-    fun arrangementAutomationUsesCanonicalTimelinePointsForScheduling() {
+    fun arrangementAutomationUsesNativeParameterIndices() {
         controller.loadArrangement(
             Arrangement(
                 automation = listOf(
@@ -109,17 +109,24 @@ class TransportControllerTest {
                         tick = PPQ.toLong(),
                         value = 0.75f,
                     ),
+                    AutomationPoint(
+                        paramId = "track.2.synth.lfo1.rate",
+                        tick = PPQ.toLong(),
+                        value = 0.5f,
+                    ),
+                    AutomationPoint(
+                        paramId = "track.2.synth.master.volume",
+                        tick = PPQ.toLong(),
+                        value = 0.25f,
+                    ),
                 ),
             ),
         )
 
         controller.scheduleAutomationEvents(0L, controller.tickToSample(PPQ * 2L, 120f), 120f)
 
-        assertEquals(1, fakeScheduler.scheduledAutomation.size)
-        val event = fakeScheduler.scheduledAutomation.single()
-        assertEquals(2, event.trackIndex)
-        assertEquals(com.jujidaw.model.ParamIds.FILTER_CUTOFF, event.paramIndex)
-        assertEquals(0.75f, event.value)
+        assertEquals(listOf(9, 21, 38), fakeScheduler.scheduledAutomation.map { it.paramIndex })
+        assertTrue(fakeScheduler.scheduledAutomation.all { it.trackIndex == 2 })
     }
 
     @Test
