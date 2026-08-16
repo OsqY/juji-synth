@@ -76,6 +76,7 @@ void MasterBus::applyCommand(const MixerCommand& cmd) {
         case MixerCommandType::SetInsertBypass: setInsertBypass(cmd.slot, cmd.booleanValue); break;
         case MixerCommandType::AddInsertEffect: addInsertEffect(cmd.slot, cmd.effectType); break;
         case MixerCommandType::RemoveInsertEffect: removeInsertEffect(cmd.slot); break;
+        case MixerCommandType::SetInsertParam: setInsertParam(cmd.slot, cmd.paramId, cmd.value); break;
         default: break;
     }
 }

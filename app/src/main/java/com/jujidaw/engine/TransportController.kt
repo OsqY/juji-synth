@@ -4,6 +4,7 @@ import com.jujidaw.model.Arrangement
 import com.jujidaw.model.AudioClip
 import com.jujidaw.model.Clip
 import com.jujidaw.model.NoteEvent
+import com.jujidaw.model.ParamIds
 import com.jujidaw.model.PadGateMode
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.Pattern
@@ -203,6 +204,11 @@ class TransportController(
         if (transportState.playing) {
             scheduler.setTransport(true, transportState.recording, bpm)
         }
+    }
+
+    /** Update the project time signature used for bar/beat transport positions. */
+    fun setTimeSignature(timeSignature: TimeSignature) {
+        transportState = transportState.copy(timeSignature = timeSignature)
     }
 
     /**
@@ -508,13 +514,16 @@ class TransportController(
 
             if (noteEndSample < currentSample || noteStartSample > windowEnd) continue
 
-            // Resolve effective padIndex: note-level > clip-level > legacy noteOn.
+            // Resolve effective padIndex: note-level > clip-level > legacy note % 16.
             // Pass the absolute noteStartSample/noteEndSample as targetSample so
             // the C++ EventQueue fires sample-accurately when the playhead
             // reaches the event, instead of firing immediately on the next
             // audio buffer (which would cluster every note in the lookahead
             // window onto a single buffer and fire them early).
-            val effectivePadIndex = if (note.padIndex >= 0) note.padIndex else padIndex
+            val effectivePadIndex =
+                if (note.padIndex >= 0) note.padIndex
+                else if (padIndex >= 0) padIndex
+                else note.note % 16
             if (effectivePadIndex >= 0) {
                 // De-duplicate: a pad trigger whose start sample was already
                 // pushed in a previous scheduler tick must not fire again.
@@ -602,6 +611,15 @@ class TransportController(
         windowEnd: Long,
         bpm: Float,
     ) {
+        if (arrangement.automation.isNotEmpty()) {
+            for (point in arrangement.automation) {
+                val (trackIndex, paramIndex) = automationTarget(point.paramId) ?: continue
+                val targetSample = tickToSample(point.tick, bpm)
+                if (targetSample >= currentSample && targetSample < windowEnd) {
+                    scheduler.scheduleAutomation(trackIndex, paramIndex, point.value, targetSample)
+                }
+            }
+        }
         for (clip in automationClips) {
             for (point in clip.points) {
                 val targetSample = tickToSample(point.position, bpm)
@@ -610,6 +628,20 @@ class TransportController(
                 }
             }
         }
+    }
+
+    /** Resolve the canonical timeline automation path to a native parameter. */
+    private fun automationTarget(paramId: String): Pair<Int, Int>? {
+        val match = Regex("^track\\.(\\d+)\\.synth\\.(.+)$").matchEntire(paramId) ?: return null
+        val track = match.groupValues[1].toIntOrNull()?.takeIf { it in 0..15 } ?: return null
+        val nativeParam =
+            when (match.groupValues[2]) {
+                "filter.cutoff" -> ParamIds.FILTER_CUTOFF
+                "amp.level", "master.volume" -> ParamIds.MASTER_VOLUME
+                "lfo1.rate" -> ParamIds.LFO1_RATE
+                else -> return null
+            }
+        return track to nativeParam
     }
 
     internal fun scheduleNoteOn(

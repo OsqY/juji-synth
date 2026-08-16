@@ -2,6 +2,7 @@ package com.jujidaw.project
 
 import android.content.Context
 import android.net.Uri
+import com.jujidaw.audio.AudioConverter
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.engine.TransportController
 import com.jujidaw.model.AudioClip
@@ -62,6 +63,9 @@ class ProjectRepository(private val context: Context) {
             .resolve("projects")
             .apply { mkdirs() }
 
+    private val appFilesDirectory: File
+        get() = context.getExternalFilesDir(null) ?: context.filesDir
+
     // ── Project CRUD ────────────────────────────────────────────────
 
     /** Return all saved projects, newest first. */
@@ -94,14 +98,22 @@ class ProjectRepository(private val context: Context) {
             val projectDir =
                 ProjectPathPolicy.projectDirectory(projectsDir, project.name)
                     ?: return@withContext Result.failure(IOException("Invalid project name"))
-            val sourceDir =
-                ProjectPathPolicy.projectDirectory(projectsDir, sourceProjectName ?: project.name)
-                    ?: return@withContext Result.failure(IOException("Invalid source project name"))
-            val normalizedProject = normalizeAudioPaths(project, sourceDir).getOrElse { return@withContext Result.failure(it) }
             projectDir.mkdirs()
+            val sourceDir = if (sourceProjectName == null) {
+                projectDir
+            } else {
+                ProjectPathPolicy.projectDirectory(projectsDir, sourceProjectName)
+            }
+            if (sourceDir == null || !sourceDir.isDirectory) {
+                return@withContext Result.failure(IOException("Invalid source project name"))
+            }
+            val normalizedProject =
+                normalizeAudioPaths(project, sourceDir, projectDir).getOrElse {
+                    return@withContext Result.failure(it)
+                }
 
             // Copy referenced samples into the project samples directory.
-            val samplesDir = projectDir.resolve("samples").apply { mkdirs() }
+            projectDir.resolve("samples").mkdirs()
             for (clip in normalizedProject.arrangement.clips.filterIsInstance<AudioClip>()) {
                 val srcFile = ProjectPathPolicy.audioFile(sourceDir, clip.audioFilePath)
                     ?: return@withContext Result.failure(IOException("Audio path is outside the source project"))
@@ -132,7 +144,7 @@ class ProjectRepository(private val context: Context) {
                 return@withContext Result.failure(IOException("Project not found: $name"))
             }
             val jsonString = jsonFile.readText()
-            val project = json.decodeFromString<Project>(jsonString)
+            val project = migrateLegacyPatternNotes(json.decodeFromString<Project>(jsonString))
             if (project.name != name) {
                 return@withContext Result.failure(IOException("Project name does not match its directory"))
             }
@@ -176,7 +188,10 @@ class ProjectRepository(private val context: Context) {
             val originalJson = oldJsonFile.readBytes()
             val jsonString = originalJson.toString(Charsets.UTF_8)
             val project = json.decodeFromString<Project>(jsonString)
-            val normalized = normalizeAudioPaths(project, oldDir).getOrElse { return@withContext Result.failure(it) }
+            val normalized =
+                normalizeAudioPaths(project, oldDir, oldDir).getOrElse {
+                    return@withContext Result.failure(it)
+                }
             val suffix = System.nanoTime().toString()
             val stagedJson = oldDir.resolve("project.json.rename.$suffix.tmp")
             val backupJson = oldDir.resolve("project.json.rename.$suffix.bak")
@@ -257,7 +272,38 @@ class ProjectRepository(private val context: Context) {
         }
     }
 
-    private fun normalizeAudioPaths(project: Project, sourceDir: File): Result<Project> {
+    /** Decode and package a pad sample directly under the active project. */
+    suspend fun importPadSample(uri: Uri, projectName: String, padIndex: Int): Result<String> =
+        withContext(Dispatchers.IO) {
+            try {
+                if (padIndex !in 0..31) return@withContext Result.failure(IOException("Invalid pad index"))
+                val projectDir =
+                    ProjectPathPolicy.projectDirectory(projectsDir, projectName)
+                        ?: return@withContext Result.failure(IOException("Invalid project name"))
+                val wavFile = projectDir.resolve("samples/pad_${padIndex}_${System.currentTimeMillis()}.wav")
+                wavFile.parentFile?.mkdirs()
+                if (!AudioConverter.convertToWav(context, uri, wavFile.absolutePath)) {
+                    wavFile.delete()
+                    return@withContext Result.failure(IOException("Cannot decode audio format"))
+                }
+                if (!SynthEngine.loadSampleToPad(wavFile.absolutePath, padIndex)) {
+                    wavFile.delete()
+                    return@withContext Result.failure(IOException("Audio file could not be loaded"))
+                }
+                Result.success(
+                    ProjectPathPolicy.relativeAudioPath(projectDir, wavFile.absolutePath)
+                        ?: return@withContext Result.failure(IOException("Cannot normalize imported pad path")),
+                )
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    private fun normalizeAudioPaths(
+        project: Project,
+        sourceDir: File,
+        targetDir: File,
+    ): Result<Project> {
         val relativePaths = mutableListOf<String>()
         val clips = project.arrangement.clips.map { clip ->
             if (clip !is AudioClip) return@map clip
@@ -269,24 +315,85 @@ class ProjectRepository(private val context: Context) {
             relativePaths += relativePath
             clip.copy(audioFilePath = relativePath)
         }
+        val pads = project.pads.mapIndexed { index, pad ->
+            if (pad.samplePath.isBlank()) return@mapIndexed pad
+            val sourceFile = sequenceOf(
+                ProjectPathPolicy.audioFile(sourceDir, pad.samplePath),
+                ProjectPathPolicy.audioFile(appFilesDirectory, pad.samplePath)
+                    ?.takeIf { File(pad.samplePath).isAbsolute },
+            ).filterNotNull().firstOrNull { it.isFile }
+                ?: return Result.failure(IOException("Pad sample not found: ${pad.samplePath}"))
+            val relativePath = projectPadPath(index, sourceFile.name)
+            val destination = ProjectPathPolicy.audioFile(targetDir, relativePath)
+                ?: return Result.failure(IOException("Pad sample path is outside the target project"))
+            destination.parentFile?.mkdirs()
+            if (sourceFile.canonicalFile != destination.canonicalFile) {
+                sourceFile.copyTo(destination, overwrite = true)
+            }
+            relativePaths += relativePath
+            pad.copy(samplePath = relativePath)
+        }
         return Result.success(
             project.copy(
                 arrangement = project.arrangement.copy(clips = clips),
+                pads = pads,
                 samplePaths = relativePaths.distinct(),
             )
         )
     }
 
     private fun validateLoadedAudio(projectDir: File, project: Project): Result<Project> {
-        for (clip in project.arrangement.clips.filterIsInstance<AudioClip>()) {
+        val relativePaths = mutableListOf<String>()
+        val clips = project.arrangement.clips.map { clip ->
+            if (clip !is AudioClip) return@map clip
             val audioFile = ProjectPathPolicy.audioFile(projectDir, clip.audioFilePath)
                 ?: return Result.failure(IOException("Audio path is outside the project"))
             if (!audioFile.isFile) {
                 return Result.failure(IOException("Audio file not found: ${clip.audioFilePath}"))
             }
+            val relativePath = ProjectPathPolicy.relativeAudioPath(projectDir, audioFile.absolutePath)
+                ?: return Result.failure(IOException("Cannot normalize audio path: ${clip.audioFilePath}"))
+            relativePaths += relativePath
+            clip.copy(audioFilePath = relativePath)
         }
-        return Result.success(project)
+        val pads = project.pads.mapIndexed { index, pad ->
+            if (pad.samplePath.isBlank()) return@mapIndexed pad
+            val projectFile = ProjectPathPolicy.audioFile(projectDir, pad.samplePath)
+                ?.takeIf { it.isFile }
+            val legacyFile = if (File(pad.samplePath).isAbsolute) {
+                ProjectPathPolicy.audioFile(appFilesDirectory, pad.samplePath)?.takeIf { it.isFile }
+            } else {
+                null
+            }
+            val sourceFile = projectFile ?: legacyFile
+                ?: return Result.failure(IOException("Pad sample not found: ${pad.samplePath}"))
+            val relativePath = if (projectFile != null) {
+                ProjectPathPolicy.relativeAudioPath(projectDir, sourceFile.absolutePath)
+            } else {
+                val migratedPath = projectPadPath(index, sourceFile.name)
+                val destination = ProjectPathPolicy.audioFile(projectDir, migratedPath)
+                    ?: return Result.failure(IOException("Pad sample path is outside the project"))
+                destination.parentFile?.mkdirs()
+                if (sourceFile.canonicalFile != destination.canonicalFile) {
+                    sourceFile.copyTo(destination, overwrite = true)
+                }
+                migratedPath
+            } ?: return Result.failure(IOException("Cannot normalize pad sample: ${pad.samplePath}"))
+            relativePaths += relativePath
+            pad.copy(samplePath = relativePath)
+        }
+        return Result.success(
+            project.copy(
+                arrangement = project.arrangement.copy(clips = clips),
+                pads = pads,
+                samplePaths = relativePaths.distinct(),
+            )
+        )
     }
+
+    private fun projectPadPath(index: Int, fileName: String): String =
+        if (fileName.startsWith("pad_${index}_")) "samples/$fileName"
+        else "samples/pad_${index}_$fileName"
 
     // ── WAV Export ──────────────────────────────────────────────────
 

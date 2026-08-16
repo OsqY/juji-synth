@@ -1,6 +1,8 @@
 package com.jujidaw.project
 
 import com.jujidaw.model.SynthState
+import com.jujidaw.model.defaultTrackSynthState
+import com.jujidaw.model.withParamValue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -85,6 +87,40 @@ object PadSynthSessionStore {
 
     fun replace(states: Map<Int, SynthState>) {
         _state.value = states.filterKeys { it in 0 until NUM_PADS }
+    }
+
+    fun clear() {
+        _state.value = emptyMap()
+    }
+}
+
+/** App-level bridge for the serializable synth snapshot of each MIDI track. */
+object TrackSynthSessionStore {
+    private val _state = MutableStateFlow<Map<Int, SynthState>>(emptyMap())
+    val state: StateFlow<Map<Int, SynthState>> = _state
+
+    fun snapshot(): Map<Int, SynthState> = _state.value
+
+    fun setState(trackIndex: Int, synthState: SynthState) {
+        if (trackIndex !in 0 until 16) return
+        _state.update { it + (trackIndex to synthState) }
+    }
+
+    fun updateParam(
+        trackIndex: Int,
+        paramId: Int,
+        value: Float,
+    ) {
+        if (trackIndex !in 0 until 16) return
+        _state.update { states ->
+            val current = states[trackIndex] ?: defaultTrackSynthState()
+            val updated = current.withParamValue(paramId, value)
+            if (updated == null) states else states + (trackIndex to updated)
+        }
+    }
+
+    fun replace(states: Map<Int, SynthState>) {
+        _state.value = states.filterKeys { it in 0 until 16 }
     }
 
     fun clear() {

@@ -218,7 +218,9 @@ private:
     std::array<float, MAX_TRACKS> instrumentSources_{};
 
     // Lock-free mixer command queue
-    static constexpr int MIXER_QUEUE_SIZE = 256;
+    // Project restore can enqueue a remove/add/parameter sequence for every
+    // track plus both buses and the master before the audio callback drains it.
+    static constexpr int MIXER_QUEUE_SIZE = 2048;
     std::array<MixerCommand, MIXER_QUEUE_SIZE> mixerQueue_;
     std::atomic<int> mixerQueueHead_{0};
     std::atomic<int> mixerQueueTail_{0};

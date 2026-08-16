@@ -7,6 +7,7 @@ import com.jujidaw.audio.SynthEngine
 import com.jujidaw.engine.TransportController
 import com.jujidaw.model.*
 import com.jujidaw.project.ProjectAutosave
+import com.jujidaw.project.MixerSessionStore
 import com.jujidaw.project.PadSelectionStore
 import com.jujidaw.project.PatternSelectionStore
 import com.jujidaw.project.PadPerformanceEvent
@@ -166,12 +167,14 @@ class TimelineViewModel(
                     }
                     _patterns.value = transportController.patterns
                     if (SynthEngine.isLoaded) {
+                        val mixerState = MixerSessionStore.snapshot()
                         _trackStates.value =
                             List(16) { index ->
+                                val track = mixerState.tracks.getOrNull(index)
                                 TrackUiState(
-                                    mute = SynthEngine.isChannelMute(index),
-                                    solo = SynthEngine.isChannelSolo(index),
-                                    arm = SynthEngine.isChannelArm(index),
+                                    mute = track?.mute ?: false,
+                                    solo = track?.solo ?: false,
+                                    arm = track?.arm ?: false,
                                     level = SynthEngine.getChannelLevel(index).coerceIn(0f, 1f),
                                 )
                             }
@@ -382,6 +385,7 @@ class TimelineViewModel(
         val target = index.coerceIn(0, 15)
         val mute = !_trackStates.value[target].mute
         if (SynthEngine.isLoaded) SynthEngine.setChannelMute(target, mute)
+        MixerSessionStore.updateTrack(target) { it.copy(mute = mute) }
         _trackStates.value =
             _trackStates.value.mapIndexed { i, s ->
                 if (i == target) s.copy(mute = mute) else s
@@ -392,6 +396,7 @@ class TimelineViewModel(
         val target = index.coerceIn(0, 15)
         val solo = !_trackStates.value[target].solo
         if (SynthEngine.isLoaded) SynthEngine.setChannelSolo(target, solo)
+        MixerSessionStore.updateTrack(target) { it.copy(solo = solo) }
         _trackStates.value =
             _trackStates.value.mapIndexed { i, s ->
                 if (i == target) s.copy(solo = solo) else s
@@ -403,6 +408,13 @@ class TimelineViewModel(
         val arm = !_trackStates.value[target].arm
         if (SynthEngine.isLoaded) {
             for (track in 0 until 16) SynthEngine.setChannelArm(track, arm && track == target)
+        }
+        MixerSessionStore.update { state ->
+            state.copy(
+                tracks = state.tracks.mapIndexed { index, track ->
+                    track.copy(arm = arm && index == target)
+                },
+            )
         }
         _trackStates.value =
             _trackStates.value.mapIndexed { i, s ->

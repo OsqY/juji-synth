@@ -26,7 +26,7 @@ data class NoteEvent(
     val startTick: Long, // tick offset from start of pattern
     val durationTicks: Long, // must be > 0
     val trackIndex: Int = 0, // mixer channel target, denormalized for convenience
-    val padIndex: Int = -1, // global pad to trigger (-1 = legacy/unknown, use noteOn path)
+    val padIndex: Int = -1, // global pad to trigger (-1 = legacy, migrate from note % 16)
 ) {
     init {
         require(note in 0..127) { "Note must be between 0 and 127" }

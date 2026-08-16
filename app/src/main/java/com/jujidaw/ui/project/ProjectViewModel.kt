@@ -11,6 +11,7 @@ import com.jujidaw.model.AudioClip
 import com.jujidaw.model.PPQ
 import com.jujidaw.model.ParamIds
 import com.jujidaw.project.MixerState
+import com.jujidaw.project.MixerSessionStore
 import com.jujidaw.project.Project
 import com.jujidaw.project.ProjectAutosave
 import com.jujidaw.project.ProjectInfo
@@ -450,7 +451,7 @@ class ProjectViewModel(
      * that save can round-trip accurately.
      */
     private fun captureMixerState(): MixerState {
-        return MixerState()
+        return MixerSessionStore.snapshot()
     }
 
     /**
@@ -460,6 +461,7 @@ class ProjectViewModel(
      * a bulk-set API for insert chains.
      */
     private fun applyMixerState(state: MixerState) {
+        MixerSessionStore.set(state)
         for (i in 0 until 16) {
             val track = state.tracks.getOrNull(i) ?: continue
             SynthEngine.setChannelFader(i, track.faderDb)

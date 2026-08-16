@@ -131,6 +131,68 @@ class ProjectRepositoryAudioTest {
         }
     }
 
+    @Test
+    fun padAssetsStayProjectRelativeAcrossSaveLoadAndRename() = runBlocking {
+        val repository = ProjectRepository(context)
+        val name = "pad_assets_${System.nanoTime()}"
+        val renamed = "pad_assets_renamed_${System.nanoTime()}"
+        val source = (context.getExternalFilesDir(null) ?: context.filesDir)
+            .resolve("imported-pad-${System.nanoTime()}.wav")
+        source.writeBytes(byteArrayOf(4, 5, 6))
+        val projectsDir = (context.getExternalFilesDir(null) ?: context.filesDir).resolve("projects")
+        try {
+            assertTrue(
+                repository.saveProject(
+                    Project(
+                        name = name,
+                        pads = listOf(PadSettings(samplePath = source.absolutePath, name = "Kick")),
+                    ),
+                ).isSuccess,
+            )
+            val savedJson = projectsDir.resolve(name).resolve("project.json").readText()
+            assertFalse(savedJson.contains(source.absolutePath))
+            assertTrue(projectsDir.resolve(name).resolve("samples/pad_0_${source.name}").isFile)
+            assertEquals("samples/pad_0_${source.name}", repository.loadProject(name).getOrThrow().pads[0].samplePath)
+
+            assertTrue(repository.renameProject(name, renamed).isSuccess)
+            val loaded = repository.loadProject(renamed).getOrThrow()
+            assertEquals("samples/pad_0_${source.name}", loaded.pads[0].samplePath)
+            assertTrue(projectsDir.resolve(renamed).resolve(loaded.pads[0].samplePath).isFile)
+        } finally {
+            source.delete()
+            repository.deleteProject(name)
+            repository.deleteProject(renamed)
+        }
+    }
+
+    @Test
+    fun loadMigratesManagedAbsolutePadSampleToProjectStorage() = runBlocking {
+        val repository = ProjectRepository(context)
+        val name = "pad_legacy_${System.nanoTime()}"
+        val source = (context.getExternalFilesDir(null) ?: context.filesDir)
+            .resolve("legacy-pad-${System.nanoTime()}.wav")
+        val projectDir = (context.getExternalFilesDir(null) ?: context.filesDir)
+            .resolve("projects").resolve(name)
+        source.writeBytes(byteArrayOf(7, 8, 9))
+        try {
+            projectDir.mkdirs()
+            projectDir.resolve("project.json").writeText(
+                json.encodeToString(
+                    Project(
+                        name = name,
+                        pads = listOf(PadSettings(samplePath = source.absolutePath)),
+                    ),
+                ),
+            )
+            val loaded = repository.loadProject(name).getOrThrow()
+            assertEquals("samples/pad_0_${source.name}", loaded.pads[0].samplePath)
+            assertTrue(projectDir.resolve(loaded.pads[0].samplePath).isFile)
+        } finally {
+            source.delete()
+            repository.deleteProject(name)
+        }
+    }
+
     private fun audioProject(name: String, path: String) =
         Project(
             name = name,

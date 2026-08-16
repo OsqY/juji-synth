@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.jujidaw.audio.AudioConverter
 import com.jujidaw.audio.SynthEngine
 import com.jujidaw.audio.TimeStretchListener
 import com.jujidaw.project.PadParamValues
@@ -13,6 +12,7 @@ import com.jujidaw.project.PadSessionStore
 import com.jujidaw.project.PadSettings
 import com.jujidaw.project.PadSynthSessionStore
 import com.jujidaw.project.PadSelectionStore
+import com.jujidaw.project.ProjectRepository
 import com.jujidaw.JujiDawApp
 import kotlinx.serialization.json.Json
 import com.jujidaw.model.defaultTrackSynthState
@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
-
 private const val NUM_PADS = 32
 
 /**
@@ -294,21 +293,15 @@ class PadsViewModel :
         viewModelScope.launch {
             try {
                 val globalIndex = _uiState.value.currentBank * 16 + _uiState.value.selectedPad
-                val samplesDir =
-                    (context.getExternalFilesDir(null) ?: context.filesDir)
-                        .resolve("samples")
-                        .apply { mkdirs() }
-
-                val wavFile = File(samplesDir, "pad_${globalIndex}_${System.currentTimeMillis()}.wav")
-                val converted = AudioConverter.convertToWav(context, uri, wavFile.absolutePath)
-                if (!converted) {
-                    showToast("Failed to decode audio format")
+                val projectName = JujiDawApp.instance.currentProjectName
+                if (projectName == null) {
+                    showToast("Save a project first")
                     return@launch
                 }
-
-                val ok = SynthEngine.loadSampleToPad(wavFile.absolutePath, globalIndex)
-                if (ok) {
-                    val dispName = wavFile.nameWithoutExtension
+                ProjectRepository(context.applicationContext)
+                    .importPadSample(uri, projectName, globalIndex)
+                    .onSuccess { relativePath ->
+                    val dispName = relativePath.substringAfterLast('/').substringBeforeLast('.')
                     _uiState.update { state ->
                         val loaded = state.padLoaded.toMutableList().apply { set(globalIndex, true) }
                         val names =
@@ -318,18 +311,15 @@ class PadsViewModel :
                         val params = state.padParams
                         state.copy(padLoaded = loaded, padNames = names, padParams = params)
                     }
-                    // Persist the absolute sample path + params so the pad
-                    // survives an app restart via ProjectAutosave.
                     val params0 = _uiState.value.padParams.getOrElse(globalIndex) { PadParams() }
                     val existing = PadSessionStore.snapshot().getOrNull(globalIndex) ?: PadSettings()
                     PadSessionStore.setPad(
                         globalIndex,
-                        existing.copy(samplePath = wavFile.absolutePath, name = dispName, params = toValues(params0)),
+                        existing.copy(samplePath = relativePath, name = dispName, params = toValues(params0)),
                     )
                     showToast("Sample loaded")
-                } else {
-                    showToast("Import failed: file could not be loaded")
-                }
+                    }
+                    .onFailure { e -> showToast("Import failed: ${e.message}") }
             } catch (e: Exception) {
                 showToast("Import error: ${e.message}")
             }

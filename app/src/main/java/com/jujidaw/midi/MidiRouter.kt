@@ -4,9 +4,13 @@ import com.jujidaw.audio.SynthEngine
 import com.jujidaw.data.MidiMapping
 import com.jujidaw.data.MidiMappingStore
 import com.jujidaw.model.MidiTarget
+import com.jujidaw.model.ParamIds
+import com.jujidaw.project.MixerSessionStore
+import com.jujidaw.project.TrackSynthSessionStore
 import com.jujidaw.ui.keyboard.KeyboardTarget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +44,7 @@ class MidiRouter(
 
     // ── Mappings ───────────────────────────────────────────────────────────
     private val _mappings = MutableStateFlow<List<MidiMapping>>(emptyList())
+    private var mappingsJob: Job? = null
 
     /** Reactive stream of all active MIDI CC→target mappings. */
     val mappings: StateFlow<List<MidiMapping>> = _mappings.asStateFlow()
@@ -92,10 +97,21 @@ class MidiRouter(
 
     /** Load persisted mappings from [MidiMappingStore] and start observing. */
     fun load() {
-        ioScope.launch {
+        mappingsJob?.cancel()
+        mappingsJob = ioScope.launch {
             mappingStore.mappingsFlow.collect { list ->
                 _mappings.value = list
             }
+        }
+    }
+
+    /** Replace mappings while loading a project and persist the new snapshot. */
+    fun replaceMappings(mappings: List<MidiMapping>) {
+        mappingsJob?.cancel()
+        _mappings.value = mappings
+        ioScope.launch {
+            mappingStore.saveMappings(mappings)
+            load()
         }
     }
 
@@ -205,15 +221,10 @@ class MidiRouter(
         val default = defaultCcMappings[ccNumber] ?: return
         if (default.isSustain) {
             // Sustain pedal is handled in MidiController directly
-            // (it affects note-off timing).  We still pass the value through
-            // so synth-wide sustain can react if desired.
-            if (value > 0.5f) {
-                SynthEngine.setParam(sustainDest, 1f)
-            } else {
-                SynthEngine.setParam(sustainDest, 0f)
-            }
+            // (it affects note-off timing); do not send the sentinel -1
+            // parameter to the native engine.
         } else if (default.paramId >= 0) {
-            SynthEngine.setParam(default.paramId, value.coerceIn(0f, 1f))
+            applyValueToTarget(MidiTarget.SynthParam(default.paramId), value)
         }
     }
 
@@ -221,7 +232,9 @@ class MidiRouter(
 
     /** Route MIDI Pitch Bend (-1 … +1). */
     fun processPitchBend(value: Float) {
-        SynthEngine.setParam(51, value.coerceIn(-1f, 1f))
+        val clamped = value.coerceIn(-1f, 1f)
+        SynthEngine.setParam(ParamIds.PITCH_BEND, clamped)
+        TrackSynthSessionStore.updateParam(0, ParamIds.PITCH_BEND, clamped)
     }
 
     // ── Learn control ──────────────────────────────────────────────────────
@@ -260,46 +273,72 @@ class MidiRouter(
     ) {
         when (target) {
             is MidiTarget.SynthParam -> {
-                SynthEngine.setParam(target.paramId, value.coerceIn(0f, 1f))
+                val clamped = value.coerceIn(0f, 1f)
+                SynthEngine.setParam(target.paramId, clamped)
+                TrackSynthSessionStore.updateParam(0, target.paramId, clamped)
             }
 
             is MidiTarget.ChannelFader -> {
                 // Map 0…1 → -60…+12 dB
-                SynthEngine.setChannelFader(target.track, value * 72f - 60f)
+                val db = (value * 72f - 60f).coerceIn(-60f, 12f)
+                SynthEngine.setChannelFader(target.track, db)
+                MixerSessionStore.updateTrack(target.track) { it.copy(faderDb = db) }
             }
 
             is MidiTarget.ChannelPan -> {
                 // Map 0…1 → -1…+1
-                SynthEngine.setChannelPan(target.track, value * 2f - 1f)
+                val pan = (value * 2f - 1f).coerceIn(-1f, 1f)
+                SynthEngine.setChannelPan(target.track, pan)
+                MixerSessionStore.updateTrack(target.track) { it.copy(pan = pan) }
             }
 
             is MidiTarget.ChannelMute -> {
-                SynthEngine.setChannelMute(target.track, value > 0.5f)
+                val mute = value > 0.5f
+                SynthEngine.setChannelMute(target.track, mute)
+                MixerSessionStore.updateTrack(target.track) { it.copy(mute = mute) }
             }
 
             is MidiTarget.ChannelSolo -> {
-                SynthEngine.setChannelSolo(target.track, value > 0.5f)
+                val solo = value > 0.5f
+                SynthEngine.setChannelSolo(target.track, solo)
+                MixerSessionStore.updateTrack(target.track) { it.copy(solo = solo) }
             }
 
             is MidiTarget.ChannelArm -> {
-                SynthEngine.setChannelArm(target.track, value > 0.5f)
+                val arm = value > 0.5f
+                SynthEngine.setChannelArm(target.track, arm)
+                MixerSessionStore.updateTrack(target.track) { it.copy(arm = arm) }
             }
 
             is MidiTarget.SendLevel -> {
-                SynthEngine.setSendLevel(target.track, target.bus, value.coerceIn(0f, 1f))
+                val level = value.coerceIn(0f, 1f)
+                SynthEngine.setSendLevel(target.track, target.bus, level)
+                MixerSessionStore.updateTrack(target.track) {
+                    when (target.bus) {
+                        0 -> it.copy(sendALevel = level)
+                        1 -> it.copy(sendBLevel = level)
+                        else -> it
+                    }
+                }
             }
 
             is MidiTarget.BusFader -> {
                 // Map 0…1 → -60…+12 dB
-                SynthEngine.setBusFader(target.bus, value * 72f - 60f)
+                val db = (value * 72f - 60f).coerceIn(-60f, 12f)
+                SynthEngine.setBusFader(target.bus, db)
+                MixerSessionStore.updateBus(target.bus) { it.copy(faderDb = db) }
             }
 
             is MidiTarget.MasterFader -> {
-                SynthEngine.setMasterFader(value * 72f - 60f)
+                val db = (value * 72f - 60f).coerceIn(-60f, 12f)
+                SynthEngine.setMasterFader(db)
+                MixerSessionStore.update { it.copy(masterFaderDb = db) }
             }
 
             is MidiTarget.InsertParam -> {
-                SynthEngine.setInsertParam(target.track, target.slot, target.paramId, value.coerceIn(0f, 1f))
+                val clamped = value.coerceIn(0f, 1f)
+                SynthEngine.setInsertParam(target.track, target.slot, target.paramId, clamped)
+                MixerSessionStore.updateInsertParam(target.track, target.slot, target.paramId, clamped)
             }
 
             is MidiTarget.PerformFx -> {

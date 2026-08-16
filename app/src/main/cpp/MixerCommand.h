@@ -25,6 +25,10 @@ enum class MixerCommandType : uint8_t {
     SetTrackCount,      // active track count 1..16
     SetInsertParam,     // track index, slot, paramId, value
     SetSendLevel,       // track index, bus (0/1 in slot), level
+    SetBusInsertBypass, // bus index, slot index, bool
+    AddBusInsertEffect,  // bus index, slot index, effect type
+    RemoveBusInsertEffect, // bus index, slot index
+    SetBusInsertParam,   // bus index, slot, paramId, value
 };
 
 enum class EffectType : uint8_t {
