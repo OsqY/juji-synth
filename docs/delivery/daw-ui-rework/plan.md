@@ -15,3 +15,17 @@
 
 Each phase is independently testable and reversible. No new dependency or
 feature is introduced.
+
+## Phase 2 — Mixer
+
+- Objective: make full-height channel strips the visual subject and remove the
+  unused area below intrinsic-height strips.
+- Files: `MixerScreen.kt`, one connected Compose layout test, and phase records.
+- Acceptance: `AC-D4`, `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, and `AC-S1`.
+- Constraints: preserve every ViewModel mutation, fader/knob gesture path,
+  insert sheet, automation sheet, and MIDI-learn route.
+- Validation: required Gradle gates, focused connected Mixer test, full
+  connected suite, and independent adversarial review.
+- Closure: strips fill the viewport in portrait, landscape remains scrollable,
+  secondary Perform FX stays available but collapsed, and no blocking review
+  finding remains.

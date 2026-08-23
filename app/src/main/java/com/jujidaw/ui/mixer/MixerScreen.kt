@@ -1,5 +1,6 @@
 package com.jujidaw.ui.mixer
 
+import android.content.res.Configuration
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -32,7 +33,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -69,7 +75,10 @@ fun MixerScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     var showPerformFx by rememberSaveable { mutableStateOf(false) }
+    val horizontalStripScroll = rememberScrollState()
+    val verticalStripScroll = rememberScrollState()
 
     // Wire the app-wide MIDI router into the ViewModel
     val app = remember { context.applicationContext as JujiDawApp }
@@ -100,27 +109,35 @@ fun MixerScreen(
             modifier
                 .fillMaxSize()
                 .background(Bg1)
-                .padding(Spacing.sm),
+                .padding(Spacing.sm)
+                .testTag("mixer-root"),
     ) {
         MixerToolbar(
             masterState = state.master,
-            onMasterFaderChange = viewModel::setMasterFader,
-            onShowPerformFx = { /* perform FX already visible below */ },
+            selectedChannel = state.selectedChannel,
+            channelCount = state.channels.size,
+            performFxVisible = showPerformFx,
+            onTogglePerformFx = { showPerformFx = !showPerformFx },
             onShowAutomation = viewModel::showAutomationSheet,
             midiLearnTarget = state.midiLearnTarget,
-            onStartLearn = { /* user must long-press a specific control */ },
             modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(Modifier.height(Spacing.sm))
 
         // Horizontally-scrollable strips
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .testTag("mixer-strip-viewport")
+                    .then(if (isLandscape) Modifier.verticalScroll(verticalStripScroll) else Modifier),
+        ) {
             Row(
                 modifier =
-                    Modifier
-                        .horizontalScroll(rememberScrollState())
-                        .verticalScroll(rememberScrollState()),
+                    (if (isLandscape) Modifier.height(460.dp) else Modifier.fillMaxHeight())
+                        .horizontalScroll(horizontalStripScroll),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 state.channels.forEachIndexed { index, ch ->
@@ -158,7 +175,7 @@ fun MixerScreen(
                         onMidiLearnSendB = {
                             viewModel.startLearn(MidiTarget.SendLevel(index, 1))
                         },
-                        modifier = Modifier.heightIn(min = 200.dp),
+                        modifier = Modifier.fillMaxHeight(),
                     )
                 }
                 MasterStrip(
@@ -167,16 +184,11 @@ fun MixerScreen(
                     onMidiLearn = {
                         viewModel.startLearn(MidiTarget.MasterFader)
                     },
-                    modifier = Modifier.heightIn(min = 200.dp),
+                    modifier = Modifier.fillMaxHeight(),
                 )
             }
         }
 
-        Spacer(Modifier.height(Spacing.sm))
-
-        ToolbarActionButton(if (showPerformFx) "Hide FX" else "Perform FX") {
-            showPerformFx = !showPerformFx
-        }
         if (showPerformFx) {
             Spacer(Modifier.height(Spacing.sm))
             PerformFxGrid(
@@ -232,75 +244,57 @@ fun MixerScreen(
 @Composable
 private fun MixerToolbar(
     masterState: MasterState,
-    onMasterFaderChange: (Float) -> Unit,
-    onShowPerformFx: () -> Unit,
+    selectedChannel: Int,
+    channelCount: Int,
+    performFxVisible: Boolean,
+    onTogglePerformFx: () -> Unit,
     onShowAutomation: () -> Unit,
     midiLearnTarget: MidiTarget?,
-    onStartLearn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier =
             modifier
-                .clip(RoundedCornerShape(RadiusLg))
                 .background(SurfaceContainer)
-                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
-                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
+                .testTag("mixer-toolbar"),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Text(
-            text = "MIXER",
+            text = "CH ${(selectedChannel + 1).toString().padStart(2, '0')}/$channelCount",
             color = Primary,
-            style = DisplaySmall,
+            style = MonoLarge,
         )
 
-        // Mini master fader + value
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
+        Text(
+            text = "MST ${"%.1f".format(masterState.faderDb)} dB",
+            color = TextSecondary,
+            style = CaptionSmall,
+        )
+
+        Spacer(Modifier.weight(1f))
+
+        if (midiLearnTarget != null) {
             Text(
-                text = "MST",
-                color = TextSecondary,
-                style = LabelSmall,
-            )
-            Text(
-                text = "%.1f".format(masterState.faderDb),
-                color = TextPrimary,
+                text = "LEARN ${midiLearnTarget.displayLabel}",
+                color = MidiLearn,
                 style = CaptionSmall,
-                modifier = Modifier.width(32.dp),
+                maxLines = 1,
             )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            // MIDI learn indicator
-            val learnActive = midiLearnTarget != null
-            Box(
-                modifier =
-                    Modifier
-                        .height(28.dp)
-                        .clip(RoundedCornerShape(RadiusMd))
-                        .background(if (learnActive) MidiLearn.copy(alpha = 0.3f) else SurfaceContainerLow)
-                        .border(
-                            1.dp,
-                            if (learnActive) MidiLearn else OutlineVariant,
-                            RoundedCornerShape(RadiusMd),
-                        ).clickable {
-                            // A long-press on a specific control starts learn;
-                            // the toolbar button toggles display of learnable hints.
-                        }.padding(horizontal = Spacing.md),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = if (learnActive) "LEARN ${midiLearnTarget?.displayLabel.orEmpty()}" else "MIDI",
-                    color = if (learnActive) MidiLearn else OnSurface,
-                    style = CaptionSmall,
-                    maxLines = 1,
-                )
-            }
-            ToolbarActionButton("Auto", onClick = onShowAutomation)
-        }
+        ToolbarActionButton(
+            label = "FX",
+            onClick = onTogglePerformFx,
+            active = performFxVisible,
+            modifier = Modifier.testTag("mixer-perform-toggle"),
+        )
+        ToolbarActionButton(
+            label = "AUTO",
+            onClick = onShowAutomation,
+            modifier = Modifier.testTag("mixer-automation-toggle"),
+        )
     }
 }
 
@@ -308,21 +302,24 @@ private fun MixerToolbar(
 private fun ToolbarActionButton(
     label: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    active: Boolean = false,
 ) {
     Box(
         modifier =
-            Modifier
-                .height(28.dp)
-                .clip(RoundedCornerShape(RadiusMd))
-                .background(SurfaceContainerLow)
-                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusMd))
+            modifier
+                .height(TouchTargetMin)
+                .widthIn(min = TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (active) Primary.copy(alpha = 0.18f) else SurfaceContainerLow)
+                .border(1.dp, if (active) Primary else OutlineVariant, RoundedCornerShape(RadiusSm))
                 .clickable(onClick = onClick)
-                .padding(horizontal = Spacing.lg),
+                .padding(horizontal = Spacing.md),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            color = OnSurface,
+            color = if (active) Primary else OnSurface,
             style = LabelSmall,
         )
     }
@@ -358,30 +355,41 @@ private fun ChannelStrip(
     Column(
         modifier =
             modifier
-                .width(112.dp)
-                .clip(RoundedCornerShape(RadiusLg))
+                .width(156.dp)
+                .clip(RoundedCornerShape(RadiusSm))
                 .background(if (isSelected) SurfaceContainerHighest else SurfaceContainer)
                 .border(
                     width = 1.dp,
                     color = if (isSelected) Primary else OutlineVariant,
-                    shape = RoundedCornerShape(RadiusLg),
+                    shape = RoundedCornerShape(RadiusSm),
                 ).clickable(onClick = onSelect)
-                .padding(horizontal = Spacing.sm, vertical = Spacing.md),
+                .padding(Spacing.sm)
+                .testTag("mixer-channel-$trackIndex"),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Track label
-        Text(
-            text = "T${trackIndex + 1}",
-            color = if (isSelected) Primary else OnSurface,
-            style = LabelSmall,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "T${trackIndex + 1}",
+                color = if (isSelected) Primary else OnSurface,
+                style = LabelSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "%.1f dB".format(channel.faderDb),
+                color = TextSecondary,
+                style = CaptionSmall,
+            )
+        }
 
         Spacer(Modifier.height(Spacing.sm))
 
         // Meter + Fader
         Row(
-            modifier = Modifier.height(144.dp),
+            modifier = Modifier.weight(1f).heightIn(min = 120.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             LevelMeter(
@@ -399,18 +407,10 @@ private fun ChannelStrip(
                 modifier =
                     Modifier
                         .width(44.dp)
-                        .fillMaxHeight(),
+                        .fillMaxHeight()
+                        .testTag("mixer-fader-$trackIndex"),
             )
         }
-
-        Spacer(Modifier.height(Spacing.sm))
-
-        // Fader value readout
-        Text(
-            text = "%.1f".format(channel.faderDb),
-            color = TextSecondary,
-            style = CaptionSmall,
-        )
 
         Spacer(Modifier.height(Spacing.sm))
 
@@ -430,6 +430,7 @@ private fun ChannelStrip(
         SynthKnob(
             value = (channel.pan + 1f) / 2f,
             onValueChange = { onPanChange(it * 2f - 1f) },
+            modifier = Modifier.testTag("mixer-pan-$trackIndex"),
             label = "Pan",
             valueDisplay = "%.0f".format(channel.pan * 100),
             accentColor = Secondary,
@@ -460,51 +461,16 @@ private fun ChannelStrip(
 
         Spacer(Modifier.height(Spacing.sm))
 
-        // Insert FX mini indicators
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            channel.inserts.forEachIndexed { slotIdx, slot ->
-                val color =
-                    when {
-                        slot.type == SynthEngine.EffectType.None -> SurfaceContainerLow
-                        slot.bypass -> TextDisabled
-                        else -> Secondary
-                    }
-                val borderColor =
-                    when {
-                        slot.type == SynthEngine.EffectType.None -> OutlineVariant
-                        slot.bypass -> TextDisabled
-                        else -> Secondary
-                    }
-                Box(
-                    modifier =
-                        Modifier
-                            .size(14.dp)
-                            .clip(RoundedCornerShape(RadiusXs))
-                            .background(color)
-                            .border(
-                                1.dp,
-                                borderColor,
-                                RoundedCornerShape(RadiusXs),
-                            ).clickable {
-                                onSelect()
-                                onShowInsertSheet()
-                            },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (slot.type != SynthEngine.EffectType.None) {
-                        Text(
-                            text =
-                                slot.type.name
-                                    .first()
-                                    .toString(),
-                            color = if (slot.bypass) OnSurface else OnSecondary,
-                            style = CaptionSmall,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
-        }
+        val activeInsertCount = channel.inserts.count { it.type != SynthEngine.EffectType.None }
+        ToolbarActionButton(
+            label = if (activeInsertCount == 0) "FX" else "FX $activeInsertCount",
+            onClick = {
+                onSelect()
+                onShowInsertSheet()
+            },
+            modifier = Modifier.fillMaxWidth().testTag("mixer-channel-fx-$trackIndex"),
+            active = activeInsertCount > 0,
+        )
     }
 }
 
@@ -522,24 +488,36 @@ private fun MasterStrip(
     Column(
         modifier =
             modifier
-                .width(88.dp)
-                .clip(RoundedCornerShape(RadiusLg))
+                .width(112.dp)
+                .clip(RoundedCornerShape(RadiusSm))
                 .background(SurfaceContainer)
-                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
-                .padding(horizontal = Spacing.md, vertical = Spacing.md),
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                .padding(Spacing.sm)
+                .testTag("mixer-master"),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = "MST",
-            color = OnSurface,
-            style = LabelSmall,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = "MST",
+                color = OnSurface,
+                style = LabelSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "%.1f dB".format(master.faderDb),
+                color = TextPrimary,
+                style = CaptionSmall,
+            )
+        }
 
         Spacer(Modifier.height(Spacing.sm))
 
         Row(
-            modifier = Modifier.height(160.dp),
+            modifier = Modifier.weight(1f).heightIn(min = 120.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             LevelMeter(
@@ -561,13 +539,6 @@ private fun MasterStrip(
             )
         }
 
-        Spacer(Modifier.height(Spacing.sm))
-
-        Text(
-            text = "%.1f".format(master.faderDb),
-            color = TextPrimary,
-            style = CaptionSmall,
-        )
     }
 }
 
@@ -769,10 +740,21 @@ private fun SmallToggle(
     Box(
         modifier =
             modifier
-                .size(width = 32.dp, height = 28.dp)
+                .size(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(bg)
                 .border(1.dp, bd, RoundedCornerShape(RadiusSm))
+                .semantics {
+                    contentDescription =
+                        when (label) {
+                            "M" -> "Mute"
+                            "S" -> "Solo"
+                            "R" -> "Record arm"
+                            "Byp" -> "Bypass effect"
+                            else -> label
+                        }
+                    stateDescription = if (checked) "On" else "Off"
+                }
                 .clickable(onClick = onCheckedChange),
         contentAlignment = Alignment.Center,
     ) {
@@ -801,7 +783,8 @@ private fun PerformFxGrid(
                 .clip(RoundedCornerShape(RadiusLg))
                 .background(SurfaceContainer)
                 .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
-                .padding(Spacing.md),
+                .padding(Spacing.md)
+                .testTag("mixer-perform-fx-grid"),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         val rows = PerformFxType.entries.chunked(4)
@@ -835,7 +818,7 @@ private fun PerformFxButton(
         modifier =
             modifier
                 .padding(horizontal = Spacing.xs)
-                .height(36.dp)
+                .height(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusMd))
                 .background(if (active) Primary.copy(alpha = 0.15f) else SurfaceContainerLow)
                 .border(
@@ -936,7 +919,7 @@ private fun InsertSlotRow(
                 modifier =
                     Modifier
                         .weight(1f)
-                        .height(32.dp)
+                        .height(TouchTargetMin)
                         .clip(RoundedCornerShape(RadiusSm))
                         .background(SurfaceContainerLow)
                         .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
@@ -994,7 +977,7 @@ private fun InsertSlotRow(
             Box(
                 modifier =
                     Modifier
-                        .size(28.dp)
+                        .size(TouchTargetMin)
                         .clip(RoundedCornerShape(RadiusXs))
                         .background(SurfaceContainerLow)
                         .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusXs))
@@ -1014,7 +997,7 @@ private fun InsertSlotRow(
                 Box(
                     modifier =
                         Modifier
-                            .size(24.dp)
+                            .size(TouchTargetMin)
                             .clip(RoundedCornerShape(RadiusXs))
                             .background(SurfaceContainerLow)
                             .clickable(onClick = onMoveUp),
@@ -1032,7 +1015,7 @@ private fun InsertSlotRow(
                 Box(
                     modifier =
                         Modifier
-                            .size(24.dp)
+                            .size(TouchTargetMin)
                             .clip(RoundedCornerShape(RadiusXs))
                             .background(SurfaceContainerLow)
                             .clickable(onClick = onMoveDown),
@@ -1096,7 +1079,7 @@ private fun AutomationMixerContent(
                 Box(
                     modifier =
                         Modifier
-                            .height(28.dp)
+                            .height(TouchTargetMin)
                             .clip(RoundedCornerShape(RadiusMd))
                             .background(if (isSelected) Primary.copy(alpha = 0.12f) else SurfaceContainerLow)
                             .border(
@@ -1135,7 +1118,7 @@ private fun AutomationMixerContent(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(36.dp)
+                    .height(TouchTargetMin)
                     .clip(RoundedCornerShape(RadiusLg))
                     .background(SurfaceContainerLow)
                     .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))

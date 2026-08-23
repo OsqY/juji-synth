@@ -62,3 +62,45 @@ Phase 1 acceptance: `AC-D1`, `AC-D2`, `AC-D3`, `AC-A1`, `AC-P1`, and `AC-S1`.
   `TouchTargetMin` to Undo/Redo/Zoom, and added device regressions.
 - Independent re-review: `task_e526dd8bdcd7` / `ctx_e3dcff81719b`, verdict PASS
   with zero blocking findings. See `phase-01-review.md`.
+
+## Phase 2 — Mixer
+
+- State: PASS; ready for focused commit
+- Acceptance: `AC-D4`, `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, `AC-S1`
+- Root cause: the strip row uses intrinsic-height children inside a weighted
+  viewport, leaving the remaining screen visually inactive.
+- Decision: retain the existing controls and state wiring, make strips fill the
+  viewport, give spare height to faders, and move the collapsed Perform FX
+  affordance into the compact Mixer toolbar.
+- Implementation: full-height flat channel/master strips, flexible fader travel,
+  selected-channel/master readouts, one full-width insert affordance per strip,
+  passive MIDI-learn status, and 44dp actions.
+- Focused connected Mixer regressions: PASS, 4/4 on SM-G998W / Android 15,
+  covering portrait fill, landscape scroll reachability, fader/pan gestures,
+  Perform FX, inserts, and automation access.
+- `./gradlew testDebugUnitTest compileDebugKotlin lintDebug assembleDebug`: PASS.
+- Landscape gesture reproduction: PASS, 1/1 with the physical device forced to
+  landscape; the test gesture stays inside the knob and clear of system edges.
+- Full connected suite: 42/43. Every UI test passed; the sole failure remains
+  the pre-existing user-owned
+  `ProjectRepositoryAudioTest.padAssetsStayProjectRelativeAcrossSaveLoadAndRename`
+  filename expectation.
+- Device capture: `/tmp/juji-ui-phase2-mixer.png`; channel strips fill the
+  workspace and about two-and-a-half strips remain visible at phone width.
+- Initial independent review: `task_d002a0e269ba` / `ctx_48902bb5c1e0`, verdict
+  FAIL. Its actionable finding was missing landscape, gesture, insert, and
+  automation regression coverage. The claimed missing `assertDoesNotExist`
+  import was disproved by successful Android-test compilation and execution.
+- Correction: expanded the focused suite to four tests, used the scroll
+  semantics action to prove bottom-control reachability, and kept knob input
+  away from Android's edge-navigation zone.
+- Independent correction review: `task_dbcdd34bec46` / `ctx_b43119b7045f`,
+  verdict FAIL. The reviewer confirmed the earlier coverage gap was closed and
+  found one remaining accessibility issue: the short `FX` toolbar action could
+  measure narrower than 44dp.
+- Correction: the shared toolbar action now enforces a 44dp minimum width, and
+  the focused device regression verifies both `FX` and `AUTO` are at least
+  44x44dp. Focused Mixer suite 4/4 and all required Gradle gates pass after the
+  correction.
+- Independent closure review: `task_339c2d574819` / `ctx_9d94bacdee39`, verdict
+  PASS with zero blocking findings. See `phase-02-review.md`.
