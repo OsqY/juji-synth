@@ -6,7 +6,7 @@
  * Provides low-pass, high-pass, and band-pass modes
  * with resonance control.
  * 
- * Based on Chamberlin/Chowning SVF topology.
+ * Uses a topology-preserving state-variable filter for stable modulation.
  */
 class Filter {
 public:
@@ -45,17 +45,16 @@ private:
     double effectiveCutoff_ = 0.8;
     int mode_ = 0;
 
-    // SVF state
-    double low_ = 0.0;
-    double high_ = 0.0;
-    double band_ = 0.0;
-    double notch_ = 0.0;
+    // Topology-preserving SVF integrator state.
+    double ic1eq_ = 0.0;
+    double ic2eq_ = 0.0;
 
-    double f_ = 0.0; // current (smoothed) frequency parameter
-    double q_ = 0.0; // resonance parameter
-    double targetF_ = 0.01; // target frequency coefficient (recalculated on param change)
-    double effectiveF_ = 0.01; // smoothed frequency coefficient for envelope modulation
+    double f_ = 0.0; // current (smoothed) frequency coefficient
+    double damping_ = 2.0; // inverse Q
+    double targetF_ = 0.01;
+    double effectiveF_ = 0.01;
 
+    double cutoffCoefficient(double normalizedCutoff) const;
     void recalcCoefficients();
 };
 

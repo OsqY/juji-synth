@@ -30,63 +30,50 @@ void Filter::setEnvelopeAmount(double amount) {
     envAmount_ = std::clamp(amount, -1.0, 1.0);
 }
 
-void Filter::recalcCoefficients() {
-    // Compute target frequency coefficient from cutoff
-    // Map to Hz, then to SVF coefficient f = 2*sin(pi*fc/fs)
-    double fc = 20.0 + (20000.0 - 20.0) * effectiveCutoff_ * effectiveCutoff_;
-    fc = std::clamp(fc, 20.0, 20000.0);
-    targetF_ = 2.0 * std::sin(M_PI * fc / sampleRate_);
-    // Cap to prevent instability (was min(f_, 1.0), now 0.95)
-    targetF_ = std::min(targetF_, 0.95);
+double Filter::cutoffCoefficient(double normalizedCutoff) const {
+    double fc = 20.0 + (20000.0 - 20.0) * normalizedCutoff * normalizedCutoff;
+    fc = std::clamp(fc, 20.0, std::min(20000.0, sampleRate_ * 0.45));
+    return std::tan(M_PI * fc / sampleRate_);
+}
 
-    // Map resonance to Q (0.5 - 20.0)
-    q_ = 0.5 + 19.5 * resonance_;
-    // Self-oscillation at max resonance, but cap to prevent stutter
-    if (resonance_ > 0.95) {
-        q_ = std::min(20.0, 0.5 + 25.0 * (resonance_ - 0.95) / 0.05);
-    }
+void Filter::recalcCoefficients() {
+    targetF_ = cutoffCoefficient(cutoff_);
+    effectiveF_ = targetF_;
+    const double q = 0.5 + 19.5 * resonance_;
+    damping_ = 1.0 / q;
 }
 
 void Filter::applyEnvelope(double envValue) {
-    // Quick one-pole smooth of f_ toward target
-    f_ += (effectiveF_ - f_) * 0.1;
-
     // Apply envelope modulation to effectiveCutoff
     double mod = envValue * envAmount_;
     double modulatedCutoff = std::clamp(cutoff_ + mod, 0.0, 1.0);
 
-    // Recompute effectiveF_ from modulated cutoff
-    double fc = 20.0 + (20000.0 - 20.0) * modulatedCutoff * modulatedCutoff;
-    fc = std::clamp(fc, 20.0, 20000.0);
-    effectiveF_ = 2.0 * std::sin(M_PI * fc / sampleRate_);
-    effectiveF_ = std::min(effectiveF_, 0.95);
+    effectiveF_ = cutoffCoefficient(modulatedCutoff);
 }
 
 float Filter::process(float input) {
-    if (f_ < 0.001) {
-        f_ = 0.01;
-        q_ = 0.5;
-    }
-
-    // SVF algorithm using current smoothed f_
-    high_ = input - low_ - q_ * band_;
-    band_ = band_ + f_ * high_;
-    low_ = low_ + f_ * band_;
-    notch_ = high_ + low_;
+    f_ += (effectiveF_ - f_) * 0.1;
+    const double a1 = 1.0 / (1.0 + f_ * (f_ + damping_));
+    const double a2 = f_ * a1;
+    const double a3 = f_ * a2;
+    const double v3 = input - ic2eq_;
+    const double band = a1 * ic1eq_ + a2 * v3;
+    const double low = ic2eq_ + a2 * ic1eq_ + a3 * v3;
+    const double high = input - damping_ * band - low;
+    ic1eq_ = 2.0 * band - ic1eq_;
+    ic2eq_ = 2.0 * low - ic2eq_;
 
     switch (mode_) {
-        case 0: return static_cast<float>(low_);     // LPF
-        case 1: return static_cast<float>(high_);    // HPF
-        case 2: return static_cast<float>(band_);    // BPF
-        default: return static_cast<float>(low_);
+        case 0: return static_cast<float>(low);     // LPF
+        case 1: return static_cast<float>(high);    // HPF
+        case 2: return static_cast<float>(band);    // BPF
+        default: return static_cast<float>(low);
     }
 }
 
 void Filter::reset() {
-    low_ = 0.0;
-    high_ = 0.0;
-    band_ = 0.0;
-    notch_ = 0.0;
+    ic1eq_ = 0.0;
+    ic2eq_ = 0.0;
     effectiveCutoff_ = cutoff_;
     effectiveF_ = targetF_;
     f_ = targetF_;
