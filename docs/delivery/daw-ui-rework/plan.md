@@ -44,3 +44,19 @@ feature is introduced.
 - Closure: each device section has one title and one flat boundary, the target
   chooser is revealable instead of permanently dominant, top actions are at
   least 44dp, and no blocking review finding remains.
+
+## Phase 4 — Pads and Keys
+
+- Objective: make finger-drumming and note performance visually dominant while
+  keeping edit, scale, repeat, and arpeggiator controls quickly revealable.
+- Files: `PadsScreen.kt`, `KeyboardScreen.kt`, one connected Compose layout
+  test, and phase records.
+- Acceptance: `AC-D4`, `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, and `AC-S1`.
+- Constraints: preserve velocity/aftertouch gestures, multi-touch note release,
+  pad selection, target routing, bank switching, edit dialogs, and all engine
+  callbacks.
+- Validation: required Gradle gates, focused connected performance-surface
+  tests, full connected suite, device captures, and independent review.
+- Closure: edit/advanced controls are collapsed by default, essential context
+  remains in one 44dp toolbar, pad/key identities are concise and accessible,
+  and no blocking review finding remains.

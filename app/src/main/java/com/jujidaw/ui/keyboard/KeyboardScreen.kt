@@ -5,10 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -18,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +32,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -60,19 +73,28 @@ fun KeyboardScreen(
     viewModel: KeyboardViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var showControls by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(BgGunmetal)
-                .padding(4.dp),
+                .background(Bg0)
+                .padding(Spacing.sm)
+                .testTag("keyboard-root"),
     ) {
-        KeyboardTopBar(state = state, viewModel = viewModel)
-        Spacer(Modifier.height(4.dp))
-        KeyboardControlStrip(state = state, viewModel = viewModel)
-        Spacer(Modifier.height(4.dp))
-        Box(modifier = Modifier.weight(1f)) {
+        KeyboardTopBar(
+            state = state,
+            viewModel = viewModel,
+            controlsVisible = showControls,
+            onToggleControls = { showControls = !showControls },
+        )
+        if (showControls) {
+            Spacer(Modifier.height(Spacing.sm))
+            KeyboardControlStrip(state = state, viewModel = viewModel)
+        }
+        Spacer(Modifier.height(Spacing.sm))
+        Box(modifier = Modifier.weight(1f).testTag("keyboard-grid")) {
             when (state.viewMode) {
                 KeyboardViewMode.GRID -> {
                     ChromaticGrid(
@@ -107,10 +129,18 @@ fun KeyboardScreen(
 private fun KeyboardTopBar(
     state: KeyboardUiState,
     viewModel: KeyboardViewModel,
+    controlsVisible: Boolean,
+    onToggleControls: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TouchTargetMin)
+                .background(SurfaceContainer)
+                .padding(horizontal = Spacing.xs)
+                .testTag("keyboard-toolbar"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         var targetExpanded by remember { mutableStateOf(false) }
@@ -128,6 +158,8 @@ private fun KeyboardTopBar(
             CycleButton(
                 text = state.target.displayName,
                 onClick = { targetExpanded = true },
+                modifier = Modifier.widthIn(min = 68.dp).testTag("keyboard-target"),
+                contentDescription = "Keyboard target: ${state.target.displayName}",
             )
             DropdownMenu(
                 expanded = targetExpanded,
@@ -145,35 +177,77 @@ private fun KeyboardTopBar(
             }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OctaveShiftButton(Icons.Outlined.ChevronLeft, "Lower octave") {
-                viewModel.setBaseOctave(state.baseOctave - 1)
-            }
-            Text(
-                text = "C${state.baseOctave}",
-                color = Secondary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            )
-            OctaveShiftButton(Icons.Outlined.ChevronRight, "Raise octave") {
-                viewModel.setBaseOctave(state.baseOctave + 1)
-            }
-        }
+        Spacer(Modifier.weight(1f))
 
-        Row {
-            ToggleButton(
-                text = "Grid",
-                active = state.viewMode == KeyboardViewMode.GRID,
-                onClick = { viewModel.setViewMode(KeyboardViewMode.GRID) },
-            )
-            Spacer(Modifier.width(4.dp))
-            ToggleButton(
-                text = "Piano",
-                active = state.viewMode == KeyboardViewMode.PIANO,
-                onClick = { viewModel.setViewMode(KeyboardViewMode.PIANO) },
-            )
-        }
+        OctaveShiftButton(
+            icon = Icons.Outlined.ChevronLeft,
+            contentDescription = "Lower octave",
+            onClick = { viewModel.setBaseOctave(state.baseOctave - 1) },
+            modifier = Modifier.testTag("keyboard-octave-down"),
+        )
+        Text(
+            text = "C${state.baseOctave}",
+            color = Secondary,
+            style = MonoLarge,
+            modifier = Modifier.width(32.dp),
+            textAlign = TextAlign.Center,
+        )
+        OctaveShiftButton(
+            icon = Icons.Outlined.ChevronRight,
+            contentDescription = "Raise octave",
+            onClick = { viewModel.setBaseOctave(state.baseOctave + 1) },
+            modifier = Modifier.testTag("keyboard-octave-up"),
+        )
+        KeyboardIconButton(
+            icon = Icons.Filled.Dashboard,
+            contentDescription = "Grid layout",
+            selected = state.viewMode == KeyboardViewMode.GRID,
+            onClick = { viewModel.setViewMode(KeyboardViewMode.GRID) },
+            modifier = Modifier.testTag("keyboard-view-grid"),
+        )
+        KeyboardIconButton(
+            icon = Icons.Filled.MusicNote,
+            contentDescription = "Piano layout",
+            selected = state.viewMode == KeyboardViewMode.PIANO,
+            onClick = { viewModel.setViewMode(KeyboardViewMode.PIANO) },
+            modifier = Modifier.testTag("keyboard-view-piano"),
+        )
+        KeyboardIconButton(
+            icon = Icons.Outlined.Tune,
+            contentDescription = if (controlsVisible) "Hide performance controls" else "Show performance controls",
+            selected = controlsVisible,
+            onClick = onToggleControls,
+            modifier = Modifier.testTag("keyboard-controls-toggle"),
+            role = Role.Button,
+        )
+    }
+}
+
+@Composable
+private fun KeyboardIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    role: Role = Role.RadioButton,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (selected) Primary.copy(alpha = 0.18f) else SurfaceContainerLow)
+                .border(1.dp, if (selected) Primary else OutlineVariant, RoundedCornerShape(RadiusSm))
+                .selectable(selected = selected, onClick = onClick, role = role),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (selected) Primary else OnSurface,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -185,8 +259,12 @@ private fun KeyboardControlStrip(
     viewModel: KeyboardViewModel,
 ) {
     LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TouchTargetMin)
+                .testTag("keyboard-control-strip"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         item {
@@ -201,7 +279,11 @@ private fun KeyboardControlStrip(
             ToggleButton("Lock", state.scaleLock) { viewModel.toggleScaleLock() }
         }
         item {
-            ToggleButton("Vel", state.velocityFromTouch) { viewModel.toggleVelocityFromTouch() }
+            ToggleButton(
+                "Vel",
+                state.velocityFromTouch,
+                modifier = Modifier.testTag("keyboard-velocity-toggle"),
+            ) { viewModel.toggleVelocityFromTouch() }
         }
         item {
             ToggleButton("AT", state.aftertouchEnabled) { viewModel.toggleAftertouch() }
@@ -359,7 +441,11 @@ private fun ChromaticGrid(
                                 note = midiNote,
                                 isActive = isActive,
                                 isInScale = inScale,
-                                modifier = Modifier.weight(1f),
+                                onSemanticsClick = {
+                                    currentOnNoteOn(midiNote, cellHeightPx / 2f, cellHeightPx)
+                                    currentOnNoteOff(midiNote)
+                                },
+                                modifier = Modifier.weight(1f).testTag("keyboard-key-$midiNote"),
                             )
                         }
                     }
@@ -374,6 +460,7 @@ private fun KeyPad(
     note: Int,
     isActive: Boolean,
     isInScale: Boolean,
+    onSemanticsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val noteNames = listOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
@@ -401,11 +488,20 @@ private fun KeyPad(
                             OutlineVariant
                         },
                     shape = RoundedCornerShape(6.dp),
-                ),
+                ).semantics {
+                    contentDescription = "Note $name$octave"
+                    selected = isActive
+                    role = Role.Button
+                    stateDescription = if (isActive) "Playing" else if (isInScale) "In scale" else "Out of scale"
+                    onClick(label = "Play note") {
+                        onSemanticsClick()
+                        true
+                    }
+                },
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "$name$octave",
+            text = if (name == "C") "$name$octave" else name,
             color =
                 when {
                     isActive -> Color.Black
@@ -426,10 +522,11 @@ private fun OctaveShiftButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier =
-            Modifier
+            modifier
                 .size(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(SurfaceContainerLow)
@@ -454,16 +551,16 @@ private fun MiniButton(
     Box(
         modifier =
             Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(BgPanel)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                .size(TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                 .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            color = Color.White,
+            color = OnSurface,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
         )
@@ -474,25 +571,27 @@ private fun MiniButton(
 private fun ToggleButton(
     text: String,
     active: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Box(
         modifier =
-            Modifier
-                .height(28.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(if (active) KnobAmber.copy(alpha = 0.25f) else BgPanel)
+            modifier
+                .height(TouchTargetMin)
+                .widthIn(min = TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (active) Primary.copy(alpha = 0.18f) else SurfaceContainerLow)
                 .border(
                     1.dp,
-                    if (active) KnobAmber else PanelHighlight.copy(alpha = 0.4f),
-                    RoundedCornerShape(4.dp),
-                ).clickable(onClick = onClick)
-                .padding(horizontal = 8.dp),
+                    if (active) Primary else OutlineVariant,
+                    RoundedCornerShape(RadiusSm),
+                ).selectable(selected = active, onClick = onClick, role = Role.Checkbox)
+                .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            color = if (active) KnobAmber else TextSecondary,
+            color = if (active) Primary else OnSurface,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
         )
@@ -502,22 +601,31 @@ private fun ToggleButton(
 @Composable
 private fun CycleButton(
     text: String,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
     onClick: () -> Unit,
 ) {
     Box(
         modifier =
-            Modifier
-                .height(28.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(BgPanel)
-                .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+            modifier
+                .height(TouchTargetMin)
+                .widthIn(min = TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp),
+                .then(
+                    if (contentDescription == null) {
+                        Modifier
+                    } else {
+                        Modifier.semantics { this.contentDescription = contentDescription }
+                    },
+                ).padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            color = TextPrimary,
+            color = OnSurface,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
         )

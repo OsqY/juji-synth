@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,6 +33,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,6 +73,7 @@ fun PadsScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var showEditTools by rememberSaveable { mutableStateOf(false) }
 
     // Surface toast messages from ViewModel
     LaunchedEffect(state.toastMessage) {
@@ -85,21 +95,29 @@ fun PadsScreen(
             modifier
                 .fillMaxSize()
                 .background(Bg0)
-                .padding(Spacing.sm),
+                .padding(Spacing.sm)
+                .testTag("pads-root"),
     ) {
-        // Toolbar: bank toggle + selected pad label + action buttons
         PadsToolbar(
             currentBank = state.currentBank,
             selectedPad = state.selectedPad,
             onBankChange = viewModel::setBank,
+            toolsVisible = showEditTools,
+            onToggleTools = { showEditTools = !showEditTools },
+        )
+
+        if (showEditTools) {
+            Spacer(modifier = Modifier.height(Spacing.sm))
+            PadsEditTools(
             onImportClick = { pickAudio.launch("audio/*") },
             onChopClick = viewModel::chopSelectedPad,
             onTimeStretchClick = viewModel::showTimeStretchDialog,
             onEditClick = viewModel::showEditSheet,
             onSynthClick = viewModel::toggleSelectedSynthMode,
             isTimeStretching = state.isTimeStretching,
-            synthEnabled = state.padParams[state.currentBank * 16 + state.selectedPad].synthMode,
-        )
+                synthEnabled = state.padParams[state.currentBank * 16 + state.selectedPad].synthMode,
+            )
+        }
 
         Spacer(modifier = Modifier.height(Spacing.sm))
 
@@ -109,7 +127,8 @@ fun PadsScreen(
                 Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(RadiusLg))
-                    .background(Bg1),
+                    .background(Bg1)
+                    .testTag("pads-grid"),
         ) {
             PadsGrid(
                 activePads = state.activePads,
@@ -165,6 +184,53 @@ private fun PadsToolbar(
     currentBank: Int,
     selectedPad: Int,
     onBankChange: (Int) -> Unit,
+    toolsVisible: Boolean,
+    onToggleTools: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TouchTargetMin)
+                .background(SurfaceContainer)
+                .padding(horizontal = Spacing.xs)
+                .testTag("pads-toolbar"),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            BankButton(
+                label = "A",
+                selected = currentBank == 0,
+                onClick = { onBankChange(0) },
+                modifier = Modifier.testTag("pads-bank-a"),
+            )
+            BankButton(
+                label = "B",
+                selected = currentBank == 1,
+                onClick = { onBankChange(1) },
+                modifier = Modifier.testTag("pads-bank-b"),
+            )
+        }
+
+        Text(
+            text = "${if (currentBank == 0) "A" else "B"}${(selectedPad + 1).toString().padStart(2, '0')}",
+            color = Primary,
+            style = MonoLarge,
+        )
+
+        ToolbarButton(
+            icon = Icons.Outlined.Tune,
+            contentDescription = if (toolsVisible) "Hide pad tools" else "Show pad tools",
+            onClick = onToggleTools,
+            active = toolsVisible,
+            modifier = Modifier.testTag("pads-tools-toggle"),
+        )
+    }
+}
+
+@Composable
+private fun PadsEditTools(
     onImportClick: () -> Unit,
     onChopClick: () -> Unit,
     onTimeStretchClick: () -> Unit,
@@ -177,55 +243,41 @@ private fun PadsToolbar(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(44.dp)
-                .clip(RoundedCornerShape(RadiusLg))
                 .background(SurfaceContainer)
-                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
-                .padding(horizontal = Spacing.md),
-        horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = Spacing.xs)
+                .testTag("pads-edit-tools"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs, Alignment.End),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Bank A / B toggle (text "A"/"B" badges)
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            BankButton(label = "A", selected = currentBank == 0, onClick = { onBankChange(0) })
-            BankButton(label = "B", selected = currentBank == 1, onClick = { onBankChange(1) })
-        }
-
-        Text(
-            text = "Pad ${selectedPad + 1}",
-            color = OnSurface,
-            style = LabelSmall,
+        ToolbarButton(
+            icon = Icons.Outlined.FileUpload,
+            contentDescription = "Import sample",
+            onClick = onImportClick,
+            modifier = Modifier.testTag("pads-import"),
         )
-
-        // Action buttons: Import / Chop / Stretch / Edit (Material Outlined icons)
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            ToolbarButton(
-                icon = Icons.Outlined.FileUpload,
-                contentDescription = "Import",
-                onClick = onImportClick,
-            )
-            ToolbarButton(
-                icon = Icons.Outlined.ContentCut,
-                contentDescription = "Chop",
-                onClick = onChopClick,
-            )
-            ToolbarButton(
-                icon = Icons.Outlined.Timer,
-                contentDescription = "Time Stretch",
-                onClick = onTimeStretchClick,
-                enabled = !isTimeStretching,
-            )
-            ToolbarButton(
-                icon = Icons.Outlined.Tune,
-                contentDescription = "Edit",
-                onClick = onEditClick,
-            )
-            ToolbarButton(
-                icon = Icons.Outlined.AutoAwesome,
-                contentDescription = if (synthEnabled) "Disable synth pad" else "Add synth pad",
-                onClick = onSynthClick,
-            )
-        }
+        ToolbarButton(
+            icon = Icons.Outlined.ContentCut,
+            contentDescription = "Chop sample",
+            onClick = onChopClick,
+        )
+        ToolbarButton(
+            icon = Icons.Outlined.Timer,
+            contentDescription = "Time stretch",
+            onClick = onTimeStretchClick,
+            enabled = !isTimeStretching,
+        )
+        ToolbarButton(
+            icon = Icons.Outlined.AutoAwesome,
+            contentDescription = if (synthEnabled) "Disable synth pad" else "Enable synth pad",
+            onClick = onSynthClick,
+            active = synthEnabled,
+        )
+        ToolbarButton(
+            icon = Icons.Outlined.Tune,
+            contentDescription = "Edit pad",
+            onClick = onEditClick,
+            modifier = Modifier.testTag("pads-edit"),
+        )
     }
 }
 
@@ -234,6 +286,7 @@ private fun BankButton(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val bg = if (selected) Primary.copy(alpha = 0.15f) else SurfaceContainerLow
     val bd = if (selected) Primary else OutlineVariant
@@ -241,12 +294,12 @@ private fun BankButton(
 
     Box(
         modifier =
-            Modifier
-                .size(44.dp)
+            modifier
+                .size(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(bg)
                 .border(1.dp, bd, RoundedCornerShape(RadiusSm))
-                .clickable(onClick = onClick),
+                .selectable(selected = selected, onClick = onClick, role = Role.RadioButton),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -264,19 +317,29 @@ private fun ToolbarButton(
     contentDescription: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    active: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
     val bgColor =
-        if (enabled) SurfaceContainerLow else DisabledFill
+        when {
+            !enabled -> DisabledFill
+            active -> Primary.copy(alpha = 0.18f)
+            else -> SurfaceContainerLow
+        }
 
     Box(
         modifier =
-            Modifier
-                .size(44.dp)
+            modifier
+                .size(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(bgColor)
                 .border(
                     1.dp,
-                    if (enabled) OutlineVariant else OutlineVariant.copy(alpha = 0.5f),
+                    when {
+                        !enabled -> OutlineVariant.copy(alpha = 0.5f)
+                        active -> Primary
+                        else -> OutlineVariant
+                    },
                     RoundedCornerShape(RadiusSm),
                 ).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -284,7 +347,11 @@ private fun ToolbarButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (enabled) OnSurface else DisabledText,
+            tint = when {
+                !enabled -> DisabledText
+                active -> Primary
+                else -> OnSurface
+            },
             modifier = Modifier.size(20.dp),
         )
     }
@@ -320,15 +387,18 @@ private fun PadsGrid(
                 for (col in 0 until 4) {
                     val padIndex = row * 4 + col
                     val globalIndex = currentBank * 16 + padIndex
+                    val name = padNames.getOrElse(globalIndex) { "Pad ${globalIndex + 1}" }
+                    val defaultName = "Pad ${globalIndex + 1}"
                     SamplerPad(
-                        label = padNames.getOrElse(globalIndex) { "P${padIndex + 1}" },
+                        label = if (name == defaultName) "${padIndex + 1}" else name,
+                        description = "Bank ${if (currentBank == 0) "A" else "B"} pad ${padIndex + 1}: $name",
                         isActive = padIndex in activePads,
                         isSelected = padIndex == selectedPad,
                         bankHue = bankHue,
                         onDown = { normalizedY -> onPadDown(padIndex, normalizedY) },
                         onUp = { onPadUp(padIndex) },
                         onSelect = { onPadSelect(padIndex) },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).testTag("pads-pad-$padIndex"),
                     )
                 }
             }
@@ -339,6 +409,7 @@ private fun PadsGrid(
 @Composable
 private fun SamplerPad(
     label: String,
+    description: String,
     isActive: Boolean,
     isSelected: Boolean,
     bankHue: Color,
@@ -394,6 +465,17 @@ private fun SamplerPad(
                 .background(SurfaceContainerLow, shape)
                 .background(tint, shape)
                 .border(borderW, borderC, shape)
+                .semantics {
+                    contentDescription = description
+                    selected = isSelected
+                    role = Role.Button
+                    onClick(label = "Play pad") {
+                        onSelect()
+                        onDown(0.5f)
+                        onUp()
+                        true
+                    }
+                }
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)

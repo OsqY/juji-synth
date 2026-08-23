@@ -135,3 +135,36 @@ Phase 1 acceptance: `AC-D1`, `AC-D2`, `AC-D3`, `AC-A1`, `AC-P1`, and `AC-S1`.
   barely one device section.
 - Independent review: `task_1b4b7418bf52` / `ctx_3cf6f782d815`, verdict PASS
   with zero blocking findings. See `phase-03-review.md`.
+
+## Phase 4 — Pads and Keys
+
+- State: PASS; ready for focused commit
+- Acceptance: `AC-D4`, `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, `AC-S1`
+- Root cause: Pads permanently spends toolbar width on five editing actions,
+  while Keys permanently spends a second row on ten abbreviated settings; the
+  playing surfaces are strong but their edit chrome reads as generic controls.
+- Decision: keep bank/target/octave/view context in one compact toolbar and
+  reveal editing or advanced performance controls only on demand. Preserve
+  direct pad/key gestures and expose concise identities through semantics.
+- Implementation: Pads now keeps only A/B, the concise current target (`A01`),
+  and a tools toggle above the grid; import/chop/stretch/synth/edit live in the
+  revealable row. Default pad names render as `1–16` while custom names remain.
+  Keys now keeps target, octave, grid/piano mode, and a controls toggle in one
+  row; scale, velocity, aftertouch, repeat, and arp controls are collapsed.
+- Accessibility: banks and view modes expose selection semantics; every toolbar
+  and revealed control is at least 44dp; pad and key cells expose full spoken
+  identities plus TalkBack play actions without altering direct multi-touch
+  gesture handling.
+- Test-first baseline: both focused tests failed on absent content-first roots
+  and toggles, then passed after implementation.
+- Focused connected performance suite: PASS, 2/2 on SM-G998W / Android 15.
+- `./gradlew testDebugUnitTest compileDebugKotlin lintDebug assembleDebug`: PASS.
+- Full connected suite: 46/47. Every UI test passed; the only failure remains
+  the pre-existing user-owned
+  `ProjectRepositoryAudioTest.padAssetsStayProjectRelativeAcrossSaveLoadAndRename`
+  filename expectation.
+- Device captures: `/tmp/juji-ui-phase4-pads.png` and
+  `/tmp/juji-ui-phase4-keys.png`; both playing surfaces now begin immediately
+  below one compact toolbar.
+- Independent review: `task_c82055da9bb3` / `ctx_61fe4f452614`, verdict PASS
+  with zero blocking findings. See `phase-04-review.md`.
