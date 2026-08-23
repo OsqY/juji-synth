@@ -9,7 +9,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.jujidaw.project.PadSelectionStore
@@ -59,7 +61,30 @@ class TimelineComposeHarnessTest {
     }
 
     @Test
+    fun advancedControlsStartCollapsedSoArrangementOwnsTheViewport() {
+        composeRule.onNodeWithTag("timeline-controls-toggle").assertIsDisplayed()
+        composeRule.onNodeWithTag("timeline-zoom-indicator").assertDoesNotExist()
+
+        val root = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        val viewport = composeRule.onNodeWithTag("timeline-viewport").fetchSemanticsNode().boundsInRoot
+        assertTrue(viewport.top < root.height * 0.25f)
+    }
+
+    @Test
+    fun iconActionsMeetMinimumTouchTarget() {
+        showAdvancedControls()
+        val minimumPx = 44f * composeRule.activity.resources.displayMetrics.density
+
+        listOf("Undo (Ctrl+Z)", "Redo (Ctrl+Y)", "Zoom out", "Zoom in").forEach { description ->
+            val bounds = composeRule.onNodeWithContentDescription(description).fetchSemanticsNode().boundsInRoot
+            assertTrue("$description width was ${bounds.width}px", bounds.width >= minimumPx)
+            assertTrue("$description height was ${bounds.height}px", bounds.height >= minimumPx)
+        }
+    }
+
+    @Test
     fun editingControlsExposeStableTags() {
+        showAdvancedControls()
         composeRule.onNodeWithTag("timeline-pad-selector").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-zoom-indicator").assertIsDisplayed()
         composeRule.onNodeWithTag("timeline-snap-indicator").assertIsDisplayed()
@@ -68,6 +93,7 @@ class TimelineComposeHarnessTest {
 
     @Test
     fun manualScrollDisablesFollowAndControlReenablesIt() {
+        showAdvancedControls()
         composeRule.runOnIdle { assertTrue(timelineViewModel.followPlayhead.value) }
         composeRule.onNodeWithTag("timeline-viewport").performTouchInput {
             swipeLeft(startX = width * 0.85f, endX = width * 0.15f, durationMillis = 250L)
@@ -105,6 +131,7 @@ class TimelineComposeHarnessTest {
 
     @Test
     fun editingIndicatorsReflectZoomAndDeleteToolState() {
+        showAdvancedControls()
         composeRule.runOnIdle { timelineViewModel.setZoom(2f) }
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("timeline-zoom-indicator").assertTextEquals("200%")
@@ -116,6 +143,11 @@ class TimelineComposeHarnessTest {
         composeRule.onNodeWithTag("timeline-delete-tool-button").performTouchInput { click() }
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("timeline-delete-tool").assertIsDisplayed()
+    }
+
+    private fun showAdvancedControls() {
+        composeRule.onNodeWithTag("timeline-controls-toggle").performTouchInput { click() }
+        composeRule.waitForIdle()
     }
 
     @Test

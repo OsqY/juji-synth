@@ -6,31 +6,23 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewModule
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RadioButtonChecked
-import androidx.compose.material.icons.outlined.Remove
-import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -52,14 +44,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujidaw.JujiDawApp
-import com.jujidaw.R
 import com.jujidaw.model.TICKS_PER_STEP
 import com.jujidaw.ui.keyboard.KeyboardScreen
 import com.jujidaw.ui.help.HelpScreen
@@ -70,7 +63,6 @@ import com.jujidaw.ui.sequencer.SequencerScreen
 import com.jujidaw.ui.synth.SynthScreen
 import com.jujidaw.ui.theme.*
 import com.jujidaw.ui.timeline.TimelineScreen
-import com.jujidaw.ui.timeline.TimelineLandscapeControls
 import com.jujidaw.ui.timeline.TimelineViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -100,8 +92,8 @@ fun MainScreen(modifier: Modifier = Modifier) {
     val timelineViewModel: TimelineViewModel = viewModel { TimelineViewModel() }
 
     Scaffold(
-        modifier = modifier.background(BgGunmetal),
-        containerColor = BgGunmetal,
+        modifier = modifier.background(Bg0),
+        containerColor = Bg0,
         bottomBar = {
             if (!isLandscape) {
                 Column {
@@ -109,39 +101,11 @@ fun MainScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.fillMaxWidth(),
                         onHelp = { showHelp = true },
                     )
-                    NavigationBar(
-                        containerColor = BgPanel,
-                        contentColor = TextPrimary,
-                        tonalElevation = 0.dp,
-                    ) {
-                        tabs.forEachIndexed { index, tab ->
-                            NavigationBarItem(
-                                icon = {
-                                    Icon(
-                                        imageVector = tab.icon,
-                                        contentDescription = tab.label,
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = tab.label,
-                                        fontSize = 10.sp,
-                                        maxLines = 1,
-                                    )
-                                },
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                colors =
-                                    NavigationBarItemDefaults.colors(
-                                        selectedIconColor = Color.Black,
-                                        selectedTextColor = KnobAmber,
-                                        indicatorColor = KnobAmber,
-                                        unselectedIconColor = TextSecondary,
-                                        unselectedTextColor = TextMuted,
-                                    ),
-                            )
-                        }
-                    }
+                    DestinationDock(
+                        tabs = tabs,
+                        selectedTab = selectedTab,
+                        onSelect = { selectedTab = it },
+                    )
                 }
             }
         },
@@ -151,102 +115,34 @@ fun MainScreen(modifier: Modifier = Modifier) {
                 Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .background(BgGunmetal),
+                    .background(Bg0),
         ) {
             if (isLandscape) {
                 Column(
                     modifier =
                         Modifier
                             .weight(1f)
-                            .background(BgPanel),
+                            .background(SurfaceContainer),
                 ) {
                     // The global transport must retain a full-width touch
                     // target in landscape. Keeping it inside the 80dp rail
                     // made Play/Record/Reset effectively invisible.
-                    Row(
-                        modifier = Modifier.fillMaxWidth().background(SurfaceContainer),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        PersistentTransportBar(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            onHelp = { showHelp = true },
-                        )
-                        if (tabs[selectedTab] == MainTab.TIMELINE) {
-                            TimelineLandscapeControls(
-                                viewModel = timelineViewModel,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
+                    PersistentTransportBar(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        onHelp = { showHelp = true },
+                    )
 
                     Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        Column(
-                        modifier =
-                            Modifier
-                                .fillMaxHeight()
-                                .width(80.dp)
-                                .background(BgPanel),
-                    ) {
-                        // Navigation rail — scrollable with visible indicator
-                        Box(modifier = Modifier.weight(1f)) {
-                            val scrollState = rememberScrollState()
-                            Column(
-                                modifier = Modifier.verticalScroll(scrollState),
-                            ) {
-                                tabs.forEachIndexed { index, tab ->
-                                    NavigationRailItem(
-                                        icon = {
-                                            Icon(
-                                                imageVector = tab.icon,
-                                                contentDescription = tab.label,
-                                            )
-                                        },
-                                        label = {
-                                            Text(
-                                                text = tab.label,
-                                                fontSize = 9.sp,
-                                                maxLines = 1,
-                                            )
-                                        },
-                                        selected = selectedTab == index,
-                                        onClick = { selectedTab = index },
-                                        colors =
-                                            NavigationRailItemDefaults.colors(
-                                                selectedIconColor = Color.Black,
-                                                selectedTextColor = KnobAmber,
-                                                indicatorColor = KnobAmber,
-                                                unselectedIconColor = TextSecondary,
-                                                unselectedTextColor = TextMuted,
-                                            ),
-                                    )
-                                }
-                            }
-
-                            // Visible scrollbar indicator on right edge
-                            if (scrollState.maxValue > 0) {
-                                // Simple proportional scrollbar: thumb height ~ visible content ratio
-                                val scrollFraction = scrollState.value.toFloat() / scrollState.maxValue.toFloat()
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .align(Alignment.TopEnd)
-                                            .width(3.dp)
-                                            .height(24.dp)
-                                            .offset(y = (scrollFraction * 100).dp)
-                                            .background(
-                                                Color.White.copy(alpha = 0.4f),
-                                                RoundedCornerShape(1.5f),
-                                            ),
-                                )
-                            }
-                        }
-                    }
+                        DestinationRail(
+                            tabs = tabs,
+                            selectedTab = selectedTab,
+                            onSelect = { selectedTab = it },
+                        )
 
                         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                             when (tabs[selectedTab]) {
                                 MainTab.TIMELINE -> TimelineScreen(
                                     viewModel = timelineViewModel,
-                                    showTransportControls = false,
                                 )
                                 MainTab.MIXER -> MixerScreen()
                                 MainTab.SYNTH -> SynthScreen()
@@ -274,6 +170,108 @@ fun MainScreen(modifier: Modifier = Modifier) {
         }
         if (showHelp) {
             HelpScreen(onClose = { showHelp = false })
+        }
+    }
+}
+
+@Composable
+private fun DestinationDock(
+    tabs: Array<MainTab>,
+    selectedTab: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .background(SurfaceContainer)
+                .border(width = 1.dp, color = OutlineVariant),
+    ) {
+        tabs.forEachIndexed { index, tab ->
+            DestinationButton(
+                tab = tab,
+                selected = selectedTab == index,
+                vertical = false,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                onClick = { onSelect(index) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DestinationRail(
+    tabs: Array<MainTab>,
+    selectedTab: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxHeight()
+                .width(56.dp)
+                .background(SurfaceContainer)
+                .verticalScroll(rememberScrollState()),
+    ) {
+        tabs.forEachIndexed { index, tab ->
+            DestinationButton(
+                tab = tab,
+                selected = selectedTab == index,
+                vertical = true,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                onClick = { onSelect(index) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DestinationButton(
+    tab: MainTab,
+    selected: Boolean,
+    vertical: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            modifier
+                .testTag("main-destination-${tab.name.lowercase()}")
+                .selectable(
+                    selected = selected,
+                    role = Role.Tab,
+                    onClick = onClick,
+                ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (selected) {
+            Box(
+                modifier =
+                    Modifier
+                        .align(if (vertical) Alignment.CenterStart else Alignment.TopCenter)
+                        .then(if (vertical) Modifier.width(2.dp).fillMaxHeight() else Modifier.height(2.dp).fillMaxWidth())
+                        .background(Primary),
+            )
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = tab.icon,
+                contentDescription = if (selected) null else tab.label,
+                tint = if (selected) Primary else OnSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+            if (selected) {
+                Text(
+                    text = tab.label,
+                    color = Primary,
+                    style = CaptionSmall,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -317,12 +315,10 @@ private fun PersistentTransportBar(
             modifier
                 .height(TransportHeight)
                 .background(SurfaceContainer)
-                .padding(horizontal = Spacing.md),
+                .padding(horizontal = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
-        // Transport group: [Play][Stop][Record][Reset] — flat Material Symbols Outlined icons
-        // on SurfaceContainer. Active states use Primary/StateActive/StateRecording per plan §1.
         TransportMiniButton(
             icon = Icons.Outlined.PlayArrow,
             contentDescription = "Play",
@@ -341,17 +337,9 @@ private fun PersistentTransportBar(
             recording = transportState.recording,
             onClick = { transportController.setRecording(!transportState.recording) },
         )
-        TransportMiniButton(
-            icon = Icons.Outlined.RestartAlt,
-            contentDescription = "Return to start",
-            active = false,
-            activeColor = Primary,
-            onClick = { transportController.restart() },
-        )
 
         GroupDivider()
 
-        // Position chip — bar|beat|step readout, monoLarge in Primary per plan §1.
         val step = transportState.position.tick / TICKS_PER_STEP
         Box(
             modifier =
@@ -363,10 +351,14 @@ private fun PersistentTransportBar(
                         transportController.stop()
                         transportController.seek(com.jujidaw.model.TransportPosition())
                     }
+                    .semantics {
+                        contentDescription =
+                            "Return to start. Position ${transportState.position.bar + 1}.${transportState.position.beat + 1}.${step + 1}"
+                    }
                     .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
         ) {
             Text(
-                text = "POS ${transportState.position.bar + 1}|${transportState.position.beat + 1}|${step + 1}",
+                text = "${transportState.position.bar + 1}.${transportState.position.beat + 1}.${step + 1}",
                 color = Primary,
                 style = MonoLarge,
             )
@@ -374,19 +366,13 @@ private fun PersistentTransportBar(
 
         GroupDivider()
 
-        // BPM group — tap chip to edit (dialog, 30..300); +/- nudge by 1 BPM.
         BpmChip(
             bpm = transportState.tempoBpm,
             onTap = { showBpmDialog = true },
-            onNudge = { delta ->
-                transportController.setTempo(
-                    (transportState.tempoBpm + delta).coerceIn(MIN_BPM, MAX_BPM),
-                )
-            },
         )
 
         TransportMiniButton(
-            icon = Icons.Outlined.HelpOutline,
+            icon = Icons.AutoMirrored.Outlined.HelpOutline,
             contentDescription = "Open workflow help",
             active = false,
             activeColor = Primary,
@@ -535,7 +521,11 @@ private fun RecordButton(
                     1.dp,
                     if (recording) StateRecording else OutlineVariant,
                     RoundedCornerShape(RadiusSm),
-                ).clickable(onClick = onClick),
+                ).clickable(onClick = onClick)
+                .semantics {
+                    contentDescription = if (recording) "Stop recording" else "Record"
+                    stateDescription = if (recording) "Recording" else "Not recording"
+                },
         contentAlignment = Alignment.Center,
     ) {
         if (recording) {
@@ -572,16 +562,12 @@ private fun GroupDivider() {
 }
 
 /**
- * BPM chip — monoLarge numeric readout + LabelSmall "BPM" tag on SurfaceContainerLow,
- * tap to open BpmEditDialog and nudge with Material Symbols Outlined `add`/`remove`
- * icons (replaces legacy unicode `−`/`+` per plan §3 step 1). Nudge buttons reuse the
- * 44dp-touch TransportMiniButton shape.
+ * BPM chip — compact numeric readout. Tap opens the precise editor.
  */
 @Composable
 private fun BpmChip(
     bpm: Float,
     onTap: () -> Unit,
-    onNudge: (Float) -> Unit,
 ) {
     Row(
         modifier =
@@ -590,64 +576,15 @@ private fun BpmChip(
                 .background(SurfaceContainerLow)
                 .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
                 .clickable(onClick = onTap)
+                .semantics { contentDescription = "Tempo ${bpm.toInt()} BPM. Edit tempo" }
                 .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         Text(
-            text = "BPM",
-            color = TextSecondary,
-            style = LabelSmall,
-        )
-        Text(
-            text = "%d".format(bpm.toInt()),
+            text = "%d BPM".format(bpm.toInt()),
             color = OnSurface,
             style = MonoLarge,
         )
-        TransportMiniButton(
-            icon = Icons.Outlined.Remove,
-            contentDescription = "Decrease BPM",
-            active = false,
-            activeColor = Primary,
-            onClick = { onNudge(-1f) },
-        )
-        TransportMiniButton(
-            icon = Icons.Outlined.Add,
-            contentDescription = "Increase BPM",
-            active = false,
-            activeColor = Primary,
-            onClick = { onNudge(1f) },
-        )
-    }
-}
-
-@Composable
-private fun PlaceholderScreen(
-    title: String,
-    message: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(BgGunmetal)
-                .padding(16.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = title,
-                color = TextPrimary,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = message,
-                color = TextMuted,
-                fontSize = 14.sp,
-            )
-        }
     }
 }

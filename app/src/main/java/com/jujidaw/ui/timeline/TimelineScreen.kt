@@ -22,10 +22,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
+import androidx.compose.material.icons.automirrored.outlined.ShowChart
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.GridOn
+import androidx.compose.material.icons.outlined.TouchApp
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material.icons.outlined.ZoomOut
 import androidx.compose.material3.Icon
@@ -54,6 +59,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
@@ -126,7 +132,7 @@ fun TimelineScreen(
     val followPlayhead = viewModel.followPlayhead.collectAsState().value
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    var showControls by rememberSaveable { mutableStateOf(true) }
+    var showControls by rememberSaveable { mutableStateOf(false) }
     var showAutomation by rememberSaveable { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(persistedZoom) }
     var pinchActive by remember { mutableStateOf(false) }
@@ -1202,37 +1208,59 @@ private fun SectionVisibilityBar(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(32.dp)
+                .height(TouchTargetMin)
                 .background(SurfaceContainerLow)
-                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
-        Text("SHOW", color = OnSurfaceVariant, style = CaptionSmall)
-        if (allowControls) SectionToggle("Controls", showControls, onToggleControls)
-        SectionToggle("Automation", showAutomation, onToggleAutomation)
+        Text("ARRANGE", color = OnSurfaceVariant, style = TitleSmall)
+        Spacer(Modifier.weight(1f))
+        if (allowControls) {
+            SectionToggle(
+                icon = Icons.Outlined.Tune,
+                description = "Show Timeline controls",
+                tag = "timeline-controls-toggle",
+                visible = showControls,
+                onClick = onToggleControls,
+            )
+        }
+        SectionToggle(
+            icon = Icons.AutoMirrored.Outlined.ShowChart,
+            description = "Show automation",
+            tag = "timeline-automation-toggle",
+            visible = showAutomation,
+            onClick = onToggleAutomation,
+        )
     }
 }
 
 @Composable
 private fun SectionToggle(
-    label: String,
+    icon: ImageVector,
+    description: String,
+    tag: String,
     visible: Boolean,
     onClick: () -> Unit,
 ) {
     Box(
         modifier =
             Modifier
-                .height(26.dp)
+                .size(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusXs))
                 .background(if (visible) Primary.copy(alpha = 0.12f) else SurfaceContainer)
                 .border(1.dp, if (visible) Primary else OutlineVariant, RoundedCornerShape(RadiusXs))
-                .clickable(onClick = onClick)
-                .padding(horizontal = Spacing.sm),
+                .testTag(tag)
+                .semantics { selected = visible }
+                .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (visible) Primary else OnSurfaceVariant, style = CaptionSmall)
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (visible) Primary else OnSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -1292,13 +1320,17 @@ private fun TimelineEditorToolbar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
-            TimelineToolButton("Select", tool == TimelineTool.SELECT, Primary) { onToolChange(TimelineTool.SELECT) }
-            TimelineToolButton("Delete", tool == TimelineTool.DELETE, StateRecording) { onToolChange(TimelineTool.DELETE) }
-            TimelineToolButton("Pads", sourceMode == TimelineTool.DRAW_PAD && tool == TimelineTool.DRAW_PAD, Secondary) {
+            TimelineToolButton(Icons.Outlined.TouchApp, "Select clips", "Select", tool == TimelineTool.SELECT, Primary) {
+                onToolChange(TimelineTool.SELECT)
+            }
+            TimelineToolButton(Icons.Outlined.Delete, "Delete clips", "Delete", tool == TimelineTool.DELETE, StateRecording) {
+                onToolChange(TimelineTool.DELETE)
+            }
+            TimelineToolButton(Icons.Outlined.Dashboard, "Draw pads", "Pads", sourceMode == TimelineTool.DRAW_PAD && tool == TimelineTool.DRAW_PAD, Secondary) {
                 sourceMode = TimelineTool.DRAW_PAD
                 onToolChange(TimelineTool.DRAW_PAD)
             }
-            TimelineToolButton("Patterns", sourceMode == TimelineTool.DRAW_PATTERN && tool == TimelineTool.DRAW_PATTERN, Primary) {
+            TimelineToolButton(Icons.Outlined.GridOn, "Draw patterns", "Patterns", sourceMode == TimelineTool.DRAW_PATTERN && tool == TimelineTool.DRAW_PATTERN, Primary) {
                 sourceMode = TimelineTool.DRAW_PATTERN
                 onToolChange(TimelineTool.DRAW_PATTERN)
             }
@@ -1361,7 +1393,9 @@ private fun TimelineEditorToolbar(
 
 @Composable
 private fun TimelineToolButton(
-    label: String,
+    icon: ImageVector,
+    description: String,
+    tagLabel: String,
     selected: Boolean,
     accent: Color,
     onClick: () -> Unit,
@@ -1369,16 +1403,21 @@ private fun TimelineToolButton(
     Box(
         modifier =
             Modifier
-                .height(34.dp)
+                .size(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(if (selected) accent.copy(alpha = 0.18f) else SurfaceContainerLow)
                 .border(1.dp, if (selected) accent else OutlineVariant, RoundedCornerShape(RadiusSm))
-                .testTag(if (label == "Delete") "timeline-delete-tool-button" else "timeline-tool-$label")
-                .clickable(onClick = onClick)
-                .padding(horizontal = Spacing.sm),
+                .testTag(if (tagLabel == "Delete") "timeline-delete-tool-button" else "timeline-tool-$tagLabel")
+                .semantics { this.selected = selected }
+                .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (selected) accent else OnSurface, style = LabelSmall)
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = if (selected) accent else OnSurface,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -1392,7 +1431,7 @@ private fun HistoryButton(
     Box(
         modifier =
             Modifier
-                .size(40.dp)
+                .size(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(SurfaceContainerLow)
                 .border(1.dp, if (enabled) OutlineVariant else OutlineVariant.copy(alpha = 0.45f), RoundedCornerShape(RadiusSm))
@@ -1508,14 +1547,14 @@ private fun TransportStrip(
                 NudgeArrow(Icons.Outlined.ChevronRight) { onNudge(snap.ticks) }
                 SnapButton(snap, onSnapChange)
                 SwingButton(transport.swing, onSwingChange)
-                ZoomStepButton(Icons.Outlined.ZoomOut) { onZoomChange(zoom - 0.2f) }
+                ZoomStepButton(Icons.Outlined.ZoomOut, "Zoom out") { onZoomChange(zoom - 0.2f) }
                 Text(
                     "${(zoom * 100).toInt()}%",
                     color = OnSurfaceVariant,
                     style = CaptionSmall,
                     modifier = Modifier.testTag("timeline-zoom-indicator"),
                 )
-                ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
+                ZoomStepButton(Icons.Outlined.ZoomIn, "Zoom in") { onZoomChange(zoom + 0.2f) }
                 FollowPlayheadButton(followPlayhead, onFollowPlayheadChange)
                 RestoreTrashButton(deletedClipCount, onRestoreDeleted)
             }
@@ -1580,49 +1619,13 @@ private fun TransportStrip(
                     style = CaptionSmall,
                     modifier = Modifier.testTag("timeline-zoom-indicator"),
                 )
-                ZoomStepButton(Icons.Outlined.ZoomOut) { onZoomChange(zoom - 0.2f) }
-                ZoomStepButton(Icons.Outlined.ZoomIn) { onZoomChange(zoom + 0.2f) }
+                ZoomStepButton(Icons.Outlined.ZoomOut, "Zoom out") { onZoomChange(zoom - 0.2f) }
+                ZoomStepButton(Icons.Outlined.ZoomIn, "Zoom in") { onZoomChange(zoom + 0.2f) }
             }
             FollowPlayheadButton(followPlayhead, onFollowPlayheadChange)
             RestoreTrashButton(deletedClipCount, onRestoreDeleted)
         }
     }
-}
-
-/** Compact timeline controls hosted in MainScreen's landscape transport row. */
-@Composable
-fun TimelineLandscapeControls(
-    viewModel: TimelineViewModel,
-    modifier: Modifier = Modifier,
-) {
-    val transport = viewModel.transportState.collectAsState().value
-    val snap = viewModel.snap.collectAsState().value
-    val zoom = viewModel.zoom.collectAsState().value
-    val deletedClipCount = viewModel.deletedClips.collectAsState().value.size
-    val followPlayhead = viewModel.followPlayhead.collectAsState().value
-    TransportStrip(
-        transport = transport,
-        snap = snap,
-        zoom = zoom,
-        compact = true,
-        deletedClipCount = deletedClipCount,
-        followPlayhead = followPlayhead,
-        onToggleLoop = viewModel::toggleLoop,
-        onTogglePunch = viewModel::togglePunch,
-        onLoopStart = viewModel::setLoopStartToPlayhead,
-        onLoopEnd = viewModel::setLoopEndToPlayhead,
-        onResetLoop = viewModel::resetLoop,
-        onPunchIn = viewModel::setPunchInToPlayhead,
-        onPunchOut = viewModel::setPunchOutToPlayhead,
-        onBpmChange = viewModel::setTempo,
-        onSwingChange = viewModel::setSwing,
-        onNudge = viewModel::nudgePlayhead,
-        onSnapChange = viewModel::setSnap,
-        onZoomChange = viewModel::setZoom,
-        onFollowPlayheadChange = viewModel::setFollowPlayhead,
-        onRestoreDeleted = viewModel::restoreLastDeletedClip,
-        modifier = modifier,
-    )
 }
 
 @Composable
@@ -1833,12 +1836,13 @@ private fun NudgeArrow(
 @Composable
 private fun ZoomStepButton(
     icon: ImageVector,
+    description: String,
     onClick: () -> Unit,
 ) {
     Box(
         modifier =
             Modifier
-                .size(36.dp)
+                .size(TouchTargetMin)
                 .clip(RoundedCornerShape(RadiusSm))
                 .background(SurfaceContainerLow)
                 .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
@@ -1847,7 +1851,7 @@ private fun ZoomStepButton(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = "Zoom",
+            contentDescription = description,
             tint = OnSurface,
             modifier = Modifier.size(18.dp),
         )
