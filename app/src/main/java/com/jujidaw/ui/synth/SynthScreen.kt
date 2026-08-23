@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -19,14 +20,18 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujidaw.JujiDawApp
@@ -40,18 +45,14 @@ import com.jujidaw.ui.theme.*
  * Synth parameter screen with track selection, oscillator, filter, envelope,
  * LFO, effects, and modulation panels.
  *
- * Reuses the existing panel composables from [MainSynthScreen] arranged in a
- * phone-first vertically-scrolling column.
+ * Reuses the existing parameter panels in a flat, phone-first scrolling device
+ * chain. Track and pad targeting stays available in a collapsed chooser.
  *
  * ### Usage
  * ```kotlin
  * SynthScreen(viewModel = viewModel(), modifier = Modifier.fillMaxSize())
  * ```
  *
- * ### TODO for integrator
- * - Wire into the bottom-navigation graph (Group 14).
- * - Per-track synth state isolation is stubbed; currently all tracks share one engine.
- * - Landscape / tablet layout can restore the 3-column hardware chassis from [MainSynthScreen].
  */
 @Composable
 fun SynthScreen(
@@ -60,7 +61,7 @@ fun SynthScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    var showTargetPicker by rememberSaveable { mutableStateOf(false) }
 
     // Toast messages from ViewModel
     LaunchedEffect(uiState.toastMessage) {
@@ -104,168 +105,93 @@ fun SynthScreen(
     val selectedParamId = uiState.midiLearnState.selectedParamId
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(BgGunmetal)
-            .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Bg1)
+                .statusBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(Spacing.sm)
+                .testTag("synth-root"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        // ── TRACK SELECTOR ──
-        TrackSelectorRow(
+        SynthToolbar(
             selectedTrack = uiState.selectedTrack,
-            onSelectTrack = viewModel::selectTrack
-        )
-
-        PadSynthSelectorRow(
             selectedPadIndex = uiState.selectedPadIndex,
-            onSelectGlobal = { viewModel.selectTrack(uiState.selectedTrack) },
-            onSelectPad = viewModel::selectPad,
+            learnMode = learnMode,
+            targetsVisible = showTargetPicker,
+            onToggleTargets = { showTargetPicker = !showTargetPicker },
+            onToggleMidiLearn = viewModel::toggleMidiLearn,
+            onShowPresets = { viewModel.showPresetBrowser(true) },
+            onShowSave = { viewModel.showSaveDialog(true) },
+            onPanic = {
+                com.jujidaw.audio.SynthEngine.panic()
+                Toast.makeText(context, "Panic! All sound stopped", Toast.LENGTH_SHORT).show()
+            },
         )
 
-        // ── SYNTH PANELS ──
-        HardwareChassis(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                SynthPanel(title = "OSC", accentColor = KnobAmber) {
-                    OscillatorPanel(
-                        state = uiState.synthState,
-                        onParamChange = viewModel::updateSynthState,
-                        learnMode = learnMode,
-                        selectedParamId = selectedParamId,
-                        onLearnSelect = viewModel::selectParamForLearn
-                    )
-                }
-
-                SynthPanel(title = "FILTER", accentColor = KnobCyan) {
-                    FilterPanel(
-                        state = uiState.synthState,
-                        onParamChange = viewModel::updateSynthState,
-                        learnMode = learnMode,
-                        selectedParamId = selectedParamId,
-                        onLearnSelect = viewModel::selectParamForLearn
-                    )
-                }
-
-                SynthPanel(title = "ENV", accentColor = KnobGreen) {
-                    EnvelopePanel(
-                        state = uiState.synthState,
-                        onParamChange = viewModel::updateSynthState,
-                        learnMode = learnMode,
-                        selectedParamId = selectedParamId,
-                        onLearnSelect = viewModel::selectParamForLearn
-                    )
-                }
-
-                SynthPanel(title = "LFO", accentColor = KnobPink) {
-                    LfoPanel(
-                        state = uiState.synthState,
-                        onParamChange = viewModel::updateSynthState,
-                        learnMode = learnMode,
-                        selectedParamId = selectedParamId,
-                        onLearnSelect = viewModel::selectParamForLearn
-                    )
-                }
-
-                SynthPanel(title = "FX", accentColor = KnobRed) {
-                    EffectsPanel(
-                        state = uiState.synthState,
-                        onParamChange = viewModel::updateSynthState,
-                        learnMode = learnMode,
-                        selectedParamId = selectedParamId,
-                        onLearnSelect = viewModel::selectParamForLearn
-                    )
-                }
-
-                SynthPanel(title = "MOD", accentColor = KnobPink) {
-                    PatchBayView(
-                        routes = uiState.synthState.modulationRoutes,
-                        onRouteChange = { idx, route -> viewModel.updateModulationRoute(idx, route) },
-                        learnMode = learnMode,
-                        selectedParamId = selectedParamId,
-                        onLearnSelect = viewModel::selectParamForLearn
-                    )
-                }
-            }
+        if (showTargetPicker) {
+            SynthTargetPicker(
+                selectedTrack = uiState.selectedTrack,
+                selectedPadIndex = uiState.selectedPadIndex,
+                onSelectTrack = viewModel::selectTrack,
+                onSelectGlobal = { viewModel.selectTrack(uiState.selectedTrack) },
+                onSelectPad = viewModel::selectPad,
+            )
         }
 
-        // ── ACTION BAR ──
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically
+        OscillatorPanel(
+            state = uiState.synthState,
+            onParamChange = viewModel::updateSynthState,
+            modifier = Modifier.fillMaxWidth().testTag("synth-panel-oscillators"),
+            learnMode = learnMode,
+            selectedParamId = selectedParamId,
+            onLearnSelect = viewModel::selectParamForLearn,
+        )
+        FilterPanel(
+            state = uiState.synthState,
+            onParamChange = viewModel::updateSynthState,
+            modifier = Modifier.fillMaxWidth().testTag("synth-panel-filter"),
+            learnMode = learnMode,
+            selectedParamId = selectedParamId,
+            onLearnSelect = viewModel::selectParamForLearn,
+        )
+        EnvelopePanel(
+            state = uiState.synthState,
+            onParamChange = viewModel::updateSynthState,
+            modifier = Modifier.fillMaxWidth().testTag("synth-panel-envelopes"),
+            learnMode = learnMode,
+            selectedParamId = selectedParamId,
+            onLearnSelect = viewModel::selectParamForLearn,
+        )
+        LfoPanel(
+            state = uiState.synthState,
+            onParamChange = viewModel::updateSynthState,
+            modifier = Modifier.fillMaxWidth().testTag("synth-panel-lfo"),
+            learnMode = learnMode,
+            selectedParamId = selectedParamId,
+            onLearnSelect = viewModel::selectParamForLearn,
+        )
+        EffectsPanel(
+            state = uiState.synthState,
+            onParamChange = viewModel::updateSynthState,
+            modifier = Modifier.fillMaxWidth().testTag("synth-panel-effects"),
+            learnMode = learnMode,
+            selectedParamId = selectedParamId,
+            onLearnSelect = viewModel::selectParamForLearn,
+        )
+        SynthPanel(
+            title = "MODULATION",
+            accentColor = MidiLearn,
+            modifier = Modifier.fillMaxWidth().testTag("synth-panel-modulation"),
         ) {
-            // MIDI Learn button
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        when {
-                            uiState.midiLearnState.mode == MidiLearnMode.CONTROL_SELECTED -> KnobGreen.copy(alpha = 0.5f)
-                            uiState.midiLearnState.mode == MidiLearnMode.LEARN_ACTIVE -> KnobAmber.copy(alpha = 0.5f)
-                            else -> BgPanel
-                        }
-                    )
-                    .border(1.dp, PanelHighlight.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                    .clickable { viewModel.toggleMidiLearn() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "MIDI",
-                    color = KnobCyan,
-                    fontSize = 7.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // PANIC button
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(KnobRed.copy(alpha = 0.5f))
-                    .border(1.dp, KnobRed, RoundedCornerShape(6.dp))
-                    .clickable {
-                        com.jujidaw.audio.SynthEngine.panic()
-                        Toast.makeText(context, "Panic! All sound stopped", Toast.LENGTH_SHORT).show()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "PANIC",
-                    color = Color.White,
-                    fontSize = 7.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            listOf(
-                "PRESET" to { viewModel.showPresetBrowser(true) },
-                "SAVE" to { viewModel.showSaveDialog(true) }
-            ).forEach { (label, onClick) ->
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(BgPanel)
-                        .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                        .clickable(onClick = onClick),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        label,
-                        color = TextSecondary,
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            PatchBayView(
+                routes = uiState.synthState.modulationRoutes,
+                onRouteChange = { idx, route -> viewModel.updateModulationRoute(idx, route) },
+                learnMode = learnMode,
+                selectedParamId = selectedParamId,
+                onLearnSelect = viewModel::selectParamForLearn,
+            )
         }
     }
 
@@ -273,7 +199,7 @@ fun SynthScreen(
     if (uiState.showPresetBrowser) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.showPresetBrowser(false) },
-            containerColor = BgPanel,
+            containerColor = SurfaceContainerHigh,
             tonalElevation = 0.dp,
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
         ) {
@@ -294,12 +220,12 @@ fun SynthScreen(
     if (uiState.showSaveDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.showSaveDialog(false) },
-            containerColor = BgPanel,
+            containerColor = SurfaceContainerHigh,
             title = {
                 Text(
                     "Save Preset",
                     fontWeight = FontWeight.Bold,
-                    color = KnobCyan
+                    color = Secondary
                 )
             },
             text = {
@@ -310,8 +236,8 @@ fun SynthScreen(
                         label = { Text("Preset Name") },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = KnobCyan,
-                            unfocusedBorderColor = PanelHighlight,
+                            focusedBorderColor = Secondary,
+                            unfocusedBorderColor = OutlineVariant,
                             cursorColor = TextPrimary,
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary
@@ -324,152 +250,202 @@ fun SynthScreen(
                     onClick = { viewModel.savePreset(uiState.savePresetName) },
                     enabled = uiState.savePresetName.isNotBlank()
                 ) {
-                    Text("Save", color = KnobCyan)
+                    Text("Save", color = Secondary)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.showSaveDialog(false) }) {
-                    Text("Cancel", color = TextMuted)
+                    Text("Cancel", color = TextDisabled)
                 }
             }
         )
     }
 }
 
-/**
- * Horizontally-scrollable row of track buttons (1..16).
- * Selected track is highlighted with the amber accent.
- */
+@Composable
+private fun SynthToolbar(
+    selectedTrack: Int,
+    selectedPadIndex: Int,
+    learnMode: Boolean,
+    targetsVisible: Boolean,
+    onToggleTargets: () -> Unit,
+    onToggleMidiLearn: () -> Unit,
+    onShowPresets: () -> Unit,
+    onShowSave: () -> Unit,
+    onPanic: () -> Unit,
+) {
+    val source =
+        if (selectedPadIndex < 0) {
+            "GLOBAL"
+        } else {
+            "${if (selectedPadIndex < 16) "A" else "B"}${selectedPadIndex % 16 + 1}"
+        }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(SurfaceContainer)
+                .padding(horizontal = Spacing.xs)
+                .testTag("synth-toolbar"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .height(TouchTargetMin)
+                    .clip(RoundedCornerShape(RadiusSm))
+                    .background(if (targetsVisible) Primary.copy(alpha = 0.18f) else SurfaceContainerLow)
+                    .border(1.dp, if (targetsVisible) Primary else OutlineVariant, RoundedCornerShape(RadiusSm))
+                    .clickable(onClick = onToggleTargets)
+                    .semantics {
+                        contentDescription = "Change synth target"
+                        stateDescription = if (targetsVisible) "Expanded" else "Collapsed"
+                    }.testTag("synth-target-toggle"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "T${(selectedTrack + 1).toString().padStart(2, '0')} · $source",
+                color = if (targetsVisible) Primary else OnSurface,
+                style = LabelSmall,
+                maxLines = 1,
+            )
+        }
+        SynthToolbarAction("MIDI", "MIDI learn", onToggleMidiLearn, "synth-midi", active = learnMode)
+        SynthToolbarAction("LIB", "Open preset library", onShowPresets, "synth-presets")
+        SynthToolbarAction("SAVE", "Save preset", onShowSave, "synth-save")
+        SynthToolbarAction("!", "Panic: stop all sound", onPanic, "synth-panic", danger = true)
+    }
+}
+
+@Composable
+private fun SynthToolbarAction(
+    label: String,
+    description: String,
+    onClick: () -> Unit,
+    tag: String,
+    active: Boolean = false,
+    danger: Boolean = false,
+) {
+    val accent = if (danger) StateRecording else Primary
+    Box(
+        modifier =
+            Modifier
+                .height(TouchTargetMin)
+                .widthIn(min = TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (active || danger) accent.copy(alpha = 0.18f) else SurfaceContainerLow)
+                .border(1.dp, if (active || danger) accent else OutlineVariant, RoundedCornerShape(RadiusSm))
+                .clickable(onClick = onClick)
+                .semantics {
+                    contentDescription = description
+                    if (description == "MIDI learn") stateDescription = if (active) "On" else "Off"
+                }.testTag(tag)
+                .padding(horizontal = Spacing.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = if (active || danger) accent else OnSurface, style = LabelSmall)
+    }
+}
+
+@Composable
+private fun SynthTargetPicker(
+    selectedTrack: Int,
+    selectedPadIndex: Int,
+    onSelectTrack: (Int) -> Unit,
+    onSelectGlobal: () -> Unit,
+    onSelectPad: (Int) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                .padding(Spacing.sm)
+                .testTag("synth-target-picker"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        TrackSelectorRow(selectedTrack = selectedTrack, onSelectTrack = onSelectTrack)
+        PadSynthSelectorRow(
+            selectedPadIndex = selectedPadIndex,
+            onSelectGlobal = onSelectGlobal,
+            onSelectPad = onSelectPad,
+        )
+    }
+}
+
 @Composable
 private fun TrackSelectorRow(
     selectedTrack: Int,
     onSelectTrack: (Int) -> Unit,
-    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            "TRACK",
-            color = TextSecondary,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(end = 4.dp)
-        )
-        repeat(16) { track ->
-            val isSelected = track == selectedTrack
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(
-                        if (isSelected) KnobAmber.copy(alpha = 0.3f) else BgPanel
-                    )
-                    .border(
-                        1.dp,
-                        if (isSelected) KnobAmber else PanelHighlight.copy(alpha = 0.4f),
-                        RoundedCornerShape(6.dp)
-                    )
-                    .clickable { onSelectTrack(track) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "${track + 1}",
-                    color = if (isSelected) KnobAmber else TextSecondary,
-                    fontSize = 12.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-            }
-        }
-    }
-}
-
-/**
- * Select the sound source being edited. The global track synth remains
- * available, while Pads A and B each expose their 16 independent synths.
- */
-@Composable
-private fun PadSynthSelectorRow(
-    selectedPadIndex: Int,
-    onSelectGlobal: () -> Unit,
-    onSelectPad: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier =
-            modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            "SOURCE",
-            color = TextSecondary,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(end = 4.dp),
-        )
-        SourceSelectorButton(
-            label = "GLOBAL",
-            selected = selectedPadIndex < 0,
-            onClick = onSelectGlobal,
-        )
-        repeat(32) { padIndex ->
-            if (padIndex == 0) {
-                Text(
-                    "A",
-                    color = KnobCyan,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-            }
-            if (padIndex == 16) {
-                Text(
-                    "B",
-                    color = KnobCyan,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-            }
-            SourceSelectorButton(
-                label = "P${padIndex % 16 + 1}",
-                selected = selectedPadIndex == padIndex,
-                onClick = { onSelectPad(padIndex) },
+        Text("TRACK", color = TextSecondary, style = CaptionSmall, modifier = Modifier.width(52.dp))
+        repeat(16) { track ->
+            SelectorButton(
+                label = "${track + 1}",
+                selected = track == selectedTrack,
+                onClick = { onSelectTrack(track) },
+                modifier = Modifier.testTag("synth-track-$track"),
             )
         }
     }
 }
 
 @Composable
-private fun SourceSelectorButton(
+private fun PadSynthSelectorRow(
+    selectedPadIndex: Int,
+    onSelectGlobal: () -> Unit,
+    onSelectPad: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("SOURCE", color = TextSecondary, style = CaptionSmall, modifier = Modifier.width(52.dp))
+        SelectorButton(
+            label = "G",
+            selected = selectedPadIndex < 0,
+            onClick = onSelectGlobal,
+            modifier = Modifier.testTag("synth-source-global"),
+        )
+        repeat(32) { padIndex ->
+            SelectorButton(
+                label = "${if (padIndex < 16) "A" else "B"}${padIndex % 16 + 1}",
+                selected = selectedPadIndex == padIndex,
+                onClick = { onSelectPad(padIndex) },
+                modifier = Modifier.testTag("synth-source-pad-$padIndex"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SelectorButton(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier =
-            Modifier
-                .height(28.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (selected) KnobAmber.copy(alpha = 0.35f) else BgPanel)
-                .border(1.dp, if (selected) KnobAmber else PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 8.dp),
+            modifier
+                .height(TouchTargetMin)
+                .widthIn(min = TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (selected) Primary.copy(alpha = 0.18f) else SurfaceContainer)
+                .border(1.dp, if (selected) Primary else OutlineVariant, RoundedCornerShape(RadiusSm))
+                .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+                .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            label,
-            color = if (selected) KnobAmber else TextSecondary,
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-        )
+        Text(label, color = if (selected) Primary else OnSurface, style = LabelSmall)
     }
 }

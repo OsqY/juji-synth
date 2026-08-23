@@ -29,3 +29,18 @@ feature is introduced.
 - Closure: strips fill the viewport in portrait, landscape remains scrollable,
   secondary Perform FX stays available but collapsed, and no blocking review
   finding remains.
+
+## Phase 3 — Synth
+
+- Objective: remove nested hardware-chassis chrome and make the ordered device
+  sections the visual subject.
+- Files: `SynthScreen.kt`, shared `SynthPanel.kt`, removal of the now-unused
+  `HardwareChassis.kt`, one connected Compose layout test, and phase records.
+- Acceptance: `AC-D4`, `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, and `AC-S1`.
+- Constraints: preserve every SynthViewModel, engine parameter, MIDI-learn,
+  preset, track, and pad-source route.
+- Validation: required Gradle gates, focused connected Synth tests, full
+  connected suite, device capture, and independent adversarial review.
+- Closure: each device section has one title and one flat boundary, the target
+  chooser is revealable instead of permanently dominant, top actions are at
+  least 44dp, and no blocking review finding remains.

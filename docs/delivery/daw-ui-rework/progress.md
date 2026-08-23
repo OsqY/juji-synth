@@ -104,3 +104,34 @@ Phase 1 acceptance: `AC-D1`, `AC-D2`, `AC-D3`, `AC-A1`, `AC-P1`, and `AC-S1`.
   correction.
 - Independent closure review: `task_339c2d574819` / `ctx_9d94bacdee39`, verdict
   PASS with zero blocking findings. See `phase-02-review.md`.
+
+## Phase 3 — Synth
+
+- State: PASS; ready for focused commit
+- Acceptance: `AC-D4`, `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, `AC-S1`
+- Root cause: `SynthScreen` wraps panel composables that already render their
+  own titled panel, producing duplicate titles, nested borders, decorative
+  screws, and excess vertical travel before controls.
+- Decision: reuse each existing device panel directly, flatten the shared panel
+  surface, collapse track/pad target selection behind the current target, and
+  move MIDI/preset/save/panic actions to a compact top toolbar.
+- Implementation: removed the redundant chassis and outer panel wrappers,
+  including the now-unreferenced `HardwareChassis` implementation;
+  reduced the shared panel to one neutral boundary with a signal marker; added
+  a collapsed `T01 · GLOBAL` target chooser; moved MIDI, library, save, and panic
+  into the top 44dp toolbar; preserved all existing callbacks and parameter
+  panels.
+- Test-first baseline: focused Synth tests initially failed on duplicate
+  `FILTER` titles and the absent target toggle, then passed after implementation.
+- Focused connected Synth suite: PASS, 2/2 on SM-G998W / Android 15.
+- `./gradlew testDebugUnitTest compileDebugKotlin lintDebug assembleDebug`: PASS.
+- Full connected suite: 43/45. All Synth and shared Sequencer UI tests passed.
+  The known user-owned project-audio filename test still fails; the previously
+  committed Mixer insert-sheet animation assertion also failed only in suite
+  order and passed immediately in isolated rerun, 1/1. No Phase 3 code is on
+  either path.
+- Device capture: `/tmp/juji-ui-phase3-synth.png`; the first viewport now shows
+  Oscillators, Filter, and the start of Envelopes instead of nested chrome around
+  barely one device section.
+- Independent review: `task_1b4b7418bf52` / `ctx_3cf6f782d815`, verdict PASS
+  with zero blocking findings. See `phase-03-review.md`.
