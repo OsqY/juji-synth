@@ -34,3 +34,12 @@
 - Connected tests: 28/28 PASS with the unrelated, pre-existing dirty
   `ProjectRepositoryAudioTest` class excluded
 - Independent review: `/root/phase3_help_review`, PASS with no findings
+
+### Phase 4 — Timeline pad preview
+
+- Timeline Compose harness: 27/27 PASS, including preview press/release,
+  cancellation, selector scrolling, and drag-without-selection behavior
+- `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`, `assembleDebug`: PASS
+- Connected tests: 29/29 PASS with the unrelated, pre-existing dirty
+  `ProjectRepositoryAudioTest` class excluded
+- Independent review: `/root/phase4_pad_preview_review`, PASS with no findings

@@ -104,6 +104,8 @@ fun TimelineScreen(
     modifier: Modifier = Modifier,
     viewModel: TimelineViewModel = viewModel { TimelineViewModel() },
     showTransportControls: Boolean = true,
+    onPadPreviewStart: (Int) -> Unit = { SynthEngine.triggerPad(it, 100) },
+    onPadPreviewEnd: (Int) -> Unit = SynthEngine::releasePad,
 ) {
     val transport = viewModel.transportState.collectAsState().value
     val arrangement = viewModel.arrangement.collectAsState().value
@@ -379,6 +381,8 @@ fun TimelineScreen(
             onToolChange = viewModel::setTool,
             onPadSelect = { viewModel.selectPad(it); viewModel.setTool(TimelineTool.DRAW_PAD) },
             onPatternSelect = { viewModel.selectPattern(it); viewModel.setTool(TimelineTool.DRAW_PATTERN) },
+            onPadPreviewStart = onPadPreviewStart,
+            onPadPreviewEnd = onPadPreviewEnd,
             onUndo = viewModel::undo,
             onRedo = viewModel::redo,
         )
@@ -1243,6 +1247,8 @@ private fun TimelineEditorToolbar(
     onToolChange: (TimelineTool) -> Unit,
     onPadSelect: (Int) -> Unit,
     onPatternSelect: (Int) -> Unit,
+    onPadPreviewStart: (Int) -> Unit,
+    onPadPreviewEnd: (Int) -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 ) {
@@ -1342,6 +1348,8 @@ private fun TimelineEditorToolbar(
                         modifier = Modifier
                             .width(itemWidth)
                             .testTag("timeline-source-chip-$chipLabel"),
+                        onPreviewStart = { if (isPad) onPadPreviewStart(index) },
+                        onPreviewEnd = { if (isPad) onPadPreviewEnd(index) },
                     ) {
                         if (isPad) onPadSelect(index) else onPatternSelect(index)
                     }
@@ -1637,14 +1645,33 @@ private fun SourceChip(
     selected: Boolean,
     accent: Color,
     modifier: Modifier = Modifier,
+    onPreviewStart: () -> Unit,
+    onPreviewEnd: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val currentOnPreviewStart by rememberUpdatedState(onPreviewStart)
+    val currentOnPreviewEnd by rememberUpdatedState(onPreviewEnd)
+
     Box(
         modifier = modifier
             .fillMaxHeight()
             .clip(RoundedCornerShape(RadiusSm))
             .background(if (selected) accent.copy(alpha = 0.2f) else SurfaceContainerLow)
             .border(1.dp, if (selected) accent else OutlineVariant, RoundedCornerShape(RadiusSm))
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    currentOnPreviewStart()
+                    try {
+                        do {
+                            val event = awaitPointerEvent()
+                            val pressed = event.changes.firstOrNull { it.id == down.id }?.pressed == true
+                        } while (pressed)
+                    } finally {
+                        currentOnPreviewEnd()
+                    }
+                }
+            }
             .clickable(onClick = onClick)
             .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center,

@@ -32,13 +32,20 @@ class TimelineComposeHarnessTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private lateinit var timelineViewModel: TimelineViewModel
+    private val padPreviewEvents = mutableListOf<String>()
 
     @Before
     fun setTimelineContent() {
+        padPreviewEvents.clear()
         timelineViewModel = TimelineViewModel()
         composeRule.setContent {
             JujiDawTheme {
-                TimelineScreen(viewModel = timelineViewModel, showTransportControls = true)
+                TimelineScreen(
+                    viewModel = timelineViewModel,
+                    showTransportControls = true,
+                    onPadPreviewStart = { padPreviewEvents += "start:$it" },
+                    onPadPreviewEnd = { padPreviewEvents += "end:$it" },
+                )
             }
         }
     }
@@ -625,6 +632,24 @@ class TimelineComposeHarnessTest {
         composeRule.onNodeWithTag("timeline-source-chip-B16").performTouchInput { click() }
         composeRule.waitForIdle()
         assertEquals(31, PadSelectionStore.selectedPad.value)
+    }
+
+    @Test
+    fun padSelectorPreviewsForPressReleaseAndCancellation() {
+        composeRule.onNodeWithTag("timeline-source-chip-A1").performTouchInput {
+            down(center)
+            up()
+        }
+        composeRule.waitForIdle()
+        assertEquals(listOf("start:0", "end:0"), padPreviewEvents)
+
+        padPreviewEvents.clear()
+        composeRule.onNodeWithTag("timeline-source-chip-A1").performTouchInput {
+            down(center)
+            cancel()
+        }
+        composeRule.waitForIdle()
+        assertEquals(listOf("start:0", "end:0"), padPreviewEvents)
     }
 
     @Test
