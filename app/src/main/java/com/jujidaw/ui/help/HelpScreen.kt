@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -53,6 +54,7 @@ fun HelpScreen(onClose: () -> Unit) {
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .testTag("workflow-guide-root")
                     .background(SurfaceContainerLow)
                     .verticalScroll(rememberScrollState())
                     .padding(Spacing.md),
@@ -129,17 +131,17 @@ private fun SignalFlow() {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        SignalNode("SOURCE", "Pads / Synth")
+        SignalNode("SOURCE", "Pads / Synth", Modifier.weight(1f))
         Text("->", color = Primary, style = TitleLarge)
-        SignalNode("WRITE", "Seq / Timeline")
+        SignalNode("WRITE", "Seq / Timeline", Modifier.weight(1f))
         Text("->", color = Primary, style = TitleLarge)
-        SignalNode("HEAR", "Transport")
+        SignalNode("HEAR", "Transport", Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun SignalNode(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun SignalNode(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = OnSurfaceVariant, style = LabelSmall)
         Text(value, color = OnSurface, style = BodyMedium, fontWeight = FontWeight.SemiBold)
     }
@@ -158,7 +160,7 @@ private fun HelpSection(index: String, title: String, accent: Color, text: Strin
     ) {
         Text(index, color = accent, style = TitleLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.width(Spacing.md))
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             Text(title, color = OnSurface, style = BodyMedium, fontWeight = FontWeight.Bold)
             Text(text, color = OnSurfaceVariant, style = BodyMedium)
         }
