@@ -78,3 +78,19 @@ feature is introduced.
   occupies at least 70% of its content height, secondary controls are
   revealable, all touched actions are at least 44dp, and no blocking review
   finding remains.
+
+## Phase 6 — Adaptive validation and final audit
+
+- Objective: verify the completed redesign as one system in portrait and
+  landscape, capture every destination, and close every acceptance criterion.
+- Files: one connected shell regression and final delivery records only unless
+  validation exposes a concrete UI defect.
+- Acceptance: `AC-D1` through `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, `AC-P1`, and
+  `AC-S1`.
+- Constraints: do not broaden into new features or repair unrelated dirty
+  audio/project work; preserve Oboe and all user-owned files.
+- Validation: all-destination landscape regression, required Gradle gates, full
+  connected suite, seven final portrait captures, and independent final audit.
+- Closure: all seven destinations fit in landscape with one global transport,
+  final portrait captures match the content-first direction, residual failures
+  are classified with evidence, and no blocking review finding remains.

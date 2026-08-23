@@ -212,3 +212,29 @@ Phase 1 acceptance: `AC-D1`, `AC-D2`, `AC-D3`, `AC-A1`, `AC-P1`, and `AC-S1`.
 - Independent correction review: `task_e41094ca6d8b` /
   `ctx_a34701317bcd`, verdict PASS with zero blocking findings. See
   `phase-05-review.md`.
+
+## Phase 6 — Adaptive validation and final audit
+
+- State: PASS; ready for focused commit
+- Acceptance: `AC-D1`–`AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, `AC-P1`, `AC-S1`
+- Implementation scope: one connected shell regression and delivery records;
+  no production code change was needed after adaptive validation.
+- All-destination landscape regression: PASS, 1/1 on SM-G998W / Android 15.
+  Timeline, Mixer, Synth, Pads, Keys, Sequencer, and Project each remain within
+  the physical screen and expose exactly one global Play action.
+- `./gradlew testDebugUnitTest compileDebugKotlin lintDebug assembleDebug`: PASS.
+- Final full connected suite: 50/52. The new landscape audit and every UI
+  rework regression passed except the known suite-order Mixer insert-sheet
+  display assertion, which passed immediately in isolation, 1/1. The other
+  failure remains the user-owned project-audio filename expectation outside
+  this work.
+- Final portrait captures: `/tmp/juji-ui-final-timeline.png`,
+  `/tmp/juji-ui-final-mixer.png`, `/tmp/juji-ui-final-synth.png`,
+  `/tmp/juji-ui-final-pads.png`, `/tmp/juji-ui-final-keys.png`,
+  `/tmp/juji-ui-final-seq.png`, and `/tmp/juji-ui-final-project.png`.
+- Device orientation was temporarily locked to portrait for captures and
+  restored to automatic rotation afterward.
+- Final acceptance evidence is consolidated in `final-audit.md`.
+- Independent final audit: `task_694ee5fa478f` / `ctx_2dbdf0bcad56`, verdict
+  PASS with every acceptance criterion satisfied and zero blocking findings.
+  See `phase-06-review.md`.
