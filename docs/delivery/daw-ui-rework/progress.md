@@ -168,3 +168,47 @@ Phase 1 acceptance: `AC-D1`, `AC-D2`, `AC-D3`, `AC-A1`, `AC-P1`, and `AC-S1`.
   below one compact toolbar.
 - Independent review: `task_c82055da9bb3` / `ctx_61fe4f452614`, verdict PASS
   with zero blocking findings. See `phase-04-review.md`.
+
+## Phase 5 — Sequencer, Project, Help, and Settings
+
+- State: PASS; ready for focused commit
+- Acceptance: `AC-D3`, `AC-D4`, `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, `AC-S1`
+- Root cause: Sequencer duplicated transport inside two permanent control rows;
+  Project duplicated transport and recording controls above the browser; audio
+  settings still used 20–28dp option/close controls.
+- Decision: retain one compact primary toolbar per task surface and reveal
+  pattern/project tools only on demand. Keep the global transport as the sole
+  playback surface, and keep destructive actions explicit in red.
+- Implementation: Sequencer now opens directly on the step or piano editor
+  with a scrollable pattern chooser, icon-led view choices, and a tools toggle;
+  copy, paste, clear, automation, and tempo live in the revealable row. Project
+  now opens directly on the project browser with New, Save, and tools in one
+  row; import, exports, diagnostics, and recording are revealable. Project card
+  actions use full, unambiguous names and 44dp targets.
+- Help/Settings: Help retains its readable workflow content and now has a 44dp
+  close action. Settings uses flat 44dp radio rows, selected semantics, one
+  compact header, and a scrollable adaptive-height surface. `SettingsScreen`
+  has no production call site; no new navigation or feature wiring was added.
+- Test-first baseline: the four focused tests compiled and failed on the old
+  duplicate transports and missing compact/target semantics, then passed after
+  implementation.
+- Focused connected task-surface suite: PASS, 6/6 on SM-G998W / Android 15,
+  including the existing Sequencer piano-height and Help landscape checks.
+- `./gradlew testDebugUnitTest compileDebugKotlin lintDebug assembleDebug`: PASS.
+- Full connected suite: 49/51. Every Phase 5 test passed. The known user-owned
+  project-audio filename expectation failed, and the known suite-order Mixer
+  insert-sheet display assertion failed before passing immediately in an
+  isolated rerun, 1/1.
+- Device captures: `/tmp/juji-ui-phase5-seq.png`,
+  `/tmp/juji-ui-phase5-seq-tools.png`,
+  `/tmp/juji-ui-phase5-project.png`, and
+  `/tmp/juji-ui-phase5-project-tools.png`.
+- Initial independent review: `task_e573b07ce32c` / `ctx_37d26be82859`, verdict
+  FAIL. Its sole blocker was missing explicit TalkBack names on the revealed
+  recording-track decrement/increment actions.
+- Correction: added `Previous recording track` and `Next recording track`
+  semantics plus a focused device regression; the regression failed before the
+  fix and passed after it, 1/1.
+- Independent correction review: `task_e41094ca6d8b` /
+  `ctx_a34701317bcd`, verdict PASS with zero blocking findings. See
+  `phase-05-review.md`.

@@ -60,3 +60,21 @@ feature is introduced.
 - Closure: edit/advanced controls are collapsed by default, essential context
   remains in one 44dp toolbar, pad/key identities are concise and accessible,
   and no blocking review finding remains.
+
+## Phase 5 — Sequencer, Project, Help, and Settings
+
+- Objective: make pattern editing and project browsing primary while keeping
+  secondary workflow, export, recording, and diagnostic actions revealable.
+- Files: `SequencerScreen.kt`, `ProjectScreen.kt`, `HelpScreen.kt`,
+  `SettingsScreen.kt`, one connected Compose layout test, and phase records.
+- Acceptance: `AC-D3`, `AC-D4`, `AC-D5`, `AC-Q1`, `AC-Q2`, `AC-A1`, and
+  `AC-S1`.
+- Constraints: preserve pattern editing, note gestures, project file actions,
+  export launchers, recording routes, dialogs, and settings persistence; keep
+  destructive actions explicit.
+- Validation: required Gradle gates, focused connected task-surface tests, full
+  connected suite, device captures, and independent review.
+- Closure: no destination duplicates global transport, each primary surface
+  occupies at least 70% of its content height, secondary controls are
+  revealable, all touched actions are at least 44dp, and no blocking review
+  finding remains.

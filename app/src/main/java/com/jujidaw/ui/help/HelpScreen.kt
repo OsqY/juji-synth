@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +40,7 @@ import com.jujidaw.ui.theme.Spacing
 import com.jujidaw.ui.theme.SurfaceContainer
 import com.jujidaw.ui.theme.SurfaceContainerHigh
 import com.jujidaw.ui.theme.SurfaceContainerLow
+import com.jujidaw.ui.theme.TouchTargetMin
 import com.jujidaw.ui.theme.TitleLarge
 import com.jujidaw.ui.theme.BodyMedium
 import com.jujidaw.ui.theme.LabelSmall
@@ -71,10 +73,12 @@ fun HelpScreen(onClose: () -> Unit) {
                 Box(
                     modifier =
                         Modifier
+                            .size(TouchTargetMin)
                             .clip(RoundedCornerShape(8.dp))
                             .border(1.dp, Outline, RoundedCornerShape(8.dp))
                             .clickable(onClick = onClose)
-                            .padding(12.dp),
+                            .testTag("workflow-guide-close"),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Outlined.Close, contentDescription = "Close workflow help", tint = OnSurface)
                 }

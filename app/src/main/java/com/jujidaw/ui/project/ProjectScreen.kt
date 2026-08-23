@@ -6,16 +6,27 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,6 +70,7 @@ fun ProjectScreen(
     val context = LocalContext.current
 
     var showDiagnostics by remember { mutableStateOf(false) }
+    var showTools by rememberSaveable { mutableStateOf(false) }
 
     // Initialise repository on first composition.
     LaunchedEffect(Unit) {
@@ -114,61 +126,64 @@ fun ProjectScreen(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(BgGunmetal)
-            .padding(4.dp)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(Bg0)
+                .padding(Spacing.sm)
+                .testTag("project-root"),
     ) {
-        // ── Toolbar: transport, project actions ─────────────────────
         ProjectToolbar(
             currentProject = state.currentProjectName,
-            isPlaying = state.isPlaying,
             isExporting = state.isExporting,
             exportProgress = state.exportProgress,
             onNew = viewModel::showNewDialog,
             onSave = viewModel::saveProject,
-            onPlay = viewModel::playTransport,
-            onStop = viewModel::stopTransport,
-            onExportMix = { pickExportDir.launch(null) },
-            onExportStems = { pickStemsDir.launch(null) },
-            onImportAudio = { pickAudio.launch("audio/*") },
-            onDiagnostics = { showDiagnostics = true }
+            toolsVisible = showTools,
+            onToggleTools = { showTools = !showTools },
         )
 
-        // ── Timeline recording controls ─────────────────────────────
-        RecordingBar(
-            trackIndex = state.recordingTrackIndex,
-            isRecording = state.isTimelineRecording,
-            onTrackChange = viewModel::setRecordingTrack,
-            onStart = viewModel::startTimelineRecording,
-            onStop = viewModel::stopTimelineRecording
-        )
+        if (showTools) {
+            Spacer(modifier = Modifier.height(Spacing.sm))
+            ProjectTools(
+                currentProject = state.currentProjectName,
+                isExporting = state.isExporting,
+                exportProgress = state.exportProgress,
+                onExportMix = { pickExportDir.launch(null) },
+                onExportStems = { pickStemsDir.launch(null) },
+                onImportAudio = { pickAudio.launch("audio/*") },
+                onDiagnostics = { showDiagnostics = true },
+                trackIndex = state.recordingTrackIndex,
+                isRecording = state.isTimelineRecording,
+                onTrackChange = viewModel::setRecordingTrack,
+                onStartRecording = viewModel::startTimelineRecording,
+                onStopRecording = viewModel::stopTimelineRecording,
+            )
+        }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(Spacing.sm))
 
-        // ── Project list ────────────────────────────────────────────
-        if (state.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth().testTag("project-browser"),
+        ) {
+            if (state.isLoading) {
                 CircularProgressIndicator(
-                    color = KnobCyan,
+                    color = Primary,
                     strokeWidth = 3.dp,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(32.dp).align(Alignment.Center),
+                )
+            } else if (state.projects.isEmpty()) {
+                EmptyState(modifier = Modifier.fillMaxSize())
+            } else {
+                ProjectList(
+                    projects = state.projects,
+                    currentProjectName = state.currentProjectName,
+                    onLoad = viewModel::loadProject,
+                    onDelete = viewModel::showDeleteConfirm,
+                    onRename = viewModel::showRenameDialog,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
-        } else if (state.projects.isEmpty()) {
-            EmptyState(modifier = Modifier.weight(1f))
-        } else {
-            ProjectList(
-                projects = state.projects,
-                currentProjectName = state.currentProjectName,
-                onLoad = viewModel::loadProject,
-                onDelete = viewModel::showDeleteConfirm,
-                onRename = viewModel::showRenameDialog,
-                modifier = Modifier.weight(1f)
-            )
         }
     }
 
@@ -216,80 +231,111 @@ fun ProjectScreen(
 @Composable
 private fun ProjectToolbar(
     currentProject: String?,
-    isPlaying: Boolean,
     isExporting: Boolean,
     exportProgress: Float,
     onNew: () -> Unit,
     onSave: () -> Unit,
-    onPlay: () -> Unit,
-    onStop: () -> Unit,
+    toolsVisible: Boolean,
+    onToggleTools: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TouchTargetMin)
+                .background(SurfaceContainer)
+                .padding(horizontal = Spacing.xs)
+                .testTag("project-toolbar"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (isExporting) "Export ${(exportProgress * 100).toInt()}%" else currentProject ?: "NO PROJECT",
+            color = if (currentProject != null) Primary else OnSurfaceVariant,
+            style = MonoLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        ProjectIconButton(
+            icon = Icons.Outlined.Add,
+            contentDescription = "New project",
+            onClick = onNew,
+            modifier = Modifier.testTag("project-new"),
+        )
+        ProjectActionButton(
+            label = "SAVE",
+            color = Secondary,
+            onClick = onSave,
+            enabled = currentProject != null,
+        )
+        ProjectIconButton(
+            icon = Icons.Outlined.Tune,
+            contentDescription = if (toolsVisible) "Hide project tools" else "Show project tools",
+            onClick = onToggleTools,
+            active = toolsVisible,
+            selectionAware = true,
+            modifier = Modifier.testTag("project-tools-toggle"),
+        )
+    }
+}
+
+@Composable
+private fun ProjectTools(
+    currentProject: String?,
+    isExporting: Boolean,
+    exportProgress: Float,
     onExportMix: () -> Unit,
     onExportStems: () -> Unit,
     onImportAudio: () -> Unit,
-    onDiagnostics: () -> Unit
+    onDiagnostics: () -> Unit,
+    trackIndex: Int,
+    isRecording: Boolean,
+    onTrackChange: (Int) -> Unit,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(BgPanel)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = Modifier.fillMaxWidth().testTag("project-tools"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        // Row 1: project name + transport
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth().height(TouchTargetMin).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Project name label
-            Text(
-                text = currentProject ?: "No project",
-                color = if (currentProject != null) KnobCyan else TextMuted,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+            ProjectActionButton(
+                label = "IMPORT",
+                color = Secondary,
+                onClick = onImportAudio,
+                enabled = currentProject != null,
             )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Transport buttons
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TransportButton(
-                    label = if (isPlaying) "Stop" else "Play",
-                    color = if (isPlaying) TransportRed else TransportGreen,
-                    onClick = if (isPlaying) onStop else onPlay
-                )
-            }
-        }
-
-        // Row 2: action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            ProjectActionButton("New", KnobCyan, onNew)
-            ProjectActionButton("Save", KnobGreen, onSave, enabled = currentProject != null)
-            ProjectActionButton("Import", KnobAmber, onImportAudio, enabled = currentProject != null)
-            ProjectActionButton("Diag", KnobPink, onDiagnostics)
-
-            Spacer(modifier = Modifier.weight(1f))
-
             if (isExporting) {
                 Text(
                     text = "Export ${(exportProgress * 100).toInt()}%",
-                    color = KnobAmber,
-                    fontSize = 9.sp,
+                    color = Primary,
+                    style = LabelSmall,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.align(Alignment.CenterVertically)
+                    modifier = Modifier.padding(horizontal = Spacing.sm),
                 )
             } else {
-                ProjectActionButton("Mix", KnobOrange, onExportMix, enabled = currentProject != null)
-                ProjectActionButton("Stems", KnobOrange, onExportStems, enabled = currentProject != null)
+                ProjectActionButton("MIX", Primary, onExportMix, enabled = currentProject != null)
+                ProjectActionButton("STEMS", Primary, onExportStems, enabled = currentProject != null)
             }
+            ProjectActionButton(
+                label = "DIAG",
+                color = OnSurface,
+                onClick = onDiagnostics,
+                modifier = Modifier.testTag("project-diagnostics"),
+            )
         }
+        RecordingBar(
+            trackIndex = trackIndex,
+            isRecording = isRecording,
+            onTrackChange = onTrackChange,
+            onStart = onStartRecording,
+            onStop = onStopRecording,
+        )
     }
 }
 
@@ -298,48 +344,60 @@ private fun ProjectActionButton(
     label: String,
     color: androidx.compose.ui.graphics.Color,
     onClick: () -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = Modifier
-            .height(28.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (enabled) BgGunmetal else BgPanel)
-            .border(1.dp, PanelHighlight.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .height(TouchTargetMin)
+                .widthIn(min = TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (enabled) SurfaceContainerLow else DisabledFill)
+                .border(1.dp, if (enabled) OutlineVariant else OutlineVariant.copy(alpha = 0.5f), RoundedCornerShape(RadiusSm))
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = Spacing.sm),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            color = if (enabled) color else TextMuted,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold
+            color = if (enabled) color else DisabledText,
+            style = LabelSmall,
+            fontWeight = FontWeight.Bold,
         )
     }
 }
 
 @Composable
-private fun TransportButton(
-    label: String,
-    color: androidx.compose.ui.graphics.Color,
-    onClick: () -> Unit
+private fun ProjectIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    active: Boolean = false,
+    selectionAware: Boolean = false,
 ) {
     Box(
-        modifier = Modifier
-            .height(28.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(color.copy(alpha = 0.2f))
-            .border(1.dp, color, RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .size(TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (active) Primary.copy(alpha = 0.18f) else SurfaceContainerLow)
+                .border(1.dp, if (active) Primary else OutlineVariant, RoundedCornerShape(RadiusSm))
+                .then(
+                    if (selectionAware) {
+                        Modifier.selectable(selected = active, onClick = onClick, role = Role.Button)
+                    } else {
+                        Modifier.clickable(onClick = onClick)
+                    },
+                ),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            color = color,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (active) Primary else OnSurface,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -355,82 +413,76 @@ private fun RecordingBar(
     onStop: () -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(BgPanel)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TouchTargetMin)
+                .background(SurfaceContainer)
+                .padding(horizontal = Spacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Record",
-            color = if (isRecording) TransportRed else TextSecondary,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold
+            text = "REC",
+            color = if (isRecording) StateRecording else TextSecondary,
+            style = LabelSmall,
+            fontWeight = FontWeight.Bold,
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Track",
-                color = TextSecondary,
-                fontSize = 9.sp,
-                modifier = Modifier.padding(end = 4.dp)
-            )
-
-            // Track index selector
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(BgGunmetal)
-                        .clickable { onTrackChange((trackIndex - 1).coerceAtLeast(0)) },
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(TouchTargetMin)
+                            .clip(RoundedCornerShape(RadiusSm))
+                            .background(SurfaceContainerLow)
+                            .semantics { contentDescription = "Previous recording track" }
+                            .clickable { onTrackChange((trackIndex - 1).coerceAtLeast(0)) },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text("-", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("−", color = OnSurface, style = LabelSmall, fontWeight = FontWeight.Bold)
                 }
                 Text(
-                    text = "${trackIndex + 1}",
-                    color = if (isRecording) TransportRed else TextPrimary,
-                    fontSize = 12.sp,
+                    text = "T${(trackIndex + 1).toString().padStart(2, '0')}",
+                    color = if (isRecording) StateRecording else TextPrimary,
+                    style = MonoLarge,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(24.dp),
-                    maxLines = 1
+                    modifier = Modifier.width(40.dp),
+                    maxLines = 1,
                 )
                 Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(BgGunmetal)
-                        .clickable { onTrackChange((trackIndex + 1).coerceAtMost(15)) },
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(TouchTargetMin)
+                            .clip(RoundedCornerShape(RadiusSm))
+                            .background(SurfaceContainerLow)
+                            .semantics { contentDescription = "Next recording track" }
+                            .clickable { onTrackChange((trackIndex + 1).coerceAtMost(15)) },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text("+", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("+", color = OnSurface, style = LabelSmall, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        // Start/Stop record button
         Box(
-            modifier = Modifier
-                .height(28.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (isRecording) TransportRed.copy(alpha = 0.2f) else TransportRed)
-                .border(
-                    1.dp,
-                    TransportRed,
-                    RoundedCornerShape(6.dp)
-                )
-                .clickable { if (isRecording) onStop() else onStart() }
-                .padding(horizontal = 10.dp),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .height(TouchTargetMin)
+                    .widthIn(min = 64.dp)
+                    .clip(RoundedCornerShape(RadiusSm))
+                    .background(if (isRecording) StateRecording.copy(alpha = 0.18f) else SurfaceContainerLow)
+                    .border(1.dp, StateRecording, RoundedCornerShape(RadiusSm))
+                    .clickable { if (isRecording) onStop() else onStart() }
+                    .testTag("project-record"),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = if (isRecording) "STOP" else "REC",
-                color = if (isRecording) TransportRed else androidx.compose.ui.graphics.Color.White,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold
+                color = StateRecording,
+                style = LabelSmall,
+                fontWeight = FontWeight.Bold,
             )
         }
     }
@@ -449,7 +501,7 @@ private fun ProjectList(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         items(projects, key = { it.name }) { info ->
             ProjectCard(
@@ -471,20 +523,20 @@ private fun ProjectCard(
     onDelete: () -> Unit,
     onRename: () -> Unit
 ) {
-    val bgColor = if (isCurrent) KnobCyan.copy(alpha = 0.08f) else BgPanel
+    val bgColor = if (isCurrent) Primary.copy(alpha = 0.08f) else SurfaceContainerLow
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(RadiusSm))
             .background(bgColor)
             .border(
                 width = if (isCurrent) 1.dp else 0.dp,
-                color = if (isCurrent) KnobCyan.copy(alpha = 0.4f) else PanelHighlight.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(8.dp)
+                color = if (isCurrent) Primary else OutlineVariant,
+                shape = RoundedCornerShape(RadiusSm),
             )
             .clickable(onClick = onLoad)
-            .padding(10.dp)
+            .padding(Spacing.sm)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -506,7 +558,7 @@ private fun ProjectCard(
                         append("  ·  ")
                         append(formatSize(info.fileSize))
                     },
-                    color = TextMuted,
+                    color = TextDisabled,
                     fontSize = 9.sp,
                     modifier = Modifier.padding(top = 2.dp)
                 )
@@ -514,10 +566,10 @@ private fun ProjectCard(
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (!isCurrent) {
-                    SmallActionButton("Load", KnobGreen, onLoad)
+                    SmallActionButton("LOAD", Secondary, onLoad)
                 }
-                SmallActionButton("Rnm", KnobCyan, onRename)
-                SmallActionButton("Del", TransportRed, onDelete)
+                SmallActionButton("RENAME", Primary, onRename)
+                SmallActionButton("DELETE", StateRecording, onDelete)
             }
         }
     }
@@ -531,18 +583,19 @@ private fun SmallActionButton(
 ) {
     Box(
         modifier = Modifier
-            .height(24.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(BgGunmetal)
-            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+            .height(TouchTargetMin)
+            .widthIn(min = TouchTargetMin)
+            .clip(RoundedCornerShape(RadiusSm))
+            .background(SurfaceContainer)
+            .border(1.dp, color.copy(alpha = 0.7f), RoundedCornerShape(RadiusSm))
             .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = Spacing.sm),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
             color = color,
-            fontSize = 8.sp,
+            style = LabelSmall,
             fontWeight = FontWeight.Bold
         )
     }

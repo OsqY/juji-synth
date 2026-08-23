@@ -4,20 +4,24 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.jujidaw.data.AppSettings
 import com.jujidaw.data.SettingsDataStore
 import com.jujidaw.ui.theme.*
 import kotlinx.coroutines.launch
@@ -63,83 +67,97 @@ fun SettingsScreen(
         }
     }
 
-    // --- UI ---
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.55f)
-            .clip(RoundedCornerShape(12.dp))
-            .background(BgPanel)
-            .border(1.dp, BgPanel.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-            .padding(16.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f)
+                .clip(RoundedCornerShape(RadiusLg))
+                .background(SurfaceContainerLow)
+                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusLg))
+                .padding(Spacing.md)
+                .testTag("settings-root"),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Header
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "AUDIO SETTINGS",
-                    color = KnobCyan,
+                    text = "AUDIO",
+                    color = Primary,
+                    style = TitleLarge,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
                 )
-                TextButton(onClick = onDismiss) {
-                    Text("✕", color = TextSecondary, fontSize = 16.sp)
+                Box(
+                    modifier =
+                        Modifier
+                            .size(TouchTargetMin)
+                            .clip(RoundedCornerShape(RadiusSm))
+                            .background(SurfaceContainer)
+                            .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
+                            .clickable(onClick = onDismiss)
+                            .testTag("settings-close"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Close audio settings", tint = OnSurface)
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
 
-            // --- Sample Rate ---
             SettingsSection(title = "Sample Rate") {
                 SettingsRadioOption(
                     label = "44100 Hz",
                     selected = selectedSampleRate == 44100,
+                    tag = "settings-rate-44100",
                     onClick = { selectedSampleRate = 44100; persist() }
                 )
                 SettingsRadioOption(
                     label = "48000 Hz",
                     selected = selectedSampleRate == 48000,
+                    tag = "settings-rate-48000",
                     onClick = { selectedSampleRate = 48000; persist() }
                 )
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
 
-            // --- Buffer Size ---
             SettingsSection(title = "Buffer Size") {
                 SettingsRadioOption(
                     label = "128 samples",
                     selected = selectedBufferSize == 128,
+                    tag = "settings-buffer-128",
                     onClick = { selectedBufferSize = 128; persist() }
                 )
                 SettingsRadioOption(
                     label = "256 samples",
                     selected = selectedBufferSize == 256,
+                    tag = "settings-buffer-256",
                     onClick = { selectedBufferSize = 256; persist() }
                 )
                 SettingsRadioOption(
                     label = "512 samples",
                     selected = selectedBufferSize == 512,
+                    tag = "settings-buffer-512",
                     onClick = { selectedBufferSize = 512; persist() }
                 )
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
 
-            // --- Output Mode ---
             SettingsSection(title = "Output Mode") {
                 SettingsRadioOption(
                     label = "Mono",
                     selected = selectedOutputMode == "mono",
+                    tag = "settings-output-mono",
                     onClick = { selectedOutputMode = "mono"; persist() }
                 )
                 SettingsRadioOption(
                     label = "Stereo",
                     selected = selectedOutputMode == "stereo",
+                    tag = "settings-output-stereo",
                     onClick = { selectedOutputMode = "stereo"; persist() }
                 )
             }
@@ -149,7 +167,7 @@ fun SettingsScreen(
 
 /**
  * A labeled section wrapper used inside [SettingsScreen].
- * Draws an engraved-style section title followed by [content].
+ * Groups one audio choice without adding another decorative container.
  */
 @Composable
 private fun SettingsSection(
@@ -159,20 +177,12 @@ private fun SettingsSection(
     Column {
         Text(
             text = title,
-            color = KnobCyan,
-            fontSize = 10.sp,
+            color = OnSurfaceVariant,
+            style = LabelSmall,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp)
+            modifier = Modifier.padding(bottom = Spacing.xs),
         )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .background(BgGunmetal)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            Column { content() }
-        }
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs), content = content)
     }
 }
 
@@ -183,30 +193,37 @@ private fun SettingsSection(
 private fun SettingsRadioOption(
     label: String,
     selected: Boolean,
-    onClick: () -> Unit
+    tag: String,
+    onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TouchTargetMin)
+                .clip(RoundedCornerShape(RadiusSm))
+                .background(if (selected) Primary.copy(alpha = 0.12f) else SurfaceContainer)
+                .border(1.dp, if (selected) Primary else OutlineVariant, RoundedCornerShape(RadiusSm))
+                .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+                .padding(horizontal = Spacing.sm)
+                .testTag(tag),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(
             selected = selected,
-            onClick = onClick,
+            onClick = null,
             colors = RadioButtonDefaults.colors(
-                selectedColor = KnobCyan,
-                unselectedColor = PanelHighlight.copy(alpha = 0.6f)
+                selectedColor = Primary,
+                unselectedColor = OnSurfaceVariant,
             ),
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(24.dp),
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(Spacing.sm))
         Text(
             text = label,
-            color = if (selected) KnobCyan else TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            color = if (selected) Primary else OnSurface,
+            style = BodyMedium,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
     }
 }

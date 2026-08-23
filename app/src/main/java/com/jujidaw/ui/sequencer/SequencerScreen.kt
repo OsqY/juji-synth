@@ -8,11 +8,24 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.GridOn
+import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -23,14 +36,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujidaw.model.PianoRollNote
-import com.jujidaw.ui.LcdDisplay
-import com.jujidaw.ui.SynthPanel
 import com.jujidaw.ui.theme.*
 import kotlin.math.roundToInt
 
@@ -57,6 +71,7 @@ fun SequencerScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showTools by rememberSaveable { mutableStateOf(false) }
 
     DisposableEffect(viewModel) {
         viewModel.enterSequencerMode()
@@ -68,28 +83,34 @@ fun SequencerScreen(
             modifier
                 .fillMaxSize()
                 .background(Bg0)
-                .padding(Spacing.sm),
+                .padding(Spacing.sm)
+                .testTag("sequencer-root"),
     ) {
-        // ── TOP BAR ──
         SequencerTopBar(
             uiState = uiState,
             onSelectPattern = viewModel::selectPattern,
+            onToggleViewMode = viewModel::toggleViewMode,
+            toolsVisible = showTools,
+            onToggleTools = { showTools = !showTools },
+        )
+
+        if (showTools) {
+            Spacer(Modifier.height(Spacing.sm))
+            SequencerTools(
             onCopy = viewModel::copyPattern,
             onPaste = viewModel::pastePattern,
             onClear = viewModel::clearPattern,
             onBpmChange = viewModel::setBpm,
-            onToggleViewMode = viewModel::toggleViewMode,
             onToggleAutomation = viewModel::toggleAutomation,
             showAutomation = uiState.showAutomation,
-            onPlay = viewModel::togglePlay,
-            onStop = viewModel::stopPlayback,
-            onRestart = viewModel::restartPlayback,
-        )
+                bpm = uiState.bpm,
+                pasteEnabled = uiState.copyBufferPattern != null,
+            )
+        }
 
         Spacer(Modifier.height(Spacing.sm))
 
-        // ── MAIN EDITOR ──
-        Box(modifier = Modifier.weight(1f)) {
+        Box(modifier = Modifier.weight(1f).testTag("sequencer-editor")) {
             when (uiState.viewMode) {
                 SequencerViewMode.STEP -> {
                     StepSequencerGrid(
@@ -162,95 +183,119 @@ fun SequencerScreen(
 private fun SequencerTopBar(
     uiState: SequencerUiState,
     onSelectPattern: (Int) -> Unit,
+    onToggleViewMode: () -> Unit,
+    toolsVisible: Boolean,
+    onToggleTools: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TouchTargetMin)
+                .background(SurfaceContainer)
+                .padding(horizontal = Spacing.xs)
+                .testTag("sequencer-toolbar"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PatternSelector(
+            selectedId = uiState.selectedPatternId,
+            onSelect = onSelectPattern,
+            modifier = Modifier.weight(1f),
+        )
+        SequencerIconButton(
+            icon = Icons.Filled.Dashboard,
+            contentDescription = "Step sequencer",
+            selected = uiState.viewMode == SequencerViewMode.STEP,
+            onClick = { if (uiState.viewMode != SequencerViewMode.STEP) onToggleViewMode() },
+            modifier = Modifier.testTag("sequencer-view-step"),
+            role = Role.RadioButton,
+            selectionAware = true,
+        )
+        SequencerIconButton(
+            icon = Icons.Filled.MusicNote,
+            contentDescription = "Piano roll",
+            selected = uiState.viewMode == SequencerViewMode.PIANO_ROLL,
+            onClick = { if (uiState.viewMode != SequencerViewMode.PIANO_ROLL) onToggleViewMode() },
+            modifier = Modifier.testTag("sequencer-view-piano"),
+            role = Role.RadioButton,
+            selectionAware = true,
+        )
+        SequencerIconButton(
+            icon = Icons.Outlined.Tune,
+            contentDescription = if (toolsVisible) "Hide pattern tools" else "Show pattern tools",
+            selected = toolsVisible,
+            onClick = onToggleTools,
+            modifier = Modifier.testTag("sequencer-tools-toggle"),
+            selectionAware = true,
+        )
+    }
+}
+
+@Composable
+private fun SequencerTools(
     onCopy: () -> Unit,
     onPaste: () -> Unit,
     onClear: () -> Unit,
     onBpmChange: (Float) -> Unit,
-    onToggleViewMode: () -> Unit,
     onToggleAutomation: () -> Unit,
     showAutomation: Boolean,
-    onPlay: () -> Unit,
-    onStop: () -> Unit,
-    onRestart: () -> Unit,
+    bpm: Float,
+    pasteEnabled: Boolean,
 ) {
-    SynthPanel(title = "SEQUENCER", accentColor = Primary) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Row 1: pattern selector + actions
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Pattern selector (1–16)
-                PatternSelector(
-                    selectedId = uiState.selectedPatternId,
-                    onSelect = onSelectPattern,
-                    modifier = Modifier.weight(1f),
-                )
-
-                // Copy / Paste / Clear
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    SmallActionButton(label = "▶", onClick = onPlay)
-                    SmallActionButton(label = "■", onClick = onStop)
-                    SmallActionButton(label = "↶", onClick = onRestart)
-                    SmallActionButton(label = "C", onClick = onCopy)
-                    SmallActionButton(label = "P", onClick = onPaste, enabled = uiState.copyBufferPattern != null)
-                    SmallActionButton(label = "X", onClick = onClear)
-                }
-            }
-
-            Spacer(Modifier.height(Spacing.sm))
-
-            // Row 2: view-mode toggle + BPM
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // View mode toggle
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    Text(
-                        text = "A",
-                        color = if (showAutomation) Primary else OnSurfaceVariant,
-                        style = LabelSmall,
-                        modifier =
-                            Modifier
-                                .clip(RoundedCornerShape(RadiusSm))
-                                .background(
-                                    if (showAutomation) {
-                                        Primary.copy(alpha = 0.25f)
-                                    } else {
-                                        SurfaceContainer
-                                    },
-                                ).clickable { onToggleAutomation() }
-                                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                    )
-                    ViewModeButton(
-                        label = "STEP",
-                        selected = uiState.viewMode == SequencerViewMode.STEP,
-                        onClick = onToggleViewMode,
-                    )
-                    ViewModeButton(
-                        label = "PIANO",
-                        selected = uiState.viewMode == SequencerViewMode.PIANO_ROLL,
-                        onClick = onToggleViewMode,
-                    )
-                }
-
-                // BPM LCD
-                LcdDisplay(
-                    value = "%.0f".format(uiState.bpm),
-                    label = "BPM",
-                    modifier = Modifier.width(80.dp),
-                )
-
-                // BPM nudge buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    BpmNudgeButton(text = "-") { onBpmChange(uiState.bpm - 1f) }
-                    BpmNudgeButton(text = "+") { onBpmChange(uiState.bpm + 1f) }
-                }
-            }
-        }
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(TouchTargetMin)
+                .horizontalScroll(rememberScrollState())
+                .testTag("sequencer-tools"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SequencerIconButton(
+            icon = Icons.Outlined.GridOn,
+            contentDescription = if (showAutomation) "Hide automation" else "Show automation",
+            selected = showAutomation,
+            onClick = onToggleAutomation,
+            selectionAware = true,
+        )
+        SequencerIconButton(
+            icon = Icons.Outlined.ContentCopy,
+            contentDescription = "Copy pattern",
+            onClick = onCopy,
+            modifier = Modifier.testTag("sequencer-copy"),
+        )
+        SequencerIconButton(
+            icon = Icons.Outlined.ContentPaste,
+            contentDescription = "Paste pattern",
+            enabled = pasteEnabled,
+            onClick = onPaste,
+        )
+        SequencerIconButton(
+            icon = Icons.Outlined.Delete,
+            contentDescription = "Clear current pattern",
+            destructive = true,
+            onClick = onClear,
+            modifier = Modifier.testTag("sequencer-clear"),
+        )
+        Spacer(Modifier.width(Spacing.sm))
+        SequencerIconButton(
+            icon = Icons.Outlined.Remove,
+            contentDescription = "Decrease tempo",
+            onClick = { onBpmChange(bpm - 1f) },
+        )
+        Text(
+            text = "%.0f".format(bpm),
+            color = Primary,
+            style = MonoLarge,
+            modifier = Modifier.width(48.dp).semantics { contentDescription = "Tempo ${"%.0f".format(bpm)} BPM" },
+        )
+        SequencerIconButton(
+            icon = Icons.Outlined.Add,
+            contentDescription = "Increase tempo",
+            onClick = { onBpmChange(bpm + 1f) },
+        )
     }
 }
 
@@ -274,7 +319,8 @@ private fun PatternSelector(
                 modifier =
                     Modifier
                         .size(TouchTargetMin)
-                        .clickable { onSelect(id) },
+                        .testTag("sequencer-pattern-$id")
+                        .selectable(selected = isSelected, onClick = { onSelect(id) }, role = Role.RadioButton),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
@@ -302,83 +348,47 @@ private fun PatternSelector(
 }
 
 @Composable
-private fun SmallActionButton(
-    label: String,
+private fun SequencerIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    selected: Boolean = false,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    destructive: Boolean = false,
+    role: Role = Role.Button,
+    selectionAware: Boolean = false,
 ) {
+    val accent = if (destructive) StateRecording else Primary
     Box(
-        // Touch target (≥44dp); visual is the inner 32dp ghost button.
         modifier =
-            Modifier
+            modifier
                 .size(TouchTargetMin)
-                .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(RadiusSm))
-                    .background(if (enabled) Color.Transparent else DisabledFill)
-                    .border(
-                        1.dp,
-                        if (enabled) OutlineVariant else OutlineVariant.copy(alpha = 0.5f),
-                        RoundedCornerShape(RadiusSm),
-                    ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(label, color = if (enabled) OnSurface else DisabledText, style = LabelSmall)
-        }
-    }
-}
-
-@Composable
-private fun ViewModeButton(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .height(TouchTargetMin)
-                .widthIn(min = 52.dp)
                 .clip(RoundedCornerShape(RadiusSm))
-                .background(if (selected) Primary.copy(alpha = 0.25f) else SurfaceContainer)
+                .background(if (selected) accent.copy(alpha = 0.18f) else SurfaceContainer)
                 .border(
                     1.dp,
-                    if (selected) Primary else OutlineVariant,
+                    if (selected || destructive) accent else OutlineVariant,
                     RoundedCornerShape(RadiusSm),
-                ).clickable(onClick = onClick)
-                .padding(horizontal = Spacing.md),
+                ).then(
+                    if (selectionAware) {
+                        Modifier.selectable(selected = selected, enabled = enabled, onClick = onClick, role = role)
+                    } else {
+                        Modifier.clickable(enabled = enabled, onClick = onClick)
+                    },
+                ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            label,
-            color = if (selected) Primary else OnSurfaceVariant,
-            style = LabelSmall,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = when {
+                !enabled -> DisabledText
+                selected || destructive -> accent
+                else -> OnSurface
+            },
+            modifier = Modifier.size(20.dp),
         )
-    }
-}
-
-@Composable
-private fun BpmNudgeButton(
-    text: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .size(TouchTargetMin)
-                .clip(RoundedCornerShape(RadiusSm))
-                .background(SurfaceContainer)
-                .border(1.dp, OutlineVariant, RoundedCornerShape(RadiusSm))
-                .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text, color = OnSurface, style = LabelSmall, fontWeight = FontWeight.Bold)
     }
 }
 
