@@ -2095,22 +2095,6 @@ private fun ClipItem(
                         )
                 }.clickable(onClick = onTap),
     ) {
-            if (clip is PadClip) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val markerX = 8.dp.toPx()
-                    drawLine(
-                        color = edge,
-                        start = Offset(markerX, 0f),
-                        end = Offset(markerX, size.height),
-                        strokeWidth = 2.dp.toPx(),
-                    )
-                    drawCircle(
-                        color = edge,
-                        radius = 6.dp.toPx(),
-                        center = Offset(markerX, size.height / 2f),
-                    )
-                }
-            }
             Text(
                 text =
                     when (clip) {

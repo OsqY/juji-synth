@@ -2,7 +2,7 @@
 
 ## Baseline
 
-- State: Phase 1 complete
+- State: All five phases complete
 - Device: SM-G998W connected
 - Protected Oboe submodule: dirty before this task; excluded
 - Other dirty files: user-owned and excluded
@@ -43,3 +43,17 @@
 - Connected tests: 29/29 PASS with the unrelated, pre-existing dirty
   `ProjectRepositoryAudioTest` class excluded
 - Independent review: `/root/phase4_pad_preview_review`, PASS with no findings
+
+### Phase 5 — PadClip marker removal
+
+- Timeline Compose harness: 27/27 PASS after removing the decorative Canvas
+- `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`, `assembleDebug`: PASS
+- Connected tests: 29/29 PASS with the unrelated, pre-existing dirty
+  `ProjectRepositoryAudioTest` class excluded
+- Independent review: `/root/phase5_marker_review`, PASS with no findings
+
+## Final audit
+
+- Reviewer: `/root/final_ui_audio_audit`
+- Verdict: PASS with no blocking or nonblocking findings
+- Native stability sweep independently rerun: PASS
