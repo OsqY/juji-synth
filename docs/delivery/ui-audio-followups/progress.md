@@ -18,3 +18,11 @@
 - Physical-device install: blocked by an existing differently signed app;
   preserving user app data took precedence over uninstalling it
 - Independent review: `/root/phase1_filter_review`, PASS
+
+### Phase 2 — piano-roll grid height
+
+- Focused Compose instrumentation regression: PASS on `emulator-5554`
+- `testDebugUnitTest`, `compileDebugKotlin`, `lintDebug`, `assembleDebug`: PASS
+- Connected tests: 27/27 PASS with the unrelated, pre-existing dirty
+  `ProjectRepositoryAudioTest` class excluded
+- Independent review: `/root/phase2_piano_review`, PASS with no findings

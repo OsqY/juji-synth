@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -564,7 +565,7 @@ private fun SequencerPianoRoll(
     val currentOnNotesChange by rememberUpdatedState(onNotesChange)
 
     Box(modifier = modifier.fillMaxWidth()) {
-        Column {
+        Column(modifier = Modifier.fillMaxSize()) {
             // Header row
             Row(
                 modifier =
@@ -599,7 +600,7 @@ private fun SequencerPianoRoll(
             }
 
             // Grid body
-            Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Row(modifier = Modifier.fillMaxWidth().weight(1f).testTag("sequencer-piano-grid")) {
                 // Note labels
                 Column(
                     modifier =
